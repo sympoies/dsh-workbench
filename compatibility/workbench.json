@@ -1,12 +1,13 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "release": {
-    "version": "0.1.0-rc.0",
-    "tag": "v0.1.0-rc.0"
+    "version": "0.1.0-rc.1",
+    "tag": "v0.1.0-rc.1"
   },
   "status": "candidate",
   "runtime": {
     "node": ">=24.0.0",
+    "pnpm": "11.24.0",
     "platforms": ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]
   },
   "components": {
@@ -31,13 +32,13 @@
     "runtimeKit": {
       "source": {
         "url": "https://github.com/sympoies/dsh-runtime-kit",
-        "commit": "d559389c94ad6f42d11899ca22f994815c382440",
-        "tree": "1b917c20683507f0eb3a15c768e011bb45dc5cf0"
+        "commit": "bd85605f30371522b529dac204dd7ea5db9198c3",
+        "tree": "11c809f09281d041dc620cb65af22e1815825c2d"
       },
       "package": {
         "name": "@sympoies/dsh-runtime-kit",
         "version": "0.0.0",
-        "integrity": "git-tree:1b917c20683507f0eb3a15c768e011bb45dc5cf0"
+        "integrity": "git-tree:11c809f09281d041dc620cb65af22e1815825c2d"
       },
       "toolchain": {
         "node": ">=24.0.0"
@@ -59,6 +60,10 @@
       "toolchain": {
         "node": "^22.19 || >=24",
         "pnpm": "11.21.0"
+      },
+      "peerOverrides": {
+        "workingActivity": "0.4.0",
+        "react": "19.3.0"
       },
       "status": "candidate"
     }

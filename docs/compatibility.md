@@ -10,12 +10,28 @@ dependency resolution for the recorded identities.
 
 The current graph is **candidate**. Its DSH and TUI package integrity values
 come from the npm registry at the pinned package versions. Git commit and tree
-values identify the upstream source revisions; runtime-kit has no published npm
-release at this revision, so its Git tree is its source integrity identity.
-The contract records the upstream package version `0.0.0` for runtime-kit; that
-is not a Workbench release version. These identities were checked on
-2026-09-25, but no Web/TUI composition or cross-interface session handoff has
-passed yet.
+values identify the upstream source revisions. The runtime-kit source now pins
+the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runtime-kit/pull/272);
+runtime-kit has no published npm release at this revision, so its Git tree is
+its source integrity identity. The contract records the upstream package
+version `0.0.0` for runtime-kit; that is not a Workbench release version.
+These identities were checked on 2026-09-25. Runtime-kit compatibility and
+managed-worktree recovery passed its owner CI; Web/TUI composition and
+cross-interface session handoff remain candidate gates.
+
+The TUI's `dsh-working-activity@0.4.0` dependency still declares peers for
+older DSH client packages and React 18. The selected TUI uses React 19 and
+declares support for DSH `0.1.7-rc.1`; unmodified npm and pnpm strict installs
+reject the combined graph. The TUI contract therefore records the exact
+working-activity and React versions for a Workbench-scoped peer correction.
+`node scripts/tui-compat.mjs` renders pnpm overrides for only that package's
+eight stale peer edges, while pinning the TUI's working-activity dependency and
+the graph's React version. The corrected graph passed a strict frozen install in
+an isolated probe, and a disposable TUI profile reached the terminal UI.
+Those checks do not yet establish the TUI acceptance gate. The overrides do
+not change the published package bytes or relax peer checks for any other
+dependency; a future installer must include them in its frozen graph and
+reject an unexpected working-activity version.
 
 ## Gate
 
@@ -27,13 +43,19 @@ TUI, Web, and cross-interface handoff on every declared target platform. A
 local schema check alone does not
 establish that upstream packages match the recorded hashes; the build and
 installation workflows must verify those bytes when implemented.
+Schema 2 adds the Workbench pnpm pin and the TUI peer correction; the compare
+gate reads the initial schema-1 candidate only as a previous release.
 
 The current common runtime baseline is Node.js 24 or newer, derived from the
 pinned runtime-kit's minimum, on the target platform set recorded in the
 contract. A target platform is a planned test target while
 the contract is a candidate; it becomes a supported platform only when its
 release acceptance passes. Upstream package manager versions are recorded as
-source-build facts, not an instruction to install floating dependencies.
+source-build facts. Workbench pins pnpm `11.24.0` for its own graph. The
+generated pnpm settings explicitly exempt only the exact selected TUI release
+from a local minimum-release-age policy, because a freshly published release
+cannot otherwise pass that independent supply-chain gate; its package integrity
+still comes from the contract and strict frozen installation remains required.
 
 ## Workbench versions
 
