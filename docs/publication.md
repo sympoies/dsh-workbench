@@ -47,9 +47,13 @@ each generated bundle or release asset tree with `--artifact PATH`. For a
 container candidate, export its image configuration and labels to a text/JSON
 file outside the repository and pass that file as an artifact as well. Do the
 same for the release workflow log after a candidate build. The script scans
-tracked content and supplied artifacts for selected secret, identity, private
-path, and endpoint patterns without printing matching lines. It rejects
-symlinks and unreadable files in supplied artifact trees.
+tracked content, public names, and supplied artifact trees for selected secret,
+identity, private path, and endpoint patterns without printing matching bytes
+or pathnames. It rejects symlinks and unreadable files. Compressed archives are
+rejected as opaque inputs, including renamed archives detected by file content.
+Other binary assets also require a separate audited handling path before release.
+Extract the exact finalized archive safely into a disposable tree and scan that
+tree, then inspect the archive and manifest before publishing.
 
 Before the first release, a human reviewer must also inspect:
 
