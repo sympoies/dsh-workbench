@@ -48,7 +48,8 @@ const result = spawnSync(process.execPath, [${JSON.stringify(dshCli)}, ...proces
 if (result.stdout) process.stdout.write(result.stdout);
 if (result.stderr) process.stderr.write(result.stderr);
 if (result.status !== 0) writeFileSync(${JSON.stringify(wrapperFailure)},
-  (result.stderr ?? '').slice(0, 4096), { mode: 0o600 });
+  JSON.stringify({ stdout: (result.stdout ?? '').slice(-4096),
+    stderr: (result.stderr ?? '').slice(-4096) }), { mode: 0o600 });
 process.exitCode = result.status ?? 1;
 `, { mode: 0o755 });
 chmodSync(wrapper, 0o755);
@@ -81,7 +82,9 @@ function invoke(command: string, args: string[]): { [key: string]: unknown } {
     process.stderr.write(result.stdout ?? '');
     process.stderr.write(result.stderr ?? '');
     try {
-      process.stderr.write(`DSH command diagnostic: ${readFileSync(wrapperFailure, 'utf8')}\n`);
+      const diagnostic = JSON.parse(readFileSync(wrapperFailure, 'utf8'));
+      process.stderr.write(`DSH command stdout: ${diagnostic.stdout}\n`);
+      process.stderr.write(`DSH command stderr: ${diagnostic.stderr}\n`);
     } catch { /* failure occurred before DSH started */ }
     try {
       const logRoot = join(profile, '.plugin-manager', 'logs');

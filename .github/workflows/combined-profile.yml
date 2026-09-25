@@ -35,6 +35,7 @@ jobs:
       - name: Allocate isolated trusted verification root
         run: |
           root="$(mktemp -d "${TMPDIR:-/tmp}/dsh-workbench.XXXXXXXX")"
+          root="$(cd "$root" && pwd -P)"
           echo "VERIFICATION_ROOT=$root" >> "$GITHUB_ENV"
       - name: Select exact Workbench source identities
         id: pins
