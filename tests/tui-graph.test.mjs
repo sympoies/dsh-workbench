@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const contract = JSON.parse(readFileSync(fileURLToPath(new URL('../compatibility/workbench.json', import.meta.url)), 'utf8'));
 const renderer = fileURLToPath(new URL('../scripts/tui-compat.mjs', import.meta.url));
+const profileLock = fileURLToPath(new URL('../compatibility/tui-profile/pnpm-lock.yaml', import.meta.url));
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8', timeout: 300_000 });
@@ -65,6 +66,39 @@ test('pinned pnpm rejects the stale TUI graph and installs the reviewed correcti
       [contract.components.tui.peerOverrides.workingActivity]);
     assert.deepEqual([...packages.matchAll(/^  react@([^:\s]+):/gm)].map(match => match[1]),
       [contract.components.tui.peerOverrides.react]);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
+});
+
+test('reviewed TUI profile lock installs without resolving a new graph', { timeout: 600_000 }, () => {
+  const stage = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-profile-'));
+  try {
+    writeFileSync(join(stage, 'package.json'), JSON.stringify({
+      name: 'dsh-profile-dsh-tui',
+      private: true,
+      dependencies: {
+        [contract.components.tui.package.name]: contract.components.tui.package.version,
+      },
+      dsh: {
+        profile: {
+          bundles: ['@deepseek-ai/dsh-base', contract.components.tui.package.name],
+        },
+      },
+    }));
+    const rendered = run(process.execPath, [renderer], root);
+    assert.equal(rendered.status, 0, rendered.stderr);
+    writeFileSync(join(stage, 'pnpm-workspace.yaml'), rendered.stdout);
+    copyFileSync(profileLock, join(stage, 'pnpm-lock.yaml'));
+    const frozen = run('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies',
+      '--ignore-scripts', '--reporter', 'append-only'], stage);
+    assert.equal(frozen.status, 0, errorCode(frozen));
+    const lock = readFileSync(join(stage, 'pnpm-lock.yaml'), 'utf8');
+    assert.ok(lock.includes(contract.components.tui.package.integrity), 'TUI integrity missing');
+    const packages = lock.split('\npackages:\n')[1]?.split('\nsnapshots:\n')[0];
+    assert.ok(packages, 'lockfile packages section missing');
+    assert.ok(packages.includes(`  dsh-working-activity@${contract.components.tui.peerOverrides.workingActivity}:`));
+    assert.ok(packages.includes(`  react@${contract.components.tui.peerOverrides.react}:`));
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
