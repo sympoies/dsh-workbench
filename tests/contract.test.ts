@@ -182,8 +182,10 @@ test('runtime Node baseline cannot fall below the pinned runtime-kit requirement
 
 test('a product-only release can advance the Workbench version', () => {
   const { dir, path } = fixture(contract => {
-    contract.release.version = '0.1.0-rc.4';
-    contract.release.tag = 'v0.1.0-rc.4';
+    const match = /^(.*-rc\.)(\d+)$/.exec(contract.release.version);
+    assert.ok(match);
+    contract.release.version = `${match[1]}${Number(match[2]) + 1}`;
+    contract.release.tag = `v${contract.release.version}`;
   });
   try {
     assert.equal(run('compare', path, ['--previous', source]).status, 0);

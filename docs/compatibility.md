@@ -11,13 +11,22 @@ dependency resolution for the recorded identities.
 The current graph is **candidate**. Its DSH and TUI package integrity values
 come from the npm registry at the pinned package versions. Git commit and tree
 values identify the upstream source revisions. The runtime-kit source now pins
-the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runtime-kit/pull/272);
+the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runtime-kit/pull/272)
+and the authenticated patched peer closure from
+[PR #274](https://github.com/sympoies/dsh-runtime-kit/pull/274);
 runtime-kit has no published npm release at this revision, so its Git tree is
 its source integrity identity. The contract records the upstream package
 version `0.0.0` for runtime-kit; that is not a Workbench release version.
 These identities were checked on 2026-09-25. Runtime-kit compatibility and
 managed-worktree recovery passed its owner CI; Web/TUI composition and
 cross-interface session handoff remain candidate gates.
+
+The [combined candidate profile procedure](combined-profile.md) stages the
+patched DSH workspace dependency closure and TUI before runtime-kit setup.
+The isolated Linux x64 graph passed strict and frozen pnpm installation,
+runtime-kit `doctor` with `healthy` status, and real-terminal TUI startup.
+This is composition evidence; it does not accept the tuple or establish a
+portable release artifact.
 
 The TUI's `dsh-working-activity@0.4.0` dependency still declares peers for
 older DSH client packages and React 18. The selected TUI uses React 19 and
@@ -63,6 +72,12 @@ Workbench `v0.1.0-rc.4` narrows the first release's acceptance targets to
 Linux x64 and macOS arm64. Linux arm64 and macOS x64 may be evaluated for a
 later Workbench version. This target change does not promote the graph from
 candidate status or alter any of the three component pins.
+
+Workbench `v0.1.0-rc.5` pins runtime-kit's merged patched-peer commit and
+stages the combined profile at `$DSH_HOME/profiles/workbench` from the owner
+receipt. The Linux x64 graph has passed strict frozen installation,
+digest-bound runtime-kit setup, healthy doctor, and a composed DSH/TUI config
+smoke. Both-platform CI and full launch checks remain candidate acceptance.
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the
