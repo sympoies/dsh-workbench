@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
 import type { WorkbenchContract } from '../src/contract-types.ts';
+import { readEvents } from './session-events.ts';
 import { stopTerminal } from './terminal-process.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
@@ -28,7 +29,7 @@ function binaryOption(name: string): string {
 function command(binary: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = process.env): string {
   const result = spawnSync(binary, args, { cwd, env, encoding: 'utf8', timeout: 300_000, maxBuffer: 32_000_000 });
   assert.equal(result.error, undefined, `${binary} could not start`);
-  assert.equal(result.status, 0, `${binary} failed with exit ${result.status}`);
+  assert.equal(result.status, 0, `${binary} failed with exit ${result.status}:\n${result.stdout?.slice(-4_000)}\n${result.stderr?.slice(-4_000)}`);
   return result.stdout.trim();
 }
 
@@ -50,23 +51,14 @@ function sessionLogs(root: string): string[] {
   return found;
 }
 
-type Event = { type: string; data?: Record<string, unknown> };
-
-function readEvents(path: string): Event[] {
-  const result = spawnSync('zstdcat', [path], { encoding: 'utf8', timeout: 5_000, maxBuffer: 32_000_000 });
-  return result.stdout?.split('\n').filter(Boolean).flatMap(line => {
-    try { return [JSON.parse(line) as Event]; } catch { return []; }
-  }) ?? [];
-}
-
-async function waitForTurn(root: string, previous: ReadonlySet<string>): Promise<{ path: string; events: Event[] }> {
+async function waitForTurn(root: string, previous: ReadonlySet<string>): Promise<string> {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const added = sessionLogs(root).filter(path => !previous.has(path));
     if (added.length > 1) throw new Error('TUI created more than one session for one approval scenario');
     if (added.length === 1) {
       const events = readEvents(added[0]);
-      if (events.some(event => event.type === 'turn/end')) return { path: added[0], events };
+      if (events.some(event => event.type === 'turn/end')) return added[0];
     }
     await new Promise(resolveWait => setTimeout(resolveWait, 100));
   }
@@ -126,9 +118,10 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
 
 async function runScenario(binary: string, fixture: string, scenario: typeof scenarios[number]): Promise<void> {
   const apiKey = randomBytes(24).toString('hex');
+  const marker = join(fixture, 'workspace', `.tui-${scenario.name}-executed`);
   const mock = await startMockLlmServer({ sequence: ['tool_call_success', 'success'], repeatLast: true,
     apiKey, successText: scenario.answer, toolName: 'bash',
-    toolArguments: JSON.stringify({ command: `printf ${scenario.toolOutput}`,
+    toolArguments: JSON.stringify({ command: `touch ${quote(marker)} && printf ${scenario.toolOutput}`,
       description: `Print ${scenario.toolOutput}`, sandbox_permissions: 'danger-full-access',
       justification: 'Verify TUI approval in a disposable workspace' }) });
   const logRoot = join(fixture, 'home', 'sessions');
@@ -141,7 +134,10 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     terminal.child.stdin?.write(`Run the Bash command printf ${scenario.toolOutput} and report its output.\r`);
     await terminal.waitFor('Awaiting approval · bash');
     terminal.child.stdin?.write(scenario.decision);
-    const { events } = await waitForTurn(logRoot, previous);
+    const logPath = await waitForTurn(logRoot, previous);
+    await stopTerminal(terminal.child);
+    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly');
+    const events = readEvents(logPath, { strict: true });
     const ended = events.find(event => event.type === 'turn/end');
     assert.equal((ended?.data?.reason as { kind?: string } | undefined)?.kind, 'completed');
     const finalMessage = events.filter(event => event.type === 'assistant/message').at(-1)?.data?.message as
@@ -156,12 +152,12 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     if (scenario.error) {
       assert.ok(content.includes('the user rejected escalating this command'));
       assert.ok(!content.includes(scenario.toolOutput));
+      assert.equal(existsSync(marker), false, 'Rejected Bash command still executed');
     } else {
       assert.ok(content.includes(scenario.toolOutput));
+      assert.equal(existsSync(marker), true, 'Allowed Bash command did not execute');
     }
     assert.ok(mock.requests.some(request => request.behavior === 'tool_call_success'));
-    await stopTerminal(terminal.child);
-    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly');
   } finally {
     const cleanup = await Promise.allSettled([stopTerminal(terminal?.child), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI acceptance cleanup failed');
