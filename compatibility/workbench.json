@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "release": {
-    "version": "0.1.0-rc.4",
-    "tag": "v0.1.0-rc.4"
+    "version": "0.1.0-rc.5",
+    "tag": "v0.1.0-rc.5"
   },
   "status": "candidate",
   "runtime": {
@@ -32,13 +32,13 @@
     "runtimeKit": {
       "source": {
         "url": "https://github.com/sympoies/dsh-runtime-kit",
-        "commit": "bd85605f30371522b529dac204dd7ea5db9198c3",
-        "tree": "11c809f09281d041dc620cb65af22e1815825c2d"
+        "commit": "23677895e516b76f2147bbc7e98071c279b1510e",
+        "tree": "2e8644608d1364855e8c21a7a14932fa35193e14"
       },
       "package": {
         "name": "@sympoies/dsh-runtime-kit",
         "version": "0.0.0",
-        "integrity": "git-tree:11c809f09281d041dc620cb65af22e1815825c2d"
+        "integrity": "git-tree:2e8644608d1364855e8c21a7a14932fa35193e14"
       },
       "toolchain": {
         "node": ">=24.0.0"

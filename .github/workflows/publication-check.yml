@@ -31,6 +31,8 @@ jobs:
         run: pnpm typecheck
       - name: Verify Web plugin integration
         run: node --test tests/web-metadata.test.ts web/tests/registration.test.ts
+      - name: Verify pinned combined profile staging
+        run: node --test tests/combined-profile.test.ts tests/pinned-kit.test.ts
       - name: Scan tracked source
         run: bash scripts/check-publication.sh
       - name: Verify scan behavior
