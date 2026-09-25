@@ -28,9 +28,9 @@ TUI currently reports a Web-held writer as an unreadable or corrupt stored log;
 that message is inaccurate. An installer or launcher must use the pinned DSH
 binary and frozen graph, rather than whichever `dsh` appears first on PATH.
 Runtime update commands must not silently change a pinned install.
-Do not use TUI `/rename` in this candidate graph: it writes a title event that
-the pinned DSH rejects on resume. Track the fix in
-[#24](https://github.com/sympoies/dsh-workbench/issues/24).
+The Workbench-scoped TUI patch now makes `/rename` resumable in a real TTY;
+the native Web title view still needs cross-interface validation under
+[#7](https://github.com/sympoies/dsh-workbench/issues/7).
 
 This topology requires stopping Web service for a Web-to-TUI handoff. It does
 not offer simultaneous Web and TUI editing or per-session Web writer release.
@@ -77,6 +77,8 @@ printf '[]\n' > "$profile/cordis.yml"
 printf '[]\n' > "$profile/cordis.patch.yml"
 node "$WORKBENCH_ROOT/scripts/tui-compat.mjs" > "$profile/pnpm-workspace.yaml"
 cp "$WORKBENCH_ROOT/compatibility/tui-profile/pnpm-lock.yaml" "$profile/pnpm-lock.yaml"
+mkdir -p "$profile/patches"
+cp "$WORKBENCH_ROOT/compatibility/patches/tui-rename.patch" "$profile/patches/tui-rename.patch"
 (cd "$profile" && pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts)
 cd "$WORKSPACE"
 "$DSH_BIN" --profile dsh-tui
@@ -154,8 +156,10 @@ completes in the same Session V4 archive. It does not exercise Web in that
 scenario.
 
 These observations cover settled text and tool turns in one disposable Linux
-fixture. They do not establish safe transfer of an executing turn, pending
-input or approval, attachments, title updates, projection-cache behavior,
+fixture. Manual and stopped-session TUI rename with exact-ID TUI restart are additionally covered
+by the patched graph's real-terminal acceptance; Web title visibility is not
+yet proved. They do not establish safe transfer of an executing turn, pending
+input or approval, attachments, cross-interface title updates, projection-cache behavior,
 crash recovery, cross-platform operation, or existing-session migration.
 Those are release acceptance work under
 [#7](https://github.com/sympoies/dsh-workbench/issues/7), with TUI-specific

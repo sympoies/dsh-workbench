@@ -19,8 +19,10 @@ test('the reviewed TUI peer correction is scoped to one transitive package and c
   const lines = result.stdout.trim().split('\n');
   assert.equal(lines[0], 'minimumReleaseAgeExclude:');
   assert.equal(lines[1], `  - '${contract.components.tui.package.name}@${contract.components.tui.package.version}'`);
-  assert.equal(lines[2], 'overrides:');
-  assert.equal(lines.length, 13);
+  assert.equal(lines[2], 'patchedDependencies:');
+  assert.equal(lines[3], `  '${contract.components.tui.package.name}@${contract.components.tui.package.version}': patches/tui-rename.patch`);
+  assert.equal(lines[4], 'overrides:');
+  assert.equal(lines.length, 15);
   assert.ok(lines.includes(`  '${contract.components.tui.package.name}@${contract.components.tui.package.version}>dsh-working-activity': ${contract.components.tui.peerOverrides!.workingActivity}`));
   assert.ok(lines.includes(`  react: ${contract.components.tui.peerOverrides!.react}`));
   for (const peer of [
@@ -40,6 +42,7 @@ test('the renderer resolves contract files under a path containing spaces', () =
     mkdirSync(join(stage, 'scripts'));
     mkdirSync(join(stage, 'src'));
     mkdirSync(join(stage, 'compatibility'));
+    mkdirSync(join(stage, 'compatibility', 'patches'));
     for (const name of ['contract.mjs', 'tui-compat.mjs']) {
       copyFileSync(join(root, 'scripts', name), join(stage, 'scripts', name));
     }
@@ -48,6 +51,8 @@ test('the renderer resolves contract files under a path containing spaces', () =
     }
     copyFileSync(join(root, 'compatibility', 'workbench.json'),
       join(stage, 'compatibility', 'workbench.json'));
+    copyFileSync(join(root, contract.components.tui.compatibilityPatch!.path),
+      join(stage, contract.components.tui.compatibilityPatch!.path));
     const result = spawnSync(process.execPath, [join(stage, 'scripts', 'tui-compat.mjs')],
       { cwd: stage, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);

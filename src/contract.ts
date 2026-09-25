@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import type { WorkbenchContract } from './contract-types.ts';
 
 const defaultPath = fileURLToPath(new URL('../compatibility/workbench.json', import.meta.url));
@@ -48,10 +50,11 @@ function nodeFloor(value: unknown, name: string): number[] {
   return found.slice(1).map(Number);
 }
 
-function validate(contract: WorkbenchContract, { previous = false }: { previous?: boolean } = {}): void {
+function validate(contract: WorkbenchContract, contractPath: string, { previous = false }: { previous?: boolean } = {}): void {
   exactKeys(contract, ['schemaVersion', 'release', 'status', 'runtime', 'components', 'acceptance'], 'contract');
-  if (contract.schemaVersion !== 2 && !(previous && contract.schemaVersion === 1)) fail('unsupported contract schemaVersion');
+  if (contract.schemaVersion !== 3 && !(previous && [1, 2].includes(contract.schemaVersion))) fail('unsupported contract schemaVersion');
   const legacy = contract.schemaVersion === 1;
+  const patched = contract.schemaVersion === 3;
   exactKeys(contract.release, ['version', 'tag'], 'release');
   match(contract.release.version, version, 'release.version');
   if (contract.release.tag !== `v${contract.release.version}`) fail('release.tag must match release.version');
@@ -65,7 +68,8 @@ function validate(contract: WorkbenchContract, { previous = false }: { previous?
   exactKeys(contract.components, components, 'components');
   for (const id of components) {
     const item = contract.components[id];
-    exactKeys(item, id === 'tui' && !legacy ? ['source', 'package', 'toolchain', 'peerOverrides', 'status'] :
+    exactKeys(item, id === 'tui' && patched ? ['source', 'package', 'toolchain', 'peerOverrides', 'compatibilityPatch', 'status'] :
+      id === 'tui' && !legacy ? ['source', 'package', 'toolchain', 'peerOverrides', 'status'] :
       ['source', 'package', 'toolchain', 'status'], `components.${id}`);
     exactKeys(item.source, id === 'runtimeKit' ? ['url', 'commit', 'tree'] : ['url', 'tag', 'commit', 'tree'], `${id}.source`);
     match(item.source.url, /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, `${id}.source.url`);
@@ -89,6 +93,20 @@ function validate(contract: WorkbenchContract, { previous = false }: { previous?
       exactKeys(item.peerOverrides, ['workingActivity', 'react'], 'tui.peerOverrides');
       match(item.peerOverrides?.workingActivity, version, 'tui.peerOverrides.workingActivity');
       match(item.peerOverrides?.react, version, 'tui.peerOverrides.react');
+      if (patched) {
+        exactKeys(item.compatibilityPatch, ['path', 'sha256'], 'tui.compatibilityPatch');
+        if (item.compatibilityPatch?.path !== 'compatibility/patches/tui-rename.patch') fail('invalid tui.compatibilityPatch.path');
+        match(item.compatibilityPatch.sha256, /^[a-f0-9]{64}$/, 'tui.compatibilityPatch.sha256');
+        let bytes: Buffer;
+        try {
+          bytes = readFileSync(join(dirname(contractPath), 'patches/tui-rename.patch'));
+        } catch {
+          fail('tui compatibility patch cannot be read');
+        }
+        if (createHash('sha256').update(bytes).digest('hex') !== item.compatibilityPatch.sha256) {
+          fail('tui compatibility patch digest mismatch');
+        }
+      }
     }
     if (!['candidate', 'accepted'].includes(item.status)) fail(`invalid ${id}.status`);
   }
@@ -133,7 +151,7 @@ function tuple(contract: WorkbenchContract) {
       const item = contract.components[id];
       return [item.source.url, item.source.tag ?? '', item.source.commit, item.source.tree,
         item.package.name, item.package.version, item.package.integrity, item.toolchain,
-        item.peerOverrides ?? null];
+        item.peerOverrides ?? null, item.compatibilityPatch ?? null];
     }),
   };
 }
@@ -183,11 +201,11 @@ function args(argv: string[]) {
 try {
   const { command, options } = args(process.argv.slice(2));
   const contract = read(options.contract);
-  validate(contract);
+  validate(contract, options.contract);
   if (command === 'require-accepted' && contract.status !== 'accepted') fail('candidate contract cannot be activated');
   if (command === 'compare') {
     const previous = read(options.previous!);
-    validate(previous, { previous: true });
+    validate(previous, options.previous!, { previous: true });
     const changed = JSON.stringify(tuple(contract)) !== JSON.stringify(tuple(previous));
     if (changed && contract.release.version === previous.release.version) fail('component tuple changed without a new Workbench release.version');
     if (contract.release.version !== previous.release.version && compareVersions(contract.release.version, previous.release.version) <= 0) {

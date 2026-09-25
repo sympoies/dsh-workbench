@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -36,6 +36,8 @@ test('pinned pnpm rejects the stale TUI graph and installs the reviewed correcti
 
   const stage = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-graph-'));
   try {
+    mkdirSync(join(stage, 'patches'));
+    copyFileSync(join(root, contract.components.tui.compatibilityPatch!.path), join(stage, 'patches/tui-rename.patch'));
     writeFileSync(join(stage, 'package.json'), JSON.stringify({
       name: 'dsh-workbench-tui-graph-check', private: true, version: '0.0.0',
       dependencies: {
@@ -58,6 +60,7 @@ test('pinned pnpm rejects the stale TUI graph and installs the reviewed correcti
     assert.equal(frozen.status, 0, errorCode(frozen));
 
     const lock = readFileSync(join(stage, 'pnpm-lock.yaml'), 'utf8');
+    assert.ok(lock.includes(contract.components.tui.compatibilityPatch!.sha256), 'TUI patch digest missing');
     for (const component of [contract.components.dsh, contract.components.tui]) {
       assert.ok(lock.includes(component.package.integrity), `${component.package.name} integrity missing`);
     }
@@ -75,6 +78,8 @@ test('pinned pnpm rejects the stale TUI graph and installs the reviewed correcti
 test('reviewed TUI profile lock installs without resolving a new graph', { timeout: 600_000 }, () => {
   const stage = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-profile-'));
   try {
+    mkdirSync(join(stage, 'patches'));
+    copyFileSync(join(root, contract.components.tui.compatibilityPatch!.path), join(stage, 'patches/tui-rename.patch'));
     writeFileSync(join(stage, 'package.json'), JSON.stringify({
       name: 'dsh-profile-dsh-tui',
       private: true,
@@ -96,6 +101,7 @@ test('reviewed TUI profile lock installs without resolving a new graph', { timeo
     assert.equal(frozen.status, 0, errorCode(frozen));
     const lock = readFileSync(join(stage, 'pnpm-lock.yaml'), 'utf8');
     assert.ok(lock.includes(contract.components.tui.package.integrity), 'TUI integrity missing');
+    assert.ok(lock.includes(contract.components.tui.compatibilityPatch!.sha256), 'TUI patch digest missing');
     const packages = lock.split('\npackages:\n')[1]?.split('\nsnapshots:\n')[0];
     assert.ok(packages, 'lockfile packages section missing');
     assert.ok(packages.includes(`  dsh-working-activity@${contract.components.tui.peerOverrides!.workingActivity}:`));
