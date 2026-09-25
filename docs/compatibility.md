@@ -22,8 +22,9 @@ passed yet.
 `node scripts/contract.mjs check` validates structure and immutable pin shape.
 `node scripts/contract.mjs require-accepted` is the activation gate: it fails
 while the contract is a candidate. An accepted contract requires all three
-components marked accepted and public evidence links for runtime-kit, TUI,
-Web, and cross-interface handoff gates. A local schema check alone does not
+components marked accepted and distinct public evidence links for runtime-kit,
+TUI, Web, and cross-interface handoff on every declared target platform. A
+local schema check alone does not
 establish that upstream packages match the recorded hashes; the build and
 installation workflows must verify those bytes when implemented.
 
@@ -38,8 +39,11 @@ source-build facts, not an instruction to install floating dependencies.
 Workbench uses its own SemVer release identity and tags `v<version>`. The
 candidate target version in the contract is reserved for this tuple; it is not
 a published release. A change to any component source URL, tag, commit, tree,
-package name, version, or integrity requires a new Workbench version and tag.
-CI runs `contract.mjs compare` against `main` to enforce that relationship.
+package name, version, integrity, runtime platform, or toolchain requires a new
+Workbench version and tag. Product or artifact changes can also advance the
+Workbench version while the component pins stay the same. New versions must
+advance in SemVer order; release publication must reject an existing tag. CI
+runs `contract.mjs compare` against `main` to enforce the contract relationship.
 Changing acceptance from candidate to accepted for the *same* tuple keeps the
 target version. Once accepted, a version's contract is immutable; a later
 tuple or artifact change gets a new release, preserving prior artifacts.

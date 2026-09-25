@@ -18,6 +18,18 @@ function fixture(change) {
   return { dir, path };
 }
 
+function accept(contract) {
+  contract.status = 'accepted';
+  for (const component of Object.values(contract.components)) component.status = 'accepted';
+  Object.entries(contract.acceptance).forEach(([name, gate], gateIndex) => {
+    gate.status = 'passed';
+    gate.evidence = contract.runtime.platforms.map((platform, platformIndex) => ({
+      platform,
+      url: `https://github.com/sympoies/dsh-workbench/pull/${100 + gateIndex * 10 + platformIndex}`,
+    }));
+  });
+}
+
 function run(command, path, extra = []) {
   return spawnSync(process.execPath, [script, command, '--contract', path, ...extra], {
     encoding: 'utf8',
@@ -47,12 +59,51 @@ test('pins have immutable source and integrity identities', () => {
 
 test('release identity changes whenever the component tuple changes', () => {
   const { dir, path } = fixture(contract => {
-    contract.components.tui.package.version = '0.11.1';
+    contract.components.tui.source.commit = 'a'.repeat(40);
   });
   try {
     const result = run('compare', path, ['--previous', source]);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /version/i);
+    assert.match(result.stderr, /component tuple changed without a new Workbench release\.version/i);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('platform and toolchain changes require a new Workbench version', () => {
+  for (const change of [
+    contract => contract.runtime.platforms.pop(),
+    contract => { contract.components.tui.toolchain.pnpm = '11.22.0'; },
+  ]) {
+    const { dir, path } = fixture(change);
+    try {
+      assert.match(run('compare', path, ['--previous', source]).stderr, /component tuple changed without a new Workbench release\.version/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('a product-only release can advance the Workbench version', () => {
+  const { dir, path } = fixture(contract => {
+    contract.release.version = '0.1.0-rc.1';
+    contract.release.tag = 'v0.1.0-rc.1';
+  });
+  try {
+    assert.equal(run('compare', path, ['--previous', source]).status, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a new release version must move forward', () => {
+  const { dir, path } = fixture(contract => {
+    contract.release.version = '0.0.9';
+    contract.release.tag = 'v0.0.9';
+    contract.components.tui.source.commit = 'a'.repeat(40);
+  });
+  try {
+    assert.match(run('compare', path, ['--previous', source]).stderr, /new Workbench release.version must advance/i);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -73,17 +124,45 @@ test('accepted contract needs recorded validation for every gate', () => {
 
 test('accepted contract passes only after all component and gate evidence is recorded', () => {
   const { dir, path } = fixture(contract => {
-    contract.status = 'accepted';
-    for (const component of Object.values(contract.components)) component.status = 'accepted';
-    for (const gate of Object.values(contract.acceptance)) {
-      gate.status = 'passed';
-      gate.evidence = ['https://github.com/sympoies/dsh-workbench/issues/6'];
-    }
+    accept(contract);
   });
   try {
     const result = run('require-accepted', path);
     assert.equal(result.status, 0, result.stderr);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an accepted release cannot be downgraded under its existing version', () => {
+  const previous = fixture(accept);
+  const current = fixture(contract => {
+    contract.acceptance.web.evidence = [];
+  });
+  try {
+    assert.match(run('compare', current.path, ['--previous', previous.path]).stderr, /accepted release contract is immutable/i);
+  } finally {
+    rmSync(previous.dir, { recursive: true, force: true });
+    rmSync(current.dir, { recursive: true, force: true });
+  }
+});
+
+test('accepted release evidence must identify each gate and platform with distinct public records', () => {
+  for (const change of [
+    contract => { contract.acceptance.web.evidence[0].url = 'https://github.com/'; },
+    contract => { contract.acceptance.web.evidence[0].url = contract.acceptance.tui.evidence[0].url; },
+    contract => { contract.acceptance.web.evidence.pop(); },
+  ]) {
+    const { dir, path } = fixture(contract => {
+      accept(contract);
+      change(contract);
+    });
+    try {
+      const result = run('require-accepted', path);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /acceptance/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });

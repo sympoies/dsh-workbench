@@ -7,6 +7,7 @@ const sha = /^[a-f0-9]{40}$/;
 const integrity = /^sha512-[A-Za-z0-9+/]{86}==$/;
 const version = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
 const platform = /^(?:linux|darwin)-(?:x64|arm64)$/;
+const evidenceUrl = /^https:\/\/github\.com\/(sympoies\/(?:dsh-workbench|dsh-runtime-kit)|ccch1mneyyy\/dsh-TUI)\/(?:pull\/[1-9]\d*|actions\/runs\/[1-9]\d*|commit\/[a-f0-9]{40})(?:#[A-Za-z0-9._-]+)?$/;
 const components = ['dsh', 'runtimeKit', 'tui'];
 const gates = ['runtimeKit', 'tui', 'web', 'handoff'];
 
@@ -49,7 +50,7 @@ function validate(contract) {
   if (contract.release.tag !== `v${contract.release.version}`) fail('release.tag must match release.version');
   if (!['candidate', 'accepted'].includes(contract.status)) fail('invalid contract status');
   exactKeys(contract.runtime, ['node', 'platforms'], 'runtime');
-  if (contract.runtime.node !== '>=24.0.0') fail('runtime.node must use the common supported baseline');
+  match(contract.runtime.node, /^>=\d+\.\d+\.\d+$/, 'runtime.node');
   if (!Array.isArray(contract.runtime.platforms) || !contract.runtime.platforms.length ||
       new Set(contract.runtime.platforms).size !== contract.runtime.platforms.length ||
       !contract.runtime.platforms.every(value => platform.test(value))) fail('invalid runtime.platforms');
@@ -78,12 +79,25 @@ function validate(contract) {
     if (!['candidate', 'accepted'].includes(item.status)) fail(`invalid ${id}.status`);
   }
   exactKeys(contract.acceptance, gates, 'acceptance');
+  const allEvidenceUrls = new Set();
   for (const gate of gates) {
     const item = contract.acceptance[gate];
     exactKeys(item, ['status', 'evidence'], `acceptance.${gate}`);
-    if (!['pending', 'passed'].includes(item.status) || !Array.isArray(item.evidence) ||
-        !item.evidence.every(value => typeof value === 'string' && /^https:\/\/github\.com\//.test(value))) {
-      fail(`invalid acceptance.${gate}`);
+    if (!['pending', 'passed'].includes(item.status) || !Array.isArray(item.evidence)) fail(`invalid acceptance.${gate}`);
+    const gatePlatforms = new Set();
+    for (const evidence of item.evidence) {
+      exactKeys(evidence, ['platform', 'url'], `acceptance.${gate}.evidence`);
+      if (!contract.runtime.platforms.includes(evidence.platform) || !evidenceUrl.test(evidence.url)) fail(`invalid acceptance.${gate} evidence`);
+      const owner = evidenceUrl.exec(evidence.url)[1];
+      if ((gate === 'web' || gate === 'handoff') && owner !== 'sympoies/dsh-workbench') fail(`invalid acceptance.${gate} evidence owner`);
+      if (gate === 'runtimeKit' && owner === 'ccch1mneyyy/dsh-TUI') fail('invalid acceptance.runtimeKit evidence owner');
+      if (gate === 'tui' && owner === 'sympoies/dsh-runtime-kit') fail('invalid acceptance.tui evidence owner');
+      if (allEvidenceUrls.has(evidence.url)) fail('acceptance evidence links must be distinct');
+      allEvidenceUrls.add(evidence.url);
+      gatePlatforms.add(evidence.platform);
+    }
+    if (item.status === 'passed' && contract.runtime.platforms.some(value => !gatePlatforms.has(value))) {
+      fail(`acceptance.${gate} lacks evidence for a target platform`);
     }
   }
   if (contract.status === 'accepted' &&
@@ -94,11 +108,41 @@ function validate(contract) {
 }
 
 function tuple(contract) {
-  return components.map(id => {
-    const item = contract.components[id];
-    return [item.source.url, item.source.tag ?? '', item.source.commit, item.source.tree,
-      item.package.name, item.package.version, item.package.integrity];
-  });
+  return {
+    runtime: contract.runtime,
+    components: components.map(id => {
+      const item = contract.components[id];
+      return [item.source.url, item.source.tag ?? '', item.source.commit, item.source.tree,
+        item.package.name, item.package.version, item.package.integrity, item.toolchain];
+    }),
+  };
+}
+
+function compareVersions(current, previous) {
+  const parse = value => {
+    const separator = value.indexOf('-');
+    const core = separator < 0 ? value : value.slice(0, separator);
+    const prerelease = separator < 0 ? undefined : value.slice(separator + 1);
+    return { core: core.split('.').map(Number), prerelease: prerelease?.split('.') };
+  };
+  const a = parse(current);
+  const b = parse(previous);
+  for (let index = 0; index < 3; index++) {
+    if (a.core[index] !== b.core[index]) return Math.sign(a.core[index] - b.core[index]);
+  }
+  if (!a.prerelease || !b.prerelease) return a.prerelease ? -1 : b.prerelease ? 1 : 0;
+  for (let index = 0; index < Math.max(a.prerelease.length, b.prerelease.length); index++) {
+    if (a.prerelease[index] === undefined) return -1;
+    if (b.prerelease[index] === undefined) return 1;
+    const aPart = a.prerelease[index];
+    const bPart = b.prerelease[index];
+    const aNumeric = /^\d+$/.test(aPart);
+    const bNumeric = /^\d+$/.test(bPart);
+    if (aNumeric && bNumeric && Number(aPart) !== Number(bPart)) return Math.sign(Number(aPart) - Number(bPart));
+    if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+    if (aPart !== bPart) return aPart < bPart ? -1 : 1;
+  }
+  return 0;
 }
 
 function args(argv) {
@@ -125,8 +169,10 @@ try {
     validate(previous);
     const changed = JSON.stringify(tuple(contract)) !== JSON.stringify(tuple(previous));
     if (changed && contract.release.version === previous.release.version) fail('component tuple changed without a new Workbench release.version');
-    if (!changed && contract.release.version !== previous.release.version) fail('Workbench release.version changed without a component tuple change');
-    if (contract.status === 'accepted' && previous.status === 'accepted' &&
+    if (contract.release.version !== previous.release.version && compareVersions(contract.release.version, previous.release.version) <= 0) {
+      fail('new Workbench release.version must advance');
+    }
+    if (previous.status === 'accepted' &&
         contract.release.version === previous.release.version && JSON.stringify(contract) !== JSON.stringify(previous)) {
       fail('accepted release contract is immutable');
     }

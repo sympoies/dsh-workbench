@@ -27,6 +27,7 @@ jobs:
         run: |
           node --test tests/contract.test.mjs
           node scripts/contract.mjs check
+          git rev-parse --verify 'origin/main^{commit}' >/dev/null
           if git cat-file -e 'origin/main:compatibility/workbench.json' 2>/dev/null; then
             git show 'origin/main:compatibility/workbench.json' > "$RUNNER_TEMP/workbench-previous.json"
             node scripts/contract.mjs compare --previous "$RUNNER_TEMP/workbench-previous.json"
