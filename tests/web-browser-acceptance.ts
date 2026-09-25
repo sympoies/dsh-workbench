@@ -83,7 +83,7 @@ async function stopHost(child: ChildProcess | undefined): Promise<void> {
 }
 
 async function openPage(browser: Browser, url: string): Promise<{ page: Page; errors: string[] }> {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: 'en-US' });
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.name));
   const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
@@ -100,7 +100,7 @@ async function copiedSessionId(page: Page): Promise<string> {
   await button.waitFor({ timeout: 30_000 });
   await button.click();
   const id = await page.evaluate(() => navigator.clipboard.readText());
-  assert.match(id, /^session-[0-9a-f-]{36}$/);
+  assert.ok(/^session-[0-9a-f-]{36}$/.test(id), 'copied ID is not a DSH session ID');
   return id;
 }
 
@@ -108,7 +108,7 @@ async function checkHistory(page: Page, id: string, own: string, other: string):
   const row = page.locator(`[data-row-key="session:${id}"]`);
   await row.waitFor({ timeout: 30_000 });
   await row.click();
-  assert.equal(await copiedSessionId(page), id, 'header ID does not match selected sidebar session');
+  assert.ok(await copiedSessionId(page) === id, 'header ID does not match selected sidebar session');
   const conversation = page.locator('[data-conversation-content]');
   await conversation.getByText(own, { exact: false }).first().waitFor({ timeout: 30_000 });
   const body = await conversation.innerText();
@@ -150,6 +150,7 @@ async function main(): Promise<void> {
     mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true, successText: answer });
     host = await startHost(dsh, home, agents, workspace, mock.baseURL);
     browser = await chromium.launch({ executablePath: browserBin, headless: true,
+      env: { PATH: process.env.PATH ?? '', HOME: home, LANG: process.env.LANG ?? 'C.UTF-8' },
       args: process.platform === 'linux' ? ['--no-sandbox'] : [] });
     let opened = await openPage(browser, host.url);
     const firstPage = opened.page;
@@ -177,7 +178,7 @@ async function main(): Promise<void> {
     await editor.press('Enter');
     await firstPage.getByText('Worked', { exact: true }).first().waitFor({ timeout: 30_000 });
     const secondId = await copiedSessionId(firstPage);
-    assert.notEqual(firstId, secondId, 'two new sessions share an ID');
+    assert.ok(firstId !== secondId, 'two new sessions share an ID');
     await checkHistory(firstPage, firstId, prompts[0], prompts[1]);
     await checkHistory(firstPage, secondId, prompts[1], prompts[0]);
     pageErrors += firstErrors.length;
@@ -189,6 +190,7 @@ async function main(): Promise<void> {
 
     host = await startHost(dsh, home, agents, workspace, mock.baseURL);
     browser = await chromium.launch({ executablePath: browserBin, headless: true,
+      env: { PATH: process.env.PATH ?? '', HOME: home, LANG: process.env.LANG ?? 'C.UTF-8' },
       args: process.platform === 'linux' ? ['--no-sandbox'] : [] });
     opened = await openPage(browser, host.url);
     await checkHistory(opened.page, firstId, prompts[0], prompts[1]);
@@ -208,4 +210,10 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+await main().catch(error => {
+  const name = error instanceof Error ? error.name : 'UnknownError';
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(JSON.stringify({ result: 'fail', error: name,
+    message: message.replace(/([?&]token=)[^\s"']+/gi, '$1[redacted]').slice(0, 1500) }));
+  process.exitCode = 1;
+});
