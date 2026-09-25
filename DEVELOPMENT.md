@@ -48,6 +48,19 @@ release version; CI compares the contract with `main`. See the
 Run `node --test tests/tui-graph.test.ts` with the pinned pnpm version when
 changing the TUI peer correction. It reproduces the uncorrected strict peer
 failure, then resolves and installs the exact DSH/TUI graph with the correction.
+On Linux with util-linux `script` and `zstdcat`, run the real terminal approval
+acceptance with an installed executable of the exact DSH contract version:
+
+```sh
+pnpm test:tui:terminal --dsh-bin /path/to/pinned/dsh
+```
+
+It installs the frozen TUI profile in a disposable home, drives Allow once and
+Reject through two real TTY sessions against an authenticated local mock, and
+checks the final Session V4 archive, approval, tool result, completed turn,
+and whether the allowed or rejected command actually ran. It never reads an
+existing DSH home or provider credential. This Linux
+gate does not claim long-session or cross-platform acceptance.
 
 For durable design or compatibility outcomes, update the current owner first,
 then use `devlog new` to append one evidence-backed entry. Run `devlog check`

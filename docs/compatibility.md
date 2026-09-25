@@ -28,7 +28,11 @@ working-activity and React versions for a Workbench-scoped peer correction.
 eight stale peer edges, while pinning the TUI's working-activity dependency and
 the graph's React version. The corrected graph passed a strict frozen install in
 an isolated probe, and a disposable TUI profile reached the terminal UI.
-Those checks do not yet establish the TUI acceptance gate. The overrides do
+The Linux real-TTY acceptance additionally drove both an allowed-once and a
+rejected Bash escalation through the pinned TUI, then verified distinct
+Session V4 decisions, tool results, completed turns, and command execution or
+non-execution after a strict final archive read. Those checks do not
+yet establish the full TUI acceptance gate. The overrides do
 not change the published package bytes or relax peer checks for any other
 dependency; a future installer must include them in its frozen graph and
 reject an unexpected working-activity version.
