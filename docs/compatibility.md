@@ -33,6 +33,14 @@ not change the published package bytes or relax peer checks for any other
 dependency; a future installer must include them in its frozen graph and
 reject an unexpected working-activity version.
 
+[`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
+is a reviewed, generated lockfile for the disposable TUI profile used by the
+[handoff procedure](session-handoff.md). It freezes that profile's transitive
+dependencies; it is not a second editable component version contract or an
+accepted installer receipt. CI verifies a strict frozen install with it. A
+candidate profile update must regenerate and review this lockfile against the
+single component contract before the handoff proof is repeated.
+
 ## Gate
 
 `node scripts/contract.mjs check` validates structure and immutable pin shape.

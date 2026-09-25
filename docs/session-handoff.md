@@ -73,7 +73,8 @@ NODE
 printf '[]\n' > "$profile/cordis.yml"
 printf '[]\n' > "$profile/cordis.patch.yml"
 node "$WORKBENCH_ROOT/scripts/tui-compat.mjs" > "$profile/pnpm-workspace.yaml"
-(cd "$profile" && pnpm install --lockfile-only --strict-peer-dependencies --ignore-scripts && pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts)
+cp "$WORKBENCH_ROOT/compatibility/tui-profile/pnpm-lock.yaml" "$profile/pnpm-lock.yaml"
+(cd "$profile" && pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts)
 cd "$WORKSPACE"
 "$DSH_BIN" --profile dsh-tui
 ```
@@ -129,15 +130,21 @@ Never run this proof against an existing user profile or session store.
 
 ## Observed result and remaining gates
 
-On 2026-09-25 an isolated strict pnpm graph with the exact Workbench TUI peer
-correction launched the real TUI. A streamed model reply and a Bash tool
+The committed fixture lockfile holds the reviewed transitive TUI profile graph;
+the procedure copies it and uses only a strict frozen install. The first
+two-process proof used an earlier exact TUI profile graph with the same
+contract component revisions. On 2026-09-25 that graph launched the real TUI.
+A streamed model reply and a Bash tool
 result survived TUI exit and exact-ID resume. Native Web listed and opened
 the TUI-created session with its prompt, reply, tool call, and result. With
 Web holding the writer, a TUI resume was refused and the compressed log's
 SHA-256 stayed unchanged. Web retained the lock across a viewing-tab close
 while another tab kept Web Host active. After Web Host stopped, TUI resumed
 the same ID and displayed the same settled history. TUI-to-TUI contention
-was also rejected, then resolved after the first TUI exited.
+was also rejected, then resolved after the first TUI exited. The committed
+profile lockfile separately passed a fresh-home strict frozen install and a
+second settled-text TUI-to-Web-to-TUI exact-ID handoff. The later run did not
+repeat tool or approval continuity.
 
 These observations cover settled text and tool turns in one disposable Linux
 fixture. They do not establish safe transfer of an executing turn, pending
