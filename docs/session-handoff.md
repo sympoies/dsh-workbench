@@ -39,30 +39,52 @@ not required for the first milestone.
 ## Reproduce with disposable state
 
 Use only a fresh disposable directory and a **separate empty** workspace.
-The commands below assume an installed graph built from
+Run these commands from the Workbench repository root. They assume an installed
+graph built from
 [`compatibility/workbench.json`](../compatibility/workbench.json). Replace
-`/path/to/pinned/dsh` with that graph's absolute DSH executable. Set a
-provider credential through your usual private environment; do not copy it
-into a fixture, command transcript, or issue.
+`/path/to/pinned/dsh` with that graph's absolute DSH executable. Use the
+pinned pnpm version from the contract. Set a provider credential through your
+usual private environment; do not copy it into a fixture, command transcript,
+or issue.
 
 ```sh
+set -eu
+export WORKBENCH_ROOT="$(pwd -P)"
 export DSH_HOME="$(mktemp -d)"
 export DSH_AGENTS_HOME="$(mktemp -d)"
 export WORKSPACE="$(mktemp -d)"
 export DSH_BIN=/path/to/pinned/dsh
 export PATH="$(dirname "$DSH_BIN"):$PATH"
 test "$(command -v dsh)" = "$DSH_BIN" || exit 1
+test "$(pnpm --version)" = "$(node -p 'require(process.argv[1]).runtime.pnpm' "$WORKBENCH_ROOT/compatibility/workbench.json")" || exit 1
+profile="$DSH_HOME/profiles/dsh-tui"
+mkdir -p "$profile"
+node - "$WORKBENCH_ROOT/compatibility/workbench.json" > "$profile/package.json" <<'NODE'
+const { readFileSync } = require('node:fs');
+const contract = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const tui = contract.components.tui.package;
+process.stdout.write(JSON.stringify({
+  name: 'dsh-profile-dsh-tui',
+  private: true,
+  dependencies: { [tui.name]: tui.version },
+  dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', tui.name] } },
+}, null, 2) + '\n');
+NODE
+printf '[]\n' > "$profile/cordis.yml"
+printf '[]\n' > "$profile/cordis.patch.yml"
+node "$WORKBENCH_ROOT/scripts/tui-compat.mjs" > "$profile/pnpm-workspace.yaml"
+(cd "$profile" && pnpm install --lockfile-only --strict-peer-dependencies --ignore-scripts && pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts)
 cd "$WORKSPACE"
 "$DSH_BIN" --profile dsh-tui
 ```
 
 In the TUI, create a session, submit a harmless prompt, let its answer
 complete, call a harmless local tool if available, record the displayed
-session ID, and exit normally. In that shell, set
-`SESSION_ID='paste-the-displayed-id-here'` and export it. Keep the original
-five environment values (`DSH_HOME`, `DSH_AGENTS_HOME`, `WORKSPACE`, `DSH_BIN`,
-`SESSION_ID`, and the PATH prefix) available; print only these non-secret
-values locally if needed. Do not run `mktemp` again for the second
+session ID, and exit normally. In that shell, run
+`export SESSION_ID='paste-the-displayed-id-here'`. Keep the five values
+`DSH_HOME`, `DSH_AGENTS_HOME`, `WORKSPACE`, `DSH_BIN`, and `SESSION_ID`
+available, along with the PATH prefix; print only these non-secret values
+locally if needed. Do not run `mktemp` again for the second
 process. In the same workspace and environment, start the native Web Host:
 
 ```sh

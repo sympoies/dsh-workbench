@@ -33,7 +33,7 @@ this table defines the public boundary now.
 | --- | --- | --- |
 | Web bind address and port | Explicit loopback or deployment-provided address; no public ingress default. | Deployment |
 | DSH persistence root | Explicit writable location; never a path embedded in the release. | Deployment |
-| Workspace identity and mounts | Explicit canonical mapping shared by Web and TUI; topology awaits the two-process proof. | Deployment |
+| Workspace identity and mounts | Explicit canonical mapping shared by Web and TUI; stop the previous writer before transfer, including the entire Web Host for Web-to-TUI handoff. | Deployment |
 | Runtime-kit policy/profile | Derived from the pinned release, with deployment-specific settings supplied separately. | Workbench and deployment |
 | Provider credentials and user preferences | Injected at runtime by the deployment or user; absent from artifacts and install receipts. | Deployment |
 | TUI invocation/profile location | Resolved from the installed package and deployment configuration, not from Agent Console paths. | Workbench and deployment |
