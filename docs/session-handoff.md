@@ -28,8 +28,9 @@ TUI currently reports a Web-held writer as an unreadable or corrupt stored log;
 that message is inaccurate. An installer or launcher must use the pinned DSH
 binary and frozen graph, rather than whichever `dsh` appears first on PATH.
 Runtime update commands must not silently change a pinned install.
-The Workbench-scoped TUI patch now makes `/rename` resumable in a real TTY;
-the native Web title view still needs cross-interface validation under
+The Workbench-scoped TUI patch makes `/rename` resumable in a real TTY. Native
+Web opens the renamed session with its authoritative title and history in the
+automated Linux browser acceptance. The broader handoff gate remains under
 [#7](https://github.com/sympoies/dsh-workbench/issues/7).
 
 This topology requires stopping Web service for a Web-to-TUI handoff. It does
@@ -157,9 +158,11 @@ scenario.
 
 These observations cover settled text and tool turns in one disposable Linux
 fixture. Manual and stopped-session TUI rename with exact-ID TUI restart are additionally covered
-by the patched graph's real-terminal acceptance; Web title visibility is not
-yet proved. They do not establish safe transfer of an executing turn, pending
-input or approval, attachments, cross-interface title updates, projection-cache behavior,
+by the patched graph's real-terminal acceptance. Native Web browser acceptance
+also opens a TUI-renamed session under the same ID with its prior prompt,
+answer, and title before and after a Web Host restart. These checks do not
+establish safe transfer of an executing turn, pending
+input or approval, attachments, live cross-interface title updates, complete projection-cache behavior,
 crash recovery, cross-platform operation, or existing-session migration.
 Those are release acceptance work under
 [#7](https://github.com/sympoies/dsh-workbench/issues/7), with TUI-specific
