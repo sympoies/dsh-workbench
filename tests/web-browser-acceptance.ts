@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
-import { chromium, type Browser, type Page } from 'playwright-core';
+import { chromium, type Browser, type Locator, type Page } from 'playwright-core';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
@@ -112,6 +112,40 @@ async function copiedSessionId(page: Page): Promise<string> {
   const id = await page.evaluate(() => navigator.clipboard.readText());
   assert.ok(/^session-[0-9a-f-]{36}$/.test(id), 'copied ID is not a DSH session ID');
   return id;
+}
+
+async function startNewSession(page: Page, phase: string): Promise<Locator> {
+  const selected = page.locator('[data-row-key^="session:"][aria-selected="true"]');
+  const previous = await selected.getAttribute('data-row-key');
+  const alreadyBlank = await selected.getByText('New Session', { exact: true }).count() > 0;
+  await page.getByRole('button', { name: 'New Session' }).first().click();
+  if (!alreadyBlank) {
+    try {
+      await page.waitForFunction(previousKey => {
+        const row = document.querySelector('[data-row-key^="session:"][aria-selected="true"]');
+        return row !== null && row.getAttribute('data-row-key') !== previousKey;
+      }, previous, { timeout: 30_000 });
+    } catch {
+      throw new Error(`${phase}: New Session did not replace the selected session`);
+    }
+  }
+  const editor = page.getByRole('textbox', { name: editorName });
+  await editor.waitFor({ timeout: 30_000 });
+  const deadline = Date.now() + 30_000;
+  while ((await editor.textContent())?.trim() !== '' && Date.now() < deadline) {
+    await new Promise(resolveWait => setTimeout(resolveWait, 50));
+  }
+  assert.equal((await editor.textContent())?.trim(), '', 'new session composer retained the previous prompt');
+  return editor;
+}
+
+async function waitForMockRequests(mock: Awaited<ReturnType<typeof startMockLlmServer>>,
+  count: number): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  while (mock.requests.length < count && Date.now() < deadline) {
+    await new Promise(resolveWait => setTimeout(resolveWait, 50));
+  }
+  assert.ok(mock.requests.length >= count, `expected ${count} mock requests before the next session`);
 }
 
 async function checkHistory(page: Page, id: string, own: string, other: string): Promise<void> {
@@ -251,10 +285,13 @@ async function main(): Promise<void> {
     const firstId = await copiedSessionId(firstPage);
     await checkToolResult(firstPage);
 
-    await firstPage.getByRole('button', { name: 'New Session' }).first().click();
-    await editor.waitFor({ timeout: 30_000 });
-    await editor.fill(prompts[1]);
-    await editor.press('Enter');
+    // First-turn title generation runs independently of the tool continuation.
+    // Let it consume its scripted success before the next tool scenario begins.
+    await waitForMockRequests(mock, 3);
+
+    const secondEditor = await startNewSession(firstPage, 'second');
+    await secondEditor.fill(prompts[1]);
+    await secondEditor.press('Enter');
     await approval.waitFor({ timeout: 30_000 });
     await approval.getByRole('button', { name: 'Reject' }).click();
     await approval.waitFor({ state: 'hidden', timeout: 30_000 });
@@ -296,9 +333,7 @@ async function main(): Promise<void> {
     browser = await launchBrowser(browserBin, home);
     let errorOpened = await openPage(browser, host.url);
     const errorPage = errorOpened.page;
-    await errorPage.getByRole('button', { name: 'New Session' }).first().click();
-    const errorEditor = errorPage.getByRole('textbox', { name: editorName });
-    await errorEditor.waitFor({ timeout: 30_000 });
+    const errorEditor = await startNewSession(errorPage, 'error');
     await errorEditor.fill(errorPrompt);
     await errorEditor.press('Enter');
     await errorPage.locator('[data-conversation-content]')
