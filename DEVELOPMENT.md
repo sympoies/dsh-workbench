@@ -58,9 +58,12 @@ pnpm test:tui:terminal --dsh-bin /path/to/pinned/dsh
 It installs the frozen TUI profile in a disposable home, drives Allow once and
 Reject through two real TTY sessions against an authenticated local mock, and
 checks the final Session V4 archive, approval, tool result, completed turn,
-and whether the allowed or rejected command actually ran. It never reads an
-existing DSH home or provider credential. This Linux
-gate does not claim long-session or cross-platform acceptance.
+and whether the allowed or rejected command actually ran. It also creates a
+72-turn conversation beyond the TUI's initial rendered-row cap, exits,
+resumes its exact ID, submits another turn, and checks its unique title and
+the exact `/resume` session count through a headless terminal screen. It never
+reads an existing DSH home or provider credential. This Linux gate does not
+claim cross-interface or cross-platform acceptance.
 
 For durable design or compatibility outcomes, update the current owner first,
 then use `devlog new` to append one evidence-backed entry. Run `devlog check`

@@ -28,6 +28,9 @@ TUI currently reports a Web-held writer as an unreadable or corrupt stored log;
 that message is inaccurate. An installer or launcher must use the pinned DSH
 binary and frozen graph, rather than whichever `dsh` appears first on PATH.
 Runtime update commands must not silently change a pinned install.
+Do not use TUI `/rename` in this candidate graph: it writes a title event that
+the pinned DSH rejects on resume. Track the fix in
+[#24](https://github.com/sympoies/dsh-workbench/issues/24).
 
 This topology requires stopping Web service for a Web-to-TUI handoff. It does
 not offer simultaneous Web and TUI editing or per-session Web writer release.
@@ -144,7 +147,11 @@ the same ID and displayed the same settled history. TUI-to-TUI contention
 was also rejected, then resolved after the first TUI exited. The committed
 profile lockfile separately passed a fresh-home strict frozen install and a
 second settled-text TUI-to-Web-to-TUI exact-ID handoff. The later run did not
-repeat tool or approval continuity.
+repeat tool or approval continuity. An automated Linux real-TTY scenario now
+also proves a 72-turn TUI session's unique title remains visible in the
+`/resume` list after exit and exact-ID resume, and that a further turn
+completes in the same Session V4 archive. It does not exercise Web in that
+scenario.
 
 These observations cover settled text and tool turns in one disposable Linux
 fixture. They do not establish safe transfer of an executing turn, pending
