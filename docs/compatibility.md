@@ -80,6 +80,10 @@ target version. Once accepted, a version's contract is immutable; a later
 tuple or artifact change gets a new release, preserving prior artifacts.
 
 Consumers may use `node scripts/contract.mjs print` to read the validated
-contract as JSON. Future Web images, TUI packages, install receipts, docs, and
-release metadata must derive their identity from that output. This repository
-does not yet ship any of those artifacts.
+contract as JSON. The Web plugin now embeds a generated identity with a
+SHA-256 digest of the parsed contract and reports the release and three
+component pins. Its package build checks that identity against the contract.
+This identifies a candidate build; it does not prove the actual installed
+runtime-kit or TUI package matches. Future Web images, TUI packages, install
+receipts, and release metadata must verify the installed graph and derive
+their identity from the same contract before activation.
