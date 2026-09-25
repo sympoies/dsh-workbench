@@ -42,8 +42,9 @@ jobs:
           node scripts/contract.mjs check
           git rev-parse --verify 'origin/main^{commit}' >/dev/null
           if git cat-file -e 'origin/main:compatibility/workbench.json' 2>/dev/null; then
-            git show 'origin/main:compatibility/workbench.json' > "$RUNNER_TEMP/workbench-previous.json"
-            node scripts/contract.mjs compare --previous "$RUNNER_TEMP/workbench-previous.json"
+            mkdir -p "$RUNNER_TEMP/workbench-previous"
+            git archive origin/main compatibility | tar -x -C "$RUNNER_TEMP/workbench-previous"
+            node scripts/contract.mjs compare --previous "$RUNNER_TEMP/workbench-previous/compatibility/workbench.json"
           fi
       - name: Resolve the selected TUI graph with strict peers
         run: node --test tests/tui-graph.test.ts
