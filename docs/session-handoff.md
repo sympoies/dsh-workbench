@@ -160,8 +160,11 @@ These observations cover settled text and tool turns in one disposable Linux
 fixture. Manual and stopped-session TUI rename with exact-ID TUI restart are additionally covered
 by the patched graph's real-terminal acceptance. Native Web browser acceptance
 also opens a TUI-renamed session under the same ID with its prior prompt,
-answer, and title before and after a Web Host restart. These checks do not
-establish safe transfer of an executing turn, pending
+answer, and title before and after a Web Host restart. The same automated
+fixture checks that a Web-held writer rejects TUI resume without changing the
+compressed archive. After Web Host stops, TUI resumes a Web-created session,
+completes another turn, and Web reads that continuation on restart. These
+checks do not establish safe transfer of an executing turn, pending
 input or approval, attachments, live cross-interface title updates, complete projection-cache behavior,
 crash recovery, cross-platform operation, or existing-session migration.
 Those are release acceptance work under

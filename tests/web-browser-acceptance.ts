@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
@@ -22,6 +22,8 @@ const editorName = 'Describe what you want to build, / commands, @ files or sess
 const tuiPrompt = 'TUI_TO_WEB_RENAMED_PROMPT';
 const tuiAnswer = 'TUI_TO_WEB_RENAMED_ANSWER';
 const tuiTitle = 'TUI_TO_WEB_MANUAL_TITLE';
+const continuationPrompt = 'WEB_TO_TUI_CONTINUATION_PROMPT';
+const continuationAnswer = 'WEB_TO_TUI_CONTINUATION_ANSWER';
 
 function option(name: string): string {
   const index = process.argv.indexOf(name);
@@ -58,6 +60,16 @@ function sessionLogs(root: string): string[] {
   return found;
 }
 
+function sessionLog(root: string, id: string): string {
+  const matches = sessionLogs(root).filter(path => basename(dirname(path)) === id);
+  assert.equal(matches.length, 1, 'Session has no unique Session V4 archive');
+  return matches[0];
+}
+
+function logDigest(path: string): string {
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
 async function waitForTui(child: ChildProcess, condition: () => boolean, label: string): Promise<void> {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
@@ -68,6 +80,28 @@ async function waitForTui(child: ChildProcess, condition: () => boolean, label: 
     await new Promise(resolveWait => setTimeout(resolveWait, 100));
   }
   throw new Error(`TUI did not reach ${label}`);
+}
+
+function visibleScreen(screen: InstanceType<typeof headless.Terminal>): string {
+  return Array.from({ length: screen.rows }, (_, row) =>
+    screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '').join('\n');
+}
+
+function startTui(dsh: string, fixture: string, home: string, agents: string, workspace: string,
+  baseURL: string, apiKey: string, args: string[] = []) {
+  const child = spawn('script', ['-q', '-e', '-c',
+    `${quote(dsh)} --profile dsh-tui ${args.map(quote).join(' ')}`, '/dev/null'], {
+    cwd: workspace, detached: true,
+    env: { PATH: `${dirname(dsh)}:${process.env.PATH ?? ''}`, HOME: home, DSH_HOME: home,
+      DSH_AGENTS_HOME: agents, XDG_CONFIG_HOME: join(fixture, 'config'),
+      LANG: 'en_US.UTF-8', TERM: 'xterm-256color',
+      DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_BASE_URL: `${baseURL}/v1`, DEEPSEEK_API_KEY: apiKey },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const screen = new headless.Terminal({ cols: 80, rows: 24, scrollback: 1_000, allowProposedApi: true });
+  child.stdout.on('data', chunk => { screen.write(chunk); });
+  child.stderr.resume();
+  return { child, screen };
 }
 
 async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
@@ -94,21 +128,9 @@ async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
   const logRoot = join(home, 'sessions');
   mkdirSync(logRoot, { recursive: true });
   const previous = new Set(sessionLogs(logRoot));
-  const child = spawn('script', ['-q', '-e', '-c', `${quote(dsh)} --profile dsh-tui`, '/dev/null'], {
-    cwd: workspace, detached: true,
-    env: { PATH: `${dirname(dsh)}:${process.env.PATH ?? ''}`, HOME: home, DSH_HOME: home,
-      DSH_AGENTS_HOME: agents, XDG_CONFIG_HOME: join(fixture, 'config'),
-      LANG: 'en_US.UTF-8', TERM: 'xterm-256color',
-      DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_BASE_URL: `${mock.baseURL}/v1`, DEEPSEEK_API_KEY: apiKey },
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  const screen = new headless.Terminal({ cols: 80, rows: 24, scrollback: 1_000, allowProposedApi: true });
-  child.stdout.on('data', chunk => { screen.write(chunk); });
-  child.stderr.resume();
+  const { child, screen } = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey);
   try {
-    await waitForTui(child, () => Array.from({ length: screen.rows }, (_, row) =>
-      screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '')
-      .join('\n').includes('Explore the uncharted!'), 'startup');
+    await waitForTui(child, () => visibleScreen(screen).includes('Explore the uncharted!'), 'startup');
     child.stdin?.write(`${tuiPrompt}\r`);
     let logPath: string | undefined;
     await waitForTui(child, () => {
@@ -129,6 +151,54 @@ async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
   } finally {
     const cleanup = await Promise.allSettled([stopTerminal(child), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI seed cleanup failed');
+  }
+}
+
+async function continueWebSessionInTui(dsh: string, fixture: string, home: string, agents: string,
+  workspace: string, id: string): Promise<void> {
+  const logRoot = join(home, 'sessions');
+  const logPath = sessionLog(logRoot, id);
+  const turnsBefore = readEvents(logPath, { strict: true }).filter(event => event.type === 'turn/end').length;
+  const previous = new Set(sessionLogs(logRoot));
+  const apiKey = randomBytes(24).toString('hex');
+  const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
+    apiKey, successText: continuationAnswer });
+  const { child, screen } = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey,
+    ['--resume', id]);
+  try {
+    await waitForTui(child, () => visibleScreen(screen).includes(answer), 'resumed Web history');
+    child.stdin?.write(`${continuationPrompt}\r`);
+    await waitForTui(child, () => readEvents(logPath).filter(event => event.type === 'turn/end').length
+      === turnsBefore + 1, 'completed TUI continuation');
+    await stopTerminal(child);
+    assert.equal(child.exitCode, 0, 'TUI did not exit cleanly after Web handoff');
+    assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [],
+      'Exact-ID TUI continuation created another session');
+    const events = readEvents(logPath, { strict: true });
+    assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(continuationPrompt));
+    assert.ok(JSON.stringify(events.filter(event => event.type === 'assistant/message')).includes(continuationAnswer));
+  } finally {
+    const cleanup = await Promise.allSettled([stopTerminal(child), mock.close()]);
+    if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI continuation cleanup failed');
+  }
+}
+
+async function checkWebWriterContention(dsh: string, fixture: string, home: string, agents: string,
+  workspace: string, id: string, baseURL: string, apiKey: string): Promise<void> {
+  const logPath = sessionLog(join(home, 'sessions'), id);
+  const before = logDigest(logPath);
+  const { child } = startTui(dsh, fixture, home, agents, workspace, baseURL, apiKey,
+    ['--resume', id]);
+  try {
+    const exit = await new Promise<number | null>((resolveExit, reject) => {
+      if (child.exitCode !== null) { resolveExit(child.exitCode); return; }
+      const timer = setTimeout(() => reject(new Error('TUI did not reject the Web-held writer')), 20_000);
+      child.once('exit', code => { clearTimeout(timer); resolveExit(code); });
+    });
+    assert.ok(exit !== null && exit !== 0, 'TUI did not refuse the Web-held writer with an error');
+    assert.equal(logDigest(logPath), before, 'Rejected TUI access changed the Web-held archive');
+  } finally {
+    await stopTerminal(child);
   }
 }
 
@@ -418,6 +488,8 @@ async function main(): Promise<void> {
     await checkHistory(firstPage, firstId, prompts[0], prompts[1]);
     await checkHistory(firstPage, secondId, prompts[1], prompts[0]);
     await checkRejectedTool(firstPage);
+    await checkHistory(firstPage, firstId, prompts[0], prompts[1]);
+    await checkWebWriterContention(dsh, fixture, home, agents, workspace, firstId, mock.baseURL, apiKey);
     pageErrors += firstErrors.length;
     hostErrors += host.errorCount();
     await browser.close();
@@ -425,11 +497,16 @@ async function main(): Promise<void> {
     await stopHost(host.child);
     host = undefined;
 
+    await continueWebSessionInTui(dsh, fixture, home, agents, workspace, firstId);
+
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
     opened = await openPage(browser, host.url);
     await checkTuiHandoff(opened.page, tuiSessionId);
     await checkHistory(opened.page, firstId, prompts[0], prompts[1]);
+    const continued = await opened.page.locator('[data-conversation-content]').innerText();
+    assert.ok(continued.includes(continuationPrompt), 'Web lost the TUI continuation prompt');
+    assert.ok(continued.includes(continuationAnswer), 'Web lost the TUI continuation answer');
     await checkToolResult(opened.page);
     await checkHistory(opened.page, secondId, prompts[1], prompts[0]);
     await checkRejectedTool(opened.page);
@@ -474,7 +551,8 @@ async function main(): Promise<void> {
     assert.equal(pageErrors, 0, 'browser reported JavaScript errors');
     assert.equal(hostErrors, 0, 'DSH Web Host reported errors');
     assert.equal(mock.requests[0]?.behavior, 'invalid_request');
-    console.log(JSON.stringify({ result: 'pass', sessions: 4, tuiToWebTitle: true, toolApproval: true,
+    console.log(JSON.stringify({ result: 'pass', sessions: 4, tuiToWebTitle: true,
+      webToTuiContinuation: true, writerContention: true, toolApproval: true,
       toolRejection: true, runningTurn: true, errorResume: true,
       toolResultsAfterRestart: true, restartResume: true,
       interactionRequests, errorRequests: mock.requests.length, pageErrors, hostErrors }));
