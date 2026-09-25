@@ -9,8 +9,9 @@ Use exact source tags or commits and keep a candidate graph separate from an
 accepted release. Test Web and TUI against the same DSH session store and
 workspace identity before claiming cross-interface resume.
 
-TypeScript is the default for source and tests. Node 24 runs the erasable
-TypeScript directly; the two `.mjs` files in `scripts/` preserve stable CLI
+TypeScript is the default for source and tests. Node 24.3.0 or later runs the
+erasable TypeScript directly without an experimental warning; the two `.mjs`
+files in `scripts/` preserve stable CLI
 entry points. Install the exact development toolchain with
 `pnpm install --frozen-lockfile --ignore-scripts`, then run `pnpm typecheck` and
 `pnpm test`. The root lockfile pins development tools; the separate

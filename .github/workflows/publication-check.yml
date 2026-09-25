@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24.3.0'
       - name: Install Workbench package manager
         run: npm install --global pnpm@11.24.0
       - name: Install pinned development tools

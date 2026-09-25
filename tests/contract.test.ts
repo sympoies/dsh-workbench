@@ -41,6 +41,12 @@ function run(command: string, path: string, extra: string[] = []) {
 test('candidate contract is valid but cannot be activated', () => {
   const check = run('check', source);
   assert.equal(check.status, 0, check.stderr);
+  assert.equal(check.stdout, 'Contract valid.\n');
+  assert.equal(check.stderr, '');
+  const printed = run('print', source);
+  assert.equal(printed.status, 0, printed.stderr);
+  assert.equal(printed.stdout, `${JSON.stringify(JSON.parse(readFileSync(source, 'utf8')))}\n`);
+  assert.equal(printed.stderr, '');
   const activation = run('require-accepted', source);
   assert.notEqual(activation.status, 0);
   assert.match(activation.stderr, /candidate/i);
@@ -126,8 +132,8 @@ test('runtime Node baseline cannot fall below the pinned runtime-kit requirement
 
 test('a product-only release can advance the Workbench version', () => {
   const { dir, path } = fixture(contract => {
-    contract.release.version = '0.1.0-rc.2';
-    contract.release.tag = 'v0.1.0-rc.2';
+    contract.release.version = '0.1.0-rc.3';
+    contract.release.tag = 'v0.1.0-rc.3';
   });
   try {
     assert.equal(run('compare', path, ['--previous', source]).status, 0);

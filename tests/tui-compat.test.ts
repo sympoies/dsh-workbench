@@ -14,6 +14,7 @@ const script = fileURLToPath(new URL('../scripts/tui-compat.mjs', import.meta.ur
 test('the reviewed TUI peer correction is scoped to one transitive package and current DSH', () => {
   const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, '');
   const selector = `dsh-working-activity@${contract.components.tui.peerOverrides!.workingActivity}>`;
   const lines = result.stdout.trim().split('\n');
   assert.equal(lines[0], 'minimumReleaseAgeExclude:');
