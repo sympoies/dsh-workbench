@@ -16,6 +16,7 @@ const contract = JSON.parse(readFileSync(contractPath, 'utf8')) as WorkbenchCont
 const { workingActivity, react } = contract.components.tui.peerOverrides!;
 const dsh = contract.components.dsh.package.version;
 const tui = contract.components.tui.package;
+const patch = contract.components.tui.compatibilityPatch!;
 const selector = `dsh-working-activity@${workingActivity}>`;
 const peers = [
   '@deepseek-ai/dsh-agent',
@@ -29,7 +30,8 @@ const peers = [
 
 // pnpm overrides rewrite only the stale peer edges of this exact dependency.
 // The installed package bytes and all other peer declarations remain intact.
-const lines = ['minimumReleaseAgeExclude:', `  - '${tui.name}@${tui.version}'`, 'overrides:',
+const lines = ['minimumReleaseAgeExclude:', `  - '${tui.name}@${tui.version}'`,
+  'patchedDependencies:', `  '${tui.name}@${tui.version}': ${patch.path.replace(/^compatibility\//, '')}`, 'overrides:',
   `  '${tui.name}@${tui.version}>dsh-working-activity': ${workingActivity}`,
   `  react: ${react}`,
   ...peers.map(peer => `  '${selector}${peer}': ${dsh}`),

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -13,10 +13,13 @@ const source = join(root, 'compatibility/workbench.json');
 
 function fixture(change?: (contract: WorkbenchContract) => void) {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-workbench-contract-'));
-  const path = join(dir, 'workbench.json');
+  const compatibility = join(dir, 'compatibility');
+  mkdirSync(join(compatibility, 'patches'), { recursive: true });
+  const path = join(compatibility, 'workbench.json');
   const contract = JSON.parse(readFileSync(source, 'utf8')) as WorkbenchContract;
   change?.(contract);
   writeFileSync(path, JSON.stringify(contract));
+  copyFileSync(join(root, 'compatibility/patches/tui-rename.patch'), join(compatibility, 'patches/tui-rename.patch'));
   return { dir, path };
 }
 
@@ -78,13 +81,14 @@ test('release identity changes whenever the component tuple changes', () => {
   }
 });
 
-test('schema 2 compares with the original schema 1 candidate only after a release bump', () => {
+test('schema 3 compares with the original schema 1 candidate only after a release bump', () => {
   const previous = fixture(contract => {
     contract.schemaVersion = 1;
     contract.release.version = '0.1.0-rc.0';
     contract.release.tag = 'v0.1.0-rc.0';
     Reflect.deleteProperty(contract.runtime, 'pnpm');
     Reflect.deleteProperty(contract.components.tui, 'peerOverrides');
+    Reflect.deleteProperty(contract.components.tui, 'compatibilityPatch');
   });
   try {
     assert.equal(run('compare', source, ['--previous', previous.path]).status, 0);
@@ -99,6 +103,47 @@ test('schema 2 compares with the original schema 1 candidate only after a releas
     }
   } finally {
     rmSync(previous.dir, { recursive: true, force: true });
+  }
+});
+
+test('schema 3 compares with the prior unpatched schema 2 contract', () => {
+  const previous = fixture(contract => {
+    contract.schemaVersion = 2;
+    contract.release.version = '0.1.0-rc.2';
+    contract.release.tag = 'v0.1.0-rc.2';
+    Reflect.deleteProperty(contract.components.tui, 'compatibilityPatch');
+  });
+  try {
+    assert.equal(run('compare', source, ['--previous', previous.path]).status, 0);
+  } finally {
+    rmSync(previous.dir, { recursive: true, force: true });
+  }
+});
+
+test('TUI compatibility patch must match its reviewed digest and path', () => {
+  for (const change of ([
+    (contract: WorkbenchContract) => { contract.components.tui.compatibilityPatch!.sha256 = 'a'.repeat(64); },
+    (contract: WorkbenchContract) => { contract.components.tui.compatibilityPatch!.path = 'patches/unknown.patch'; },
+  ])) {
+    const { dir, path } = fixture(change);
+    try {
+      assert.notEqual(run('check', path).status, 0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('a copied contract rejects a changed or missing patch in its own tree', () => {
+  const copied = fixture();
+  try {
+    assert.equal(run('check', copied.path).status, 0);
+    writeFileSync(join(copied.dir, 'compatibility/patches/tui-rename.patch'), 'changed patch\n');
+    assert.match(run('check', copied.path).stderr, /patch digest mismatch/i);
+    rmSync(join(copied.dir, 'compatibility/patches/tui-rename.patch'));
+    assert.match(run('check', copied.path).stderr, /patch cannot be read/i);
+  } finally {
+    rmSync(copied.dir, { recursive: true, force: true });
   }
 });
 
@@ -132,8 +177,8 @@ test('runtime Node baseline cannot fall below the pinned runtime-kit requirement
 
 test('a product-only release can advance the Workbench version', () => {
   const { dir, path } = fixture(contract => {
-    contract.release.version = '0.1.0-rc.3';
-    contract.release.tag = 'v0.1.0-rc.3';
+    contract.release.version = '0.1.0-rc.4';
+    contract.release.tag = 'v0.1.0-rc.4';
   });
   try {
     assert.equal(run('compare', path, ['--previous', source]).status, 0);

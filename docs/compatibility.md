@@ -39,21 +39,28 @@ The terminal assertion reconstructs the screen
 from ANSI updates; searching the output byte stream cannot verify a changed
 count because the TUI may emit only the changed digit. These checks do not yet
 establish the full TUI acceptance gate. The overrides do
-not change the published package bytes or relax peer checks for any other
+not relax peer checks for any other
 dependency; a future installer must include them in its frozen graph and
 reject an unexpected working-activity version.
 
-Manual TUI `/rename` is a known blocker in this candidate graph:
-dsh-TUI 0.11.0 appends `session/title` without the `messageSeqs` array required
-by DSH 0.1.7-rc.1. A later exact-ID resume rejects the log as semantically
-invalid. See [#24](https://github.com/sympoies/dsh-workbench/issues/24).
-The long-session acceptance relies on the valid automatic title path; it does
-not establish manual rename compatibility.
+Workbench `v0.1.0-rc.3` adds an exact
+[`dsh-TUI 0.11.0` patch](../compatibility/patches/tui-rename.patch) for
+[#24](https://github.com/sympoies/dsh-workbench/issues/24). Live `/rename`
+now calls DSH's session-title service, which records the normalized title
+with `messageSeqs: []` and `source.kind: user` and supersedes automatic
+title generation. The persisted-session picker writes the same user-title
+payload. The patch path and SHA-256 digest are part of the single contract;
+the frozen profile lock records pnpm's patch hash. A real-terminal regression
+proved manual rename, exact-ID restart, and another completed turn against
+the patched profile. It also exercised the stopped-session title writer and
+another exact-ID restart. Native Web visibility of that renamed title still needs
+the cross-interface gate in [#7](https://github.com/sympoies/dsh-workbench/issues/7).
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the
 [handoff procedure](session-handoff.md). It freezes that profile's transitive
-dependencies; it is not a second editable component version contract or an
+dependencies and the exact compatibility patch; it is not a second editable
+component version contract or an
 accepted installer receipt. CI verifies a strict frozen install with it. A
 candidate profile update must regenerate and review this lockfile against the
 single component contract before the handoff proof is repeated.
@@ -68,8 +75,8 @@ TUI, Web, and cross-interface handoff on every declared target platform. A
 local schema check alone does not
 establish that upstream packages match the recorded hashes; the build and
 installation workflows must verify those bytes when implemented.
-Schema 2 adds the Workbench pnpm pin and the TUI peer correction; the compare
-gate reads the initial schema-1 candidate only as a previous release.
+Schema 3 adds the TUI patch identity; the compare gate reads schema 1 and 2
+candidates only as previous releases.
 
 The current common runtime baseline is Node.js 24 or newer, derived from the
 pinned runtime-kit's minimum, on the target platform set recorded in the
@@ -87,7 +94,8 @@ still comes from the contract and strict frozen installation remains required.
 Workbench uses its own SemVer release identity and tags `v<version>`. The
 candidate target version in the contract is reserved for this tuple; it is not
 a published release. A change to any component source URL, tag, commit, tree,
-package name, version, integrity, runtime platform, or toolchain requires a new
+package name, version, integrity, compatibility patch, runtime platform, or
+toolchain requires a new
 Workbench version and tag. Product or artifact changes can also advance the
 Workbench version while the component pins stay the same. New versions must
 advance in SemVer order; release publication must reject an existing tag. CI

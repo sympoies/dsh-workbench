@@ -8,6 +8,7 @@ export interface WorkbenchContract {
     package: { name: string; version: string; integrity: string };
     toolchain: { node: string; pnpm?: string };
     peerOverrides?: { workingActivity: string; react: string };
+    compatibilityPatch?: { path: string; sha256: string };
     status: string;
   }>;
   acceptance: Record<'runtimeKit' | 'tui' | 'web' | 'handoff', {

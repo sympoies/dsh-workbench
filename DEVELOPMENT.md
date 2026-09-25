@@ -46,8 +46,9 @@ change to any component source or package identity requires a new Workbench
 release version; CI compares the contract with `main`. See the
 [contract guide](docs/compatibility.md) for acceptance and release rules.
 Run `node --test tests/tui-graph.test.ts` with the pinned pnpm version when
-changing the TUI peer correction. It reproduces the uncorrected strict peer
-failure, then resolves and installs the exact DSH/TUI graph with the correction.
+changing the TUI compatibility patch or peer correction. It reproduces the
+uncorrected strict peer failure, then resolves and installs the exact DSH/TUI
+graph with the reviewed patch and peer correction.
 On Linux with util-linux `script` and `zstdcat`, run the real terminal approval
 acceptance with an installed executable of the exact DSH contract version:
 
@@ -61,7 +62,10 @@ checks the final Session V4 archive, approval, tool result, completed turn,
 and whether the allowed or rejected command actually ran. It also creates a
 72-turn conversation beyond the TUI's initial rendered-row cap, exits,
 resumes its exact ID, submits another turn, and checks its unique title and
-the exact `/resume` session count through a headless terminal screen. It never
+the exact `/resume` session count through a headless terminal screen. It also
+renames a session, exits, resumes that exact ID, and completes another turn
+while checking the durable user-title event. It then exercises the patched
+stopped-session title writer and resumes the same ID again. It never
 reads an existing DSH home or provider credential. This Linux gate does not
 claim cross-interface or cross-platform acceptance.
 

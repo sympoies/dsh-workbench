@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
 import headless from '@xterm/headless';
 import type { WorkbenchContract } from '../src/contract-types.ts';
@@ -216,6 +216,61 @@ async function runSessionScenario(binary: string, fixture: string): Promise<void
   }
 }
 
+async function runRenameScenario(binary: string, fixture: string): Promise<void> {
+  const apiKey = randomBytes(24).toString('hex');
+  const answer = 'TUI_RENAME_ANSWER';
+  const renamed = 'WB_MANUAL_RENAME';
+  const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true, apiKey, successText: answer });
+  const logRoot = join(fixture, 'home', 'sessions');
+  const previous = new Set(sessionLogs(logRoot));
+  let terminal: ReturnType<typeof startTerminal> | undefined;
+  try {
+    terminal = startTerminal(binary, fixture, mock.baseURL, apiKey);
+    await terminal.waitFor('Explore the uncharted!');
+    terminal.child.stdin?.write('TUI_RENAME_FIRST\r');
+    const logPath = await waitForTurn(logRoot, previous);
+    terminal.child.stdin?.write(`/rename ${renamed}\r`);
+    await waitForTitle(logPath, renamed);
+    await stopTerminal(terminal.child);
+    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly after rename');
+    const sessionId = basename(dirname(logPath));
+    terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, ['--resume', sessionId]);
+    await terminal.waitFor(answer);
+    terminal.child.stdin?.write('TUI_RENAME_RESUMED\r');
+    await waitForTurnCount(logPath, 2);
+    await terminal.waitForAfter('TUI_RENAME_RESUMED', answer);
+    await stopTerminal(terminal.child);
+    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly after renamed resume');
+    const offlineTitle = 'WB_OFFLINE_RENAME';
+    const offlineWriter = pathToFileURL(join(fixture, 'home', 'profiles', 'dsh-tui', 'node_modules',
+      contract.components.tui.package.name, 'lib/types/dsh-adapter/compat/sessionLog.js')).href;
+    command(process.execPath, ['--input-type=module', '-e',
+      `import { appendSessionTitle } from ${JSON.stringify(offlineWriter)};
+       if (appendSessionTitle(process.argv[1], process.argv[2]) !== 'appended') process.exit(1);`,
+      sessionId, offlineTitle], join(fixture, 'workspace'), {
+      ...process.env, HOME: join(fixture, 'home'), DSH_HOME: join(fixture, 'home'),
+    });
+    terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, ['--resume', sessionId]);
+    await terminal.waitFor(answer);
+    terminal.child.stdin?.write('TUI_OFFLINE_RENAME_RESUMED\r');
+    await waitForTurnCount(logPath, 3);
+    await terminal.waitForAfter('TUI_OFFLINE_RENAME_RESUMED', answer);
+    await stopTerminal(terminal.child);
+    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly after offline rename');
+    assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [logPath]);
+    const events = readEvents(logPath, { strict: true });
+    assert.equal(events.filter(event => event.type === 'turn/end').length, 3);
+    assert.deepEqual(events.filter(event => event.type === 'session/title').at(-1)?.data,
+      { title: offlineTitle, messageSeqs: [], source: { kind: 'user' } });
+    assert.ok(events.some(event => event.type === 'session/title'
+      && event.data?.title === renamed
+      && (event.data?.source as { kind?: string } | undefined)?.kind === 'user'));
+  } finally {
+    const cleanup = await Promise.allSettled([stopTerminal(terminal?.child), mock.close()]);
+    if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI rename cleanup failed');
+  }
+}
+
 async function runScenario(binary: string, fixture: string, scenario: typeof scenarios[number]): Promise<void> {
   const apiKey = randomBytes(24).toString('hex');
   const marker = join(fixture, 'workspace', `.tui-${scenario.name}-executed`);
@@ -288,6 +343,8 @@ async function main(): Promise<void> {
     writeFileSync(join(profile, 'pnpm-workspace.yaml'), command(process.execPath,
       [join(repo, 'scripts/tui-compat.mjs')], repo) + '\n');
     copyFileSync(join(repo, 'compatibility/tui-profile/pnpm-lock.yaml'), join(profile, 'pnpm-lock.yaml'));
+    mkdirSync(join(profile, 'patches'));
+    copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path), join(profile, 'patches/tui-rename.patch'));
     const userConfig = join(fixture, 'user.npmrc');
     const globalConfig = join(fixture, 'global.npmrc');
     writeFileSync(userConfig, '');
@@ -301,8 +358,10 @@ async function main(): Promise<void> {
     assert.equal(installedTui.version, contract.components.tui.package.version);
     for (const scenario of scenarios) await runScenario(dsh, fixture, scenario);
     await runSessionScenario(dsh, fixture);
+    await runRenameScenario(dsh, fixture);
     console.log(JSON.stringify({ result: 'pass', scenarios: scenarios.map(scenario => scenario.name),
-      approvals: true, toolResults: true, exactIdResume: true, realTty: true }));
+      approvals: true, toolResults: true, exactIdResume: true, manualRenameResume: true,
+      offlineRenameResume: true, realTty: true }));
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }

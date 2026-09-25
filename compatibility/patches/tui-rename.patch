@@ -1,0 +1,38 @@
+diff --git a/lib/types/dsh-adapter/channel/session-metadata.js b/lib/types/dsh-adapter/channel/session-metadata.js
+index de95a03af2cb8e06aad7a5b0b3628c18adacfe14..a4611edec95d3799e69a1ce436d337f1619e3171 100644
+--- a/lib/types/dsh-adapter/channel/session-metadata.js
++++ b/lib/types/dsh-adapter/channel/session-metadata.js
+@@ -163,8 +163,11 @@ export function createSessionMetadataActions(ctx, deps) {
+         const capture = deps.binding.capture();
+         if (!current(capture))
+             return;
+-        capture.agent.session.append('session/title', { title });
+-        deps.setSessionTitle(title);
++        const titleService = ctx.get('sessionTitle');
++        if (!titleService)
++            throw new Error('session title service unavailable');
++        const accepted = titleService.rename(capture.agent.session, title);
++        deps.setSessionTitle(accepted.title);
+         deps.emit();
+     };
+     const setSessionColor = (color) => {
+diff --git a/lib/types/dsh-adapter/compat/sessionLog.js b/lib/types/dsh-adapter/compat/sessionLog.js
+index c31d6e62e56b5c762ce891d9055b211416afff2d..cb0cffd9f522fd6231de61fcc0c076f2b7bb05e5 100644
+--- a/lib/types/dsh-adapter/compat/sessionLog.js
++++ b/lib/types/dsh-adapter/compat/sessionLog.js
+@@ -1106,13 +1106,12 @@ export function appendSessionTitle(sessionId, title) {
+             if (typeof seq === 'number' && seq > maxSeq)
+                 maxSeq = seq;
+         }
+-        // Same envelope shape as a manual /rename append ({ title } only); the
+-        // seed validator asks only for type/seq/time/data on non-message types.
++        // An explicit user rename cites no source messages and pins the title.
+         const event = {
+             type: 'session/title',
+             seq: maxSeq + 1,
+             time: Date.now(),
+-            data: { title },
++            data: { title, messageSeqs: [], source: { kind: 'user' } },
+         };
+         const frame = zstdCompressSync(Buffer.from(JSON.stringify(event) + '\n', 'utf8'));
+         appendFileSync(file, frame);
