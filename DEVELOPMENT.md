@@ -13,7 +13,7 @@ TypeScript is the default for source and tests. Node 24.3.0 or later runs the
 erasable TypeScript directly without an experimental warning; the two `.mjs`
 files in `scripts/` preserve stable CLI
 entry points. Install the exact development toolchain with
-`pnpm install --frozen-lockfile --ignore-scripts`, then run `pnpm typecheck` and
+`pnpm install --frozen-lockfile --strict-peer-dependencies`, then run `pnpm typecheck` and
 `pnpm test`. The root lockfile pins development tools; the separate
 [compatibility contract](compatibility/workbench.json) pins the DSH product
 graph. Generated files and `node_modules/` are not published.
@@ -22,6 +22,18 @@ For the Web plugin, run `pnpm web:metadata:check` and `pnpm web:build` before
 `pnpm typecheck`; its generated `web/lib/` is ignored. The metadata check
 ensures the Web package version and DSH catalog match the contract. See the
 [Web port notes](docs/web-port.md) for the current acceptance boundary.
+Run the native browser acceptance with a Chromium executable and an installed
+DSH executable at the exact contract version:
+
+```sh
+pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chromium
+```
+
+The script builds and packs the Web plugin, installs it in a disposable DSH
+profile, and runs two sessions against the pinned DSH mock LLM server. It
+checks distinct IDs, isolated histories, and Web Host restart recovery. The
+fixture, profile, and mock endpoint are local and removed afterward. This
+test does not claim TUI handoff, tool approval, or release acceptance.
 
 Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`

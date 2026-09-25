@@ -29,7 +29,11 @@ artifact review are established.
 No predecessor source file or history was copied. This candidate has strict
 dependency installation, a TypeScript build that emits the DSH Client module
 loader format, and artifact-level registration and clipboard interaction tests.
-The packaged plugin also loaded without page errors in a disposable native Web
-profile on the pinned DSH runtime. Two-session interaction, approval/tool
-continuity, version reporting, and image composition remain acceptance work under
+The packaged plugin loaded without page errors in a disposable native Web
+profile on the pinned DSH runtime. The [browser acceptance script](../tests/web-browser-acceptance.ts)
+uses a local mock LLM to create two distinct sessions, checks their separate
+histories and copied IDs, then restarts the Web Host and reopens both. It
+requires explicit paths to the pinned DSH executable and a Chromium executable;
+see [development instructions](../DEVELOPMENT.md). Tool and approval continuity,
+TUI handoff, version reporting, and image composition remain acceptance work under
 [#5](https://github.com/sympoies/dsh-workbench/issues/5).
