@@ -175,6 +175,8 @@ jobs:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |
           cd "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
+          # Runtime-kit's contained DSH command omits PNPM_HOME; use its store now.
+          unset PNPM_HOME
           test "$(npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm --version)" = "$WORKBENCH_PNPM"
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --strict-peer-dependencies --ignore-scripts
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
