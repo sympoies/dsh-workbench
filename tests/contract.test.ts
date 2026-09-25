@@ -4,21 +4,23 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import type { WorkbenchContract } from '../src/contract-types.ts';
 
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 const script = join(root, 'scripts/contract.mjs');
 const source = join(root, 'compatibility/workbench.json');
 
-function fixture(change) {
+function fixture(change?: (contract: WorkbenchContract) => void) {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-workbench-contract-'));
   const path = join(dir, 'workbench.json');
-  const contract = JSON.parse(readFileSync(source, 'utf8'));
+  const contract = JSON.parse(readFileSync(source, 'utf8')) as WorkbenchContract;
   change?.(contract);
   writeFileSync(path, JSON.stringify(contract));
   return { dir, path };
 }
 
-function accept(contract) {
+function accept(contract: WorkbenchContract) {
   contract.status = 'accepted';
   for (const component of Object.values(contract.components)) component.status = 'accepted';
   Object.entries(contract.acceptance).forEach(([name, gate], gateIndex) => {
@@ -30,7 +32,7 @@ function accept(contract) {
   });
 }
 
-function run(command, path, extra = []) {
+function run(command: string, path: string, extra: string[] = []) {
   return spawnSync(process.execPath, [script, command, '--contract', path, ...extra], {
     encoding: 'utf8',
   });
@@ -39,6 +41,12 @@ function run(command, path, extra = []) {
 test('candidate contract is valid but cannot be activated', () => {
   const check = run('check', source);
   assert.equal(check.status, 0, check.stderr);
+  assert.equal(check.stdout, 'Contract valid.\n');
+  assert.equal(check.stderr, '');
+  const printed = run('print', source);
+  assert.equal(printed.status, 0, printed.stderr);
+  assert.equal(printed.stdout, `${JSON.stringify(JSON.parse(readFileSync(source, 'utf8')))}\n`);
+  assert.equal(printed.stderr, '');
   const activation = run('require-accepted', source);
   assert.notEqual(activation.status, 0);
   assert.match(activation.stderr, /candidate/i);
@@ -75,8 +83,8 @@ test('schema 2 compares with the original schema 1 candidate only after a releas
     contract.schemaVersion = 1;
     contract.release.version = '0.1.0-rc.0';
     contract.release.tag = 'v0.1.0-rc.0';
-    delete contract.runtime.pnpm;
-    delete contract.components.tui.peerOverrides;
+    Reflect.deleteProperty(contract.runtime, 'pnpm');
+    Reflect.deleteProperty(contract.components.tui, 'peerOverrides');
   });
   try {
     assert.equal(run('compare', source, ['--previous', previous.path]).status, 0);
@@ -95,12 +103,12 @@ test('schema 2 compares with the original schema 1 candidate only after a releas
 });
 
 test('platform and toolchain changes require a new Workbench version', () => {
-  for (const change of [
+  for (const change of ([
     contract => contract.runtime.platforms.pop(),
     contract => { contract.runtime.pnpm = '11.25.0'; },
     contract => { contract.components.tui.toolchain.pnpm = '11.22.0'; },
-    contract => { contract.components.tui.peerOverrides.react = '19.2.0'; },
-  ]) {
+    contract => { contract.components.tui.peerOverrides!.react = '19.2.0'; },
+  ] satisfies Array<(contract: WorkbenchContract) => void>)) {
     const { dir, path } = fixture(change);
     try {
       assert.match(run('compare', path, ['--previous', source]).stderr, /component tuple changed without a new Workbench release\.version/i);
@@ -124,8 +132,8 @@ test('runtime Node baseline cannot fall below the pinned runtime-kit requirement
 
 test('a product-only release can advance the Workbench version', () => {
   const { dir, path } = fixture(contract => {
-    contract.release.version = '0.1.0-rc.2';
-    contract.release.tag = 'v0.1.0-rc.2';
+    contract.release.version = '0.1.0-rc.3';
+    contract.release.tag = 'v0.1.0-rc.3';
   });
   try {
     assert.equal(run('compare', path, ['--previous', source]).status, 0);
@@ -186,11 +194,11 @@ test('an accepted release cannot be downgraded under its existing version', () =
 });
 
 test('accepted release evidence must identify each gate and platform with distinct public records', () => {
-  for (const change of [
+  for (const change of ([
     contract => { contract.acceptance.web.evidence[0].url = 'https://github.com/'; },
     contract => { contract.acceptance.web.evidence[0].url = contract.acceptance.tui.evidence[0].url; },
     contract => { contract.acceptance.web.evidence.pop(); },
-  ]) {
+  ] satisfies Array<(contract: WorkbenchContract) => void>)) {
     const { dir, path } = fixture(contract => {
       accept(contract);
       change(contract);

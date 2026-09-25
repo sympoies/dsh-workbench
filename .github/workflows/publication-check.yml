@@ -18,17 +18,21 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24.3.0'
       - name: Install Workbench package manager
         run: npm install --global pnpm@11.24.0
+      - name: Install pinned development tools
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Typecheck source and tests
+        run: pnpm typecheck
       - name: Scan tracked source
         run: bash scripts/check-publication.sh
       - name: Verify scan behavior
         run: bash tests/check-publication.sh
       - name: Validate compatibility contract
         run: |
-          node --test tests/contract.test.mjs
-          node --test tests/tui-compat.test.mjs
+          node --test tests/contract.test.ts
+          node --test tests/tui-compat.test.ts
           node scripts/contract.mjs check
           git rev-parse --verify 'origin/main^{commit}' >/dev/null
           if git cat-file -e 'origin/main:compatibility/workbench.json' 2>/dev/null; then
@@ -36,4 +40,4 @@ jobs:
             node scripts/contract.mjs compare --previous "$RUNNER_TEMP/workbench-previous.json"
           fi
       - name: Resolve the selected TUI graph with strict peers
-        run: node --test tests/tui-graph.test.mjs
+        run: node --test tests/tui-graph.test.ts

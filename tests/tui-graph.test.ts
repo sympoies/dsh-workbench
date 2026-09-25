@@ -5,19 +5,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import type { WorkbenchContract } from '../src/contract-types.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const contract = JSON.parse(readFileSync(fileURLToPath(new URL('../compatibility/workbench.json', import.meta.url)), 'utf8'));
+const contract = JSON.parse(readFileSync(fileURLToPath(new URL('../compatibility/workbench.json', import.meta.url)), 'utf8')) as WorkbenchContract;
 const renderer = fileURLToPath(new URL('../scripts/tui-compat.mjs', import.meta.url));
 const profileLock = fileURLToPath(new URL('../compatibility/tui-profile/pnpm-lock.yaml', import.meta.url));
 
-function run(command, args, cwd) {
+function run(command: string, args: string[], cwd: string) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8', timeout: 300_000 });
   assert.equal(result.error, undefined, `${command} could not start`);
   return result;
 }
 
-function errorCode(result) {
+function errorCode(result: ReturnType<typeof run>): string {
   return /\[ERR_PNPM_[A-Z_]+\]/.exec(`${result.stdout}\n${result.stderr}`)?.[0] ??
     `exit ${result.status}`;
 }
@@ -63,9 +64,9 @@ test('pinned pnpm rejects the stale TUI graph and installs the reviewed correcti
     const packages = lock.split('\npackages:\n')[1]?.split('\nsnapshots:\n')[0];
     assert.ok(packages, 'lockfile packages section missing');
     assert.deepEqual([...packages.matchAll(/^  dsh-working-activity@([^:\s]+):/gm)].map(match => match[1]),
-      [contract.components.tui.peerOverrides.workingActivity]);
+      [contract.components.tui.peerOverrides!.workingActivity]);
     assert.deepEqual([...packages.matchAll(/^  react@([^:\s]+):/gm)].map(match => match[1]),
-      [contract.components.tui.peerOverrides.react]);
+      [contract.components.tui.peerOverrides!.react]);
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
@@ -97,8 +98,8 @@ test('reviewed TUI profile lock installs without resolving a new graph', { timeo
     assert.ok(lock.includes(contract.components.tui.package.integrity), 'TUI integrity missing');
     const packages = lock.split('\npackages:\n')[1]?.split('\nsnapshots:\n')[0];
     assert.ok(packages, 'lockfile packages section missing');
-    assert.ok(packages.includes(`  dsh-working-activity@${contract.components.tui.peerOverrides.workingActivity}:`));
-    assert.ok(packages.includes(`  react@${contract.components.tui.peerOverrides.react}:`));
+    assert.ok(packages.includes(`  dsh-working-activity@${contract.components.tui.peerOverrides!.workingActivity}:`));
+    assert.ok(packages.includes(`  react@${contract.components.tui.peerOverrides!.react}:`));
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }

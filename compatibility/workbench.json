@@ -1,12 +1,12 @@
 {
   "schemaVersion": 2,
   "release": {
-    "version": "0.1.0-rc.1",
-    "tag": "v0.1.0-rc.1"
+    "version": "0.1.0-rc.2",
+    "tag": "v0.1.0-rc.2"
   },
   "status": "candidate",
   "runtime": {
-    "node": ">=24.0.0",
+    "node": ">=24.3.0",
     "pnpm": "11.24.0",
     "platforms": ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]
   },

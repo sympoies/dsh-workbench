@@ -1,0 +1,13 @@
+{
+  "name": "dsh-workbench",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.2",
+    "typescript": "5.9.3"
+  }
+}
