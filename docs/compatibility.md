@@ -59,6 +59,11 @@ prompt, and answer before and after a Web Host restart. The broader
 cross-interface gate remains
 under [#7](https://github.com/sympoies/dsh-workbench/issues/7).
 
+Workbench `v0.1.0-rc.4` narrows the first release's acceptance targets to
+Linux x64 and macOS arm64. Linux arm64 and macOS x64 may be evaluated for a
+later Workbench version. This target change does not promote the graph from
+candidate status or alter any of the three component pins.
+
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the
 [handoff procedure](session-handoff.md). It freezes that profile's transitive

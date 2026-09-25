@@ -35,10 +35,12 @@ dependency installation, a TypeScript build that emits the DSH Client module
 loader format, and artifact-level registration and clipboard interaction tests.
 The packaged plugin loaded without page errors in a disposable native Web
 profile on the pinned DSH runtime. The [browser acceptance script](../tests/web-browser-acceptance.ts)
-uses a local mock LLM to create three distinct sessions, checks their separate
+uses a local mock LLM to create four distinct sessions, checks their separate
 histories and copied IDs, exercises a pending turn, a tool approval and
 rejection, and a provider error. It restarts the Web Host and reopens all
-three, including the settled tool results and failed turn. It
+four, including the settled tool results and failed turn. It also verifies a
+TUI-created session's manual title and history in Web, writer contention while
+Web owns a session, and exact-ID TUI continuation after Web stops. It
 requires explicit paths to the pinned DSH executable and a Chromium executable;
 see [development instructions](../DEVELOPMENT.md). Image composition, installed
 graph mismatch rejection, and cross-platform evidence remain acceptance work under

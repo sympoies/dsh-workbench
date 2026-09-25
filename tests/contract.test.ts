@@ -55,6 +55,11 @@ test('candidate contract is valid but cannot be activated', () => {
   assert.match(activation.stderr, /candidate/i);
 });
 
+test('first release targets only Linux x64 and macOS arm64', () => {
+  const contract = JSON.parse(readFileSync(source, 'utf8')) as WorkbenchContract;
+  assert.deepEqual(contract.runtime.platforms, ['linux-x64', 'darwin-arm64']);
+});
+
 test('pins have immutable source and integrity identities', () => {
   const { dir, path } = fixture(contract => {
     contract.components.dsh.source.commit = 'main';
