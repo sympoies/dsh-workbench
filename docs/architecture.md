@@ -38,6 +38,10 @@ this table defines the public boundary now.
 | Provider credentials and user preferences | Injected at runtime by the deployment or user; absent from artifacts and install receipts. | Deployment |
 | TUI invocation/profile location | Resolved from the installed package and deployment configuration, not from Agent Console paths. | Workbench and deployment |
 
+The [session handoff decision](session-handoff.md) selects a shared explicit
+persistence root and canonical workspace with sequential writers. The first
+milestone stops the entire Web Host before TUI resumes a Web-held session.
+
 The private deployment retains account names, hostnames, reverse proxy and
 Tailscale settings, secret references and values, session logs, attachments,
 user preferences, and existing installation state. Workbench release artifacts
