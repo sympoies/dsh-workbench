@@ -48,22 +48,25 @@ function nodeFloor(value, name) {
   return found.slice(1).map(Number);
 }
 
-function validate(contract) {
+function validate(contract, { previous = false } = {}) {
   exactKeys(contract, ['schemaVersion', 'release', 'status', 'runtime', 'components', 'acceptance'], 'contract');
-  if (contract.schemaVersion !== 1) fail('unsupported contract schemaVersion');
+  if (contract.schemaVersion !== 2 && !(previous && contract.schemaVersion === 1)) fail('unsupported contract schemaVersion');
+  const legacy = contract.schemaVersion === 1;
   exactKeys(contract.release, ['version', 'tag'], 'release');
   match(contract.release.version, version, 'release.version');
   if (contract.release.tag !== `v${contract.release.version}`) fail('release.tag must match release.version');
   if (!['candidate', 'accepted'].includes(contract.status)) fail('invalid contract status');
-  exactKeys(contract.runtime, ['node', 'platforms'], 'runtime');
+  exactKeys(contract.runtime, legacy ? ['node', 'platforms'] : ['node', 'pnpm', 'platforms'], 'runtime');
   const runtimeNodeFloor = nodeFloor(contract.runtime.node, 'runtime.node');
+  if (!legacy) match(contract.runtime.pnpm, version, 'runtime.pnpm');
   if (!Array.isArray(contract.runtime.platforms) || !contract.runtime.platforms.length ||
       new Set(contract.runtime.platforms).size !== contract.runtime.platforms.length ||
       !contract.runtime.platforms.every(value => platform.test(value))) fail('invalid runtime.platforms');
   exactKeys(contract.components, components, 'components');
   for (const id of components) {
     const item = contract.components[id];
-    exactKeys(item, ['source', 'package', 'toolchain', 'status'], `components.${id}`);
+    exactKeys(item, id === 'tui' && !legacy ? ['source', 'package', 'toolchain', 'peerOverrides', 'status'] :
+      ['source', 'package', 'toolchain', 'status'], `components.${id}`);
     exactKeys(item.source, id === 'runtimeKit' ? ['url', 'commit', 'tree'] : ['url', 'tag', 'commit', 'tree'], `${id}.source`);
     match(item.source.url, /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, `${id}.source.url`);
     if (item.source.tag !== undefined) match(item.source.tag, /^[A-Za-z0-9][A-Za-z0-9._-]*$/, `${id}.source.tag`);
@@ -82,6 +85,11 @@ function validate(contract) {
     exactKeys(item.toolchain, id === 'runtimeKit' ? ['node'] : ['node', 'pnpm'], `${id}.toolchain`);
     string(item.toolchain.node, `${id}.toolchain.node`);
     if (item.toolchain.pnpm !== undefined) match(item.toolchain.pnpm, version, `${id}.toolchain.pnpm`);
+    if (id === 'tui' && !legacy) {
+      exactKeys(item.peerOverrides, ['workingActivity', 'react'], 'tui.peerOverrides');
+      match(item.peerOverrides.workingActivity, version, 'tui.peerOverrides.workingActivity');
+      match(item.peerOverrides.react, version, 'tui.peerOverrides.react');
+    }
     if (!['candidate', 'accepted'].includes(item.status)) fail(`invalid ${id}.status`);
   }
   const kitNodeFloor = nodeFloor(contract.components.runtimeKit.toolchain.node, 'runtimeKit.toolchain.node');
@@ -124,7 +132,8 @@ function tuple(contract) {
     components: components.map(id => {
       const item = contract.components[id];
       return [item.source.url, item.source.tag ?? '', item.source.commit, item.source.tree,
-        item.package.name, item.package.version, item.package.integrity, item.toolchain];
+        item.package.name, item.package.version, item.package.integrity, item.toolchain,
+        item.peerOverrides ?? null];
     }),
   };
 }
@@ -177,7 +186,7 @@ try {
   if (command === 'require-accepted' && contract.status !== 'accepted') fail('candidate contract cannot be activated');
   if (command === 'compare') {
     const previous = read(options.previous);
-    validate(previous);
+    validate(previous, { previous: true });
     const changed = JSON.stringify(tuple(contract)) !== JSON.stringify(tuple(previous));
     if (changed && contract.release.version === previous.release.version) fail('component tuple changed without a new Workbench release.version');
     if (contract.release.version !== previous.release.version && compareVersions(contract.release.version, previous.release.version) <= 0) {

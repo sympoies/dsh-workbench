@@ -70,10 +70,36 @@ test('release identity changes whenever the component tuple changes', () => {
   }
 });
 
+test('schema 2 compares with the original schema 1 candidate only after a release bump', () => {
+  const previous = fixture(contract => {
+    contract.schemaVersion = 1;
+    contract.release.version = '0.1.0-rc.0';
+    contract.release.tag = 'v0.1.0-rc.0';
+    delete contract.runtime.pnpm;
+    delete contract.components.tui.peerOverrides;
+  });
+  try {
+    assert.equal(run('compare', source, ['--previous', previous.path]).status, 0);
+    const unchanged = fixture(contract => {
+      contract.release.version = '0.1.0-rc.0';
+      contract.release.tag = 'v0.1.0-rc.0';
+    });
+    try {
+      assert.match(run('compare', unchanged.path, ['--previous', previous.path]).stderr, /component tuple changed without a new Workbench release.version/i);
+    } finally {
+      rmSync(unchanged.dir, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(previous.dir, { recursive: true, force: true });
+  }
+});
+
 test('platform and toolchain changes require a new Workbench version', () => {
   for (const change of [
     contract => contract.runtime.platforms.pop(),
+    contract => { contract.runtime.pnpm = '11.25.0'; },
     contract => { contract.components.tui.toolchain.pnpm = '11.22.0'; },
+    contract => { contract.components.tui.peerOverrides.react = '19.2.0'; },
   ]) {
     const { dir, path } = fixture(change);
     try {
@@ -98,8 +124,8 @@ test('runtime Node baseline cannot fall below the pinned runtime-kit requirement
 
 test('a product-only release can advance the Workbench version', () => {
   const { dir, path } = fixture(contract => {
-    contract.release.version = '0.1.0-rc.1';
-    contract.release.tag = 'v0.1.0-rc.1';
+    contract.release.version = '0.1.0-rc.2';
+    contract.release.tag = 'v0.1.0-rc.2';
   });
   try {
     assert.equal(run('compare', path, ['--previous', source]).status, 0);

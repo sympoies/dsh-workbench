@@ -9,11 +9,15 @@ Use exact source tags or commits and keep a candidate graph separate from an
 accepted release. Test Web and TUI against the same DSH session store and
 workspace identity before claiming cross-interface resume.
 
-Run `node --test tests/contract.test.mjs` and `node scripts/contract.mjs check`
+Run `node --test tests/contract.test.mjs tests/tui-compat.test.mjs` and
+`node scripts/contract.mjs check`
 when changing the [compatibility contract](compatibility/workbench.json). A
 change to any component source or package identity requires a new Workbench
 release version; CI compares the contract with `main`. See the
 [contract guide](docs/compatibility.md) for acceptance and release rules.
+Run `node --test tests/tui-graph.test.mjs` with the pinned pnpm version when
+changing the TUI peer correction. It reproduces the uncorrected strict peer
+failure, then resolves and installs the exact DSH/TUI graph with the correction.
 
 For durable design or compatibility outcomes, update the current owner first,
 then use `devlog new` to append one evidence-backed entry. Run `devlog check`
