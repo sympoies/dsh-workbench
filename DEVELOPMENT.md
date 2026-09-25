@@ -13,3 +13,8 @@ For durable design or compatibility outcomes, update the current owner first,
 then use `devlog new` to append one evidence-backed entry. Run `devlog check`
 before delivery. The log's format and privacy rules are in
 [docs/devlog/README.md](docs/devlog/README.md).
+
+Before sending source for review, run `bash scripts/check-publication.sh` and
+review the [publication checklist](docs/publication.md). A generated release
+candidate must also pass each generated artifact tree to that script with
+`--artifact PATH`, followed by human review.

@@ -1,0 +1,20 @@
+name: Public source check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan tracked source
+        run: bash scripts/check-publication.sh
+      - name: Verify scan behavior
+        run: bash tests/check-publication.sh
