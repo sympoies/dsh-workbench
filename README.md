@@ -13,6 +13,10 @@ This repository owns portable product code and release artifacts. Host paths,
 credentials, exposure, persistent data, and deployment cutover belong to each
 consumer's private deployment configuration.
 
+See the [product and deployment boundary](docs/architecture.md) and
+[public source and release audit](docs/publication.md). Workbench source is
+available under the [MIT license](LICENSE).
+
 See [DEVELOPMENT.md](DEVELOPMENT.md) for contributor workflow and
 [docs/devlog/README.md](docs/devlog/README.md) for durable development
 decisions.
