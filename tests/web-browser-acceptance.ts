@@ -13,6 +13,7 @@ const repo = fileURLToPath(new URL('..', import.meta.url));
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
 const answer = 'WORKBENCH_SMOKE_OK';
 const prompts = ['FIRST_FIXTURE_PROMPT', 'SECOND_FIXTURE_PROMPT'] as const;
+const errorPrompt = 'ERROR_FIXTURE_PROMPT';
 const editorName = 'Describe what you want to build, / commands, @ files or sessions';
 
 function option(name: string): string {
@@ -98,6 +99,12 @@ async function openPage(browser: Browser, url: string): Promise<{ page: Page; er
   return { page, errors };
 }
 
+function launchBrowser(executablePath: string, home: string): Promise<Browser> {
+  return chromium.launch({ executablePath, headless: true,
+    env: { PATH: process.env.PATH ?? '', HOME: home, LANG: process.env.LANG ?? 'C.UTF-8' },
+    chromiumSandbox: true });
+}
+
 async function copiedSessionId(page: Page): Promise<string> {
   const button = page.getByRole('button', { name: 'Copy Session ID for TUI' });
   await button.waitFor({ timeout: 30_000 });
@@ -118,6 +125,47 @@ async function checkHistory(page: Page, id: string, own: string, other: string):
   assert.ok(body.includes(own), 'session lost its prompt');
   assert.ok(!body.includes(other), 'session shows another session prompt');
   assert.ok(body.includes(answer), 'session lost its mock answer');
+}
+
+async function openToolDetails(page: Page) {
+  const conversation = page.locator('[data-conversation-content]');
+  const turn = conversation.locator('[data-turn-process="1"]');
+  await turn.waitFor({ timeout: 30_000 });
+  assert.equal(await turn.getAttribute('data-turn-process-tool-calls'), '1');
+  if (await turn.getAttribute('aria-expanded') === 'false') await turn.click();
+  const group = conversation.locator('[data-process-activity="commands"]');
+  await group.waitFor({ timeout: 30_000 });
+  if (await group.getAttribute('aria-expanded') === 'false') await group.click();
+  const call = conversation.locator('[data-chat-flow-kind="tool-call"]');
+  await call.waitFor({ state: 'visible', timeout: 30_000 });
+  await call.click();
+  return call;
+}
+
+async function checkToolResult(page: Page): Promise<void> {
+  const call = await openToolDetails(page);
+  await call.getByText('TOOL_OK', { exact: true }).waitFor({ timeout: 30_000 });
+}
+
+async function checkRejectedTool(page: Page): Promise<void> {
+  const call = await openToolDetails(page);
+  await call.getByText('Failed', { exact: true }).waitFor({ timeout: 30_000 });
+  assert.ok((await call.innerText()).includes('the user rejected escalating this command'));
+  assert.equal(await call.getByText('TOOL_OK', { exact: true }).count(), 0,
+    'a rejected command displayed a success output');
+}
+
+async function checkFailedHistory(page: Page, id: string): Promise<void> {
+  const row = page.locator(`[data-row-key="session:${id}"]`);
+  await row.waitFor({ timeout: 30_000 });
+  await row.click();
+  assert.ok(await copiedSessionId(page) === id, 'failed session opened under another ID');
+  const content = page.locator('[data-conversation-content]');
+  await content.getByText('This turn failed', { exact: false }).first().waitFor({ timeout: 30_000 });
+  const body = await content.innerText();
+  assert.ok(body.includes(errorPrompt));
+  assert.ok(body.includes('mock invalid request'));
+  assert.ok(!body.includes(prompts[0]) && !body.includes(prompts[1]));
 }
 
 async function main(): Promise<void> {
@@ -163,16 +211,16 @@ async function main(): Promise<void> {
     });
 
     const apiKey = randomBytes(24).toString('hex');
-    mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
-      successText: answer, apiKey });
+    mock = await startMockLlmServer({ sequence: ['tool_call_success', 'success', 'success', 'tool_call_success', 'success'],
+      repeatLast: true, successText: answer, apiKey, toolName: 'bash',
+      toolArguments: JSON.stringify({ command: 'printf TOOL_OK', description: 'Print TOOL_OK',
+        sandbox_permissions: 'danger-full-access', justification: 'Verify the approval UI in a disposable workspace' }) });
     const unauthorized = await fetch(`${mock.baseURL}/v1/messages`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
     });
     assert.equal(unauthorized.status, 401, 'mock endpoint accepted an unauthenticated request');
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
-    browser = await chromium.launch({ executablePath: browserBin, headless: true,
-      env: { PATH: process.env.PATH ?? '', HOME: home, LANG: process.env.LANG ?? 'C.UTF-8' },
-      chromiumSandbox: true });
+    browser = await launchBrowser(browserBin, home);
     let opened = await openPage(browser, host.url);
     const firstPage = opened.page;
     const firstErrors = opened.errors;
@@ -190,18 +238,32 @@ async function main(): Promise<void> {
     await editor.waitFor({ timeout: 30_000 });
     await editor.fill(prompts[0]);
     await editor.press('Enter');
+    const approval = firstPage.locator('[data-approval-key]');
+    await approval.waitFor({ timeout: 30_000 });
+    const approvalText = await approval.innerText();
+    assert.ok(approvalText.includes('Waiting for approval'));
+    assert.ok(approvalText.includes('printf TOOL_OK'));
+    assert.ok(await approval.getByRole('button', { name: 'Reject' }).isVisible());
+    assert.ok((await firstPage.locator('[data-turn-process="1"]').innerText()).includes('Deep diving'),
+      'the turn appeared settled while approval was pending');
+    await approval.getByRole('button', { name: 'Allow once' }).click();
     await firstPage.getByText('Worked', { exact: true }).first().waitFor({ timeout: 30_000 });
     const firstId = await copiedSessionId(firstPage);
+    await checkToolResult(firstPage);
 
     await firstPage.getByRole('button', { name: 'New Session' }).first().click();
     await editor.waitFor({ timeout: 30_000 });
     await editor.fill(prompts[1]);
     await editor.press('Enter');
+    await approval.waitFor({ timeout: 30_000 });
+    await approval.getByRole('button', { name: 'Reject' }).click();
+    await approval.waitFor({ state: 'hidden', timeout: 30_000 });
     await firstPage.getByText('Worked', { exact: true }).first().waitFor({ timeout: 30_000 });
     const secondId = await copiedSessionId(firstPage);
     assert.ok(firstId !== secondId, 'two new sessions share an ID');
     await checkHistory(firstPage, firstId, prompts[0], prompts[1]);
     await checkHistory(firstPage, secondId, prompts[1], prompts[0]);
+    await checkRejectedTool(firstPage);
     pageErrors += firstErrors.length;
     hostErrors += host.errorCount();
     await browser.close();
@@ -210,19 +272,59 @@ async function main(): Promise<void> {
     host = undefined;
 
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
-    browser = await chromium.launch({ executablePath: browserBin, headless: true,
-      env: { PATH: process.env.PATH ?? '', HOME: home, LANG: process.env.LANG ?? 'C.UTF-8' },
-      chromiumSandbox: true });
+    browser = await launchBrowser(browserBin, home);
     opened = await openPage(browser, host.url);
     await checkHistory(opened.page, firstId, prompts[0], prompts[1]);
+    await checkToolResult(opened.page);
     await checkHistory(opened.page, secondId, prompts[1], prompts[0]);
+    await checkRejectedTool(opened.page);
     pageErrors += opened.errors.length;
     hostErrors += host.errorCount();
     assert.equal(pageErrors, 0, 'browser reported JavaScript errors');
     assert.equal(hostErrors, 0, 'DSH Web Host reported errors');
     assert.ok(mock.requests.length >= 2, 'the mock server received fewer than two requests');
-    console.log(JSON.stringify({ result: 'pass', sessions: 2, restartResume: true,
-      mockRequests: mock.requests.length, pageErrors, hostErrors }));
+    assert.equal(mock.requests.filter(request => request.behavior === 'tool_call_success').length, 2);
+    const interactionRequests = mock.requests.length;
+    await browser.close();
+    browser = undefined;
+    await stopHost(host.child);
+    host = undefined;
+    await mock.close();
+
+    mock = await startMockLlmServer({ sequence: ['invalid_request'], repeatLast: true, apiKey });
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
+    browser = await launchBrowser(browserBin, home);
+    let errorOpened = await openPage(browser, host.url);
+    const errorPage = errorOpened.page;
+    await errorPage.getByRole('button', { name: 'New Session' }).first().click();
+    const errorEditor = errorPage.getByRole('textbox', { name: editorName });
+    await errorEditor.waitFor({ timeout: 30_000 });
+    await errorEditor.fill(errorPrompt);
+    await errorEditor.press('Enter');
+    await errorPage.locator('[data-conversation-content]')
+      .getByText('This turn failed', { exact: false }).first().waitFor({ timeout: 30_000 });
+    const errorId = await copiedSessionId(errorPage);
+    await checkFailedHistory(errorPage, errorId);
+    pageErrors += errorOpened.errors.length;
+    hostErrors += host.errorCount();
+    await browser.close();
+    browser = undefined;
+    await stopHost(host.child);
+    host = undefined;
+
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
+    browser = await launchBrowser(browserBin, home);
+    errorOpened = await openPage(browser, host.url);
+    await checkFailedHistory(errorOpened.page, errorId);
+    pageErrors += errorOpened.errors.length;
+    hostErrors += host.errorCount();
+    assert.equal(pageErrors, 0, 'browser reported JavaScript errors');
+    assert.equal(hostErrors, 0, 'DSH Web Host reported errors');
+    assert.equal(mock.requests[0]?.behavior, 'invalid_request');
+    console.log(JSON.stringify({ result: 'pass', sessions: 3, toolApproval: true,
+      toolRejection: true, runningTurn: true, errorResume: true,
+      toolResultsAfterRestart: true, restartResume: true,
+      interactionRequests, errorRequests: mock.requests.length, pageErrors, hostErrors }));
   } finally {
     const cleanup = await Promise.allSettled([
       browser?.close() ?? Promise.resolve(),
