@@ -7,7 +7,8 @@
     "test": "pnpm web:build && node --test tests/*.test.ts web/tests/*.test.ts",
     "web:metadata:check": "node scripts/web-metadata.mjs check",
     "web:build": "pnpm --filter @sympoies/dsh-workbench-web build",
-    "test:web:browser": "node tests/web-browser-acceptance.ts"
+    "test:web:browser": "node tests/web-browser-acceptance.ts",
+    "test:tui:terminal": "node tests/tui-terminal-acceptance.ts"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
