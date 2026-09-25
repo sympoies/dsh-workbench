@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname;
-const contract = JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url), 'utf8'));
-const script = new URL('../scripts/tui-compat.mjs', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
+const contract = JSON.parse(readFileSync(fileURLToPath(new URL('../compatibility/workbench.json', import.meta.url)), 'utf8'));
+const script = fileURLToPath(new URL('../scripts/tui-compat.mjs', import.meta.url));
 
 test('the reviewed TUI peer correction is scoped to one transitive package and current DSH', () => {
   const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
@@ -27,4 +30,23 @@ test('the reviewed TUI peer correction is scoped to one transitive package and c
     assert.ok(lines.includes(`  '${selector}${peer}': ${contract.components.dsh.package.version}`), peer);
   }
   assert.ok(lines.includes(`  '${selector}react': ${contract.components.tui.peerOverrides.react}`));
+});
+
+test('the renderer resolves contract files under a path containing spaces', () => {
+  const stage = mkdtempSync(join(tmpdir(), 'dsh workbench '));
+  try {
+    mkdirSync(join(stage, 'scripts'));
+    mkdirSync(join(stage, 'compatibility'));
+    for (const name of ['contract.mjs', 'tui-compat.mjs']) {
+      copyFileSync(join(root, 'scripts', name), join(stage, 'scripts', name));
+    }
+    copyFileSync(join(root, 'compatibility', 'workbench.json'),
+      join(stage, 'compatibility', 'workbench.json'));
+    const result = spawnSync(process.execPath, [join(stage, 'scripts', 'tui-compat.mjs')],
+      { cwd: stage, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^minimumReleaseAgeExclude:/);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
 });

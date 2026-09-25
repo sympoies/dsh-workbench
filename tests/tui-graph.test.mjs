@@ -4,10 +4,11 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname;
-const contract = JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url), 'utf8'));
-const renderer = new URL('../scripts/tui-compat.mjs', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
+const contract = JSON.parse(readFileSync(fileURLToPath(new URL('../compatibility/workbench.json', import.meta.url)), 'utf8'));
+const renderer = fileURLToPath(new URL('../scripts/tui-compat.mjs', import.meta.url));
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8', timeout: 300_000 });

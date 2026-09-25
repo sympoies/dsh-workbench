@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const contractPath = new URL('../compatibility/workbench.json', import.meta.url).pathname;
-const check = spawnSync(process.execPath, [new URL('./contract.mjs', import.meta.url).pathname, 'check'], {
+const contractPath = fileURLToPath(new URL('../compatibility/workbench.json', import.meta.url));
+const check = spawnSync(process.execPath, [fileURLToPath(new URL('./contract.mjs', import.meta.url)), 'check'], {
   encoding: 'utf8',
 });
 if (check.status !== 0) {
