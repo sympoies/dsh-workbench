@@ -3,14 +3,16 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
+import headless from '@xterm/headless';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 import { readEvents } from './session-events.ts';
 import { stopTerminal } from './terminal-process.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
+const { Terminal } = headless;
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
 const scenarios = [
   { name: 'allow', decision: '\r', outcome: 'allowed-once', toolOutput: 'TUI_ALLOW_TOOL_OK',
@@ -65,12 +67,32 @@ async function waitForTurn(root: string, previous: ReadonlySet<string>): Promise
   throw new Error('TUI did not persist a completed approval turn');
 }
 
-function startTerminal(binary: string, fixture: string, baseURL: string, apiKey: string): {
+async function waitForTurnCount(path: string, count: number): Promise<void> {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (readEvents(path).filter(event => event.type === 'turn/end').length >= count) return;
+    await new Promise(resolveWait => setTimeout(resolveWait, 100));
+  }
+  throw new Error(`TUI did not complete turn ${count}`);
+}
+
+async function waitForTitle(path: string, title: string): Promise<void> {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (readEvents(path).some(event => event.type === 'session/title' && event.data?.title === title)) return;
+    await new Promise(resolveWait => setTimeout(resolveWait, 100));
+  }
+  throw new Error('TUI did not persist the long-session title');
+}
+
+function startTerminal(binary: string, fixture: string, baseURL: string, apiKey: string, appArgs: string[] = []): {
   child: ChildProcess;
-  waitFor: (marker: string) => Promise<void>;
+  waitFor: (marker: string | RegExp) => Promise<void>;
+  waitForAfter: (first: string, second: string) => Promise<void>;
 } {
   const home = join(fixture, 'home');
-  const child = spawn('script', ['-q', '-e', '-c', `${quote(binary)} --profile dsh-tui`, '/dev/null'], {
+  const child = spawn('script', ['-q', '-e', '-c',
+    `${quote(binary)} --profile dsh-tui ${appArgs.map(quote).join(' ')}`, '/dev/null'], {
     cwd: join(fixture, 'workspace'),
     detached: true,
     env: {
@@ -87,22 +109,48 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
     },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  let output = '';
+  const screen = new Terminal({ cols: 80, rows: 24, scrollback: 1_000, allowProposedApi: true });
   const listeners = new Set<() => void>();
   child.stdout.on('data', chunk => {
-    output = `${output}${String(chunk)}`.slice(-131_072);
-    for (const listener of listeners) listener();
+    screen.write(chunk, () => { for (const listener of listeners) listener(); });
   });
+  child.stderr.resume();
+  const visibleScreen = () => Array.from({ length: screen.rows }, (_, row) =>
+    screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '').join('\n');
   return {
     child,
+    waitForAfter: (first, second) => new Promise<void>((resolveWait, reject) => {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        reject(new Error(`TUI exited before ${second}: ${child.exitCode ?? child.signalCode}`));
+        return;
+      }
+      const timer = setTimeout(() => finish(new Error(`TUI did not show ${second} after ${first}`)), 60_000);
+      const onExit = () => finish(new Error(`TUI exited before ${second}: ${child.exitCode ?? child.signalCode}`));
+      const check = () => {
+        const frame = visibleScreen();
+        if (frame.lastIndexOf(second) > frame.lastIndexOf(first) && frame.includes(first)) finish();
+      };
+      function finish(error?: Error) {
+        clearTimeout(timer);
+        listeners.delete(check);
+        child.off('exit', onExit);
+        if (error) reject(error); else resolveWait();
+      }
+      listeners.add(check);
+      child.once('exit', onExit);
+      check();
+    }),
     waitFor: marker => new Promise<void>((resolveWait, reject) => {
       if (child.exitCode !== null || child.signalCode !== null) {
-        reject(new Error('TUI exited before the expected terminal state'));
+        reject(new Error(`TUI exited before ${marker}: ${child.exitCode ?? child.signalCode}`));
         return;
       }
       const timer = setTimeout(() => finish(new Error(`TUI did not show ${marker}`)), 60_000);
-      const onExit = () => finish(new Error('TUI exited before the expected terminal state'));
-      const check = () => { if (output.includes(marker)) finish(); };
+      const onExit = () => finish(new Error(`TUI exited before ${marker}: ${child.exitCode ?? child.signalCode}`));
+      const check = () => {
+        const frame = visibleScreen();
+        if (typeof marker === 'string' ? frame.includes(marker) : marker.test(frame)) finish();
+      };
       function finish(error?: Error) {
         clearTimeout(timer);
         listeners.delete(check);
@@ -114,6 +162,58 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       check();
     }),
   };
+}
+
+async function runSessionScenario(binary: string, fixture: string): Promise<void> {
+  const apiKey = randomBytes(24).toString('hex');
+  const answer = 'TUI_SESSION_ANSWER';
+  const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true, apiKey, successText: answer });
+  const logRoot = join(fixture, 'home', 'sessions');
+  const previous = new Set(sessionLogs(logRoot));
+  // Two visible transcript rows per turn exceed the pinned TUI's 120-row
+  // initial rendering cap, exercising its long-session projection on resume.
+  const prompts = Array.from({ length: 72 }, (_, index) => `TUI_SESSION_TURN_${index + 1}`);
+  let terminal: ReturnType<typeof startTerminal> | undefined;
+  try {
+    terminal = startTerminal(binary, fixture, mock.baseURL, apiKey);
+    await terminal.waitFor('Explore the uncharted!');
+    terminal.child.stdin?.write(`${prompts[0]}\r`);
+    const logPath = await waitForTurn(logRoot, previous);
+    for (let index = 1; index < prompts.length; index += 1) {
+      terminal.child.stdin?.write(`${prompts[index]}\r`);
+      await waitForTurnCount(logPath, index + 1);
+    }
+    await waitForTitle(logPath, answer);
+    await stopTerminal(terminal.child);
+    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly before resume');
+    const sessionId = basename(dirname(logPath));
+    terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, ['--resume', sessionId]);
+    await terminal.waitFor(answer);
+    terminal.child.stdin?.write('TUI_SESSION_RESUMED_TURN\r');
+    await waitForTurnCount(logPath, prompts.length + 1);
+    await terminal.waitForAfter('TUI_SESSION_RESUMED_TURN', answer);
+    terminal.child.stdin?.write('/resume\r');
+    await terminal.waitFor(new RegExp(`\\b${previous.size + 1} total\\b`));
+    await terminal.waitFor(new RegExp(`Sessions[\\s\\S]*${answer}`));
+    await stopTerminal(terminal.child);
+    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly after resume');
+    assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [logPath],
+      'Exact-ID resume created another session');
+    const events = readEvents(logPath, { strict: true });
+    const ended = events.filter(event => event.type === 'turn/end');
+    assert.equal(ended.length, prompts.length + 1,
+      `Unexpected turns: ${JSON.stringify(ended.map(event => event.data?.turn))}; mock requests: ${mock.requests.length}`);
+    const userText = JSON.stringify(events.filter(event => event.type === 'user/message'));
+    for (const prompt of [...prompts, 'TUI_SESSION_RESUMED_TURN']) assert.ok(userText.includes(prompt));
+    const answerMessages = events.filter(event => event.type === 'assistant/message'
+      && JSON.stringify(event.data?.message).includes(answer));
+    assert.equal(answerMessages.length, prompts.length + 1);
+    assert.equal(events.filter(event => event.type === 'session/title').at(-1)?.data?.title, answer);
+    assert.ok(mock.requests.filter(request => request.behavior === 'success').length >= prompts.length + 1);
+  } finally {
+    const cleanup = await Promise.allSettled([stopTerminal(terminal?.child), mock.close()]);
+    if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI session cleanup failed');
+  }
 }
 
 async function runScenario(binary: string, fixture: string, scenario: typeof scenarios[number]): Promise<void> {
@@ -200,8 +300,9 @@ async function main(): Promise<void> {
       contract.components.tui.package.name, 'package.json'), 'utf8')) as { version: string };
     assert.equal(installedTui.version, contract.components.tui.package.version);
     for (const scenario of scenarios) await runScenario(dsh, fixture, scenario);
+    await runSessionScenario(dsh, fixture);
     console.log(JSON.stringify({ result: 'pass', scenarios: scenarios.map(scenario => scenario.name),
-      approvals: true, toolResults: true, realTty: true }));
+      approvals: true, toolResults: true, exactIdResume: true, realTty: true }));
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }

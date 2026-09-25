@@ -31,11 +31,24 @@ an isolated probe, and a disposable TUI profile reached the terminal UI.
 The Linux real-TTY acceptance additionally drove both an allowed-once and a
 rejected Bash escalation through the pinned TUI, then verified distinct
 Session V4 decisions, tool results, completed turns, and command execution or
-non-execution after a strict final archive read. Those checks do not
-yet establish the full TUI acceptance gate. The overrides do
+non-execution after a strict final archive read. A second scenario created 72
+turns beyond the TUI's 120-row initial render cap, exited, resumed the exact
+session ID, completed another turn in the same archive, and confirmed both the
+exact fixture session count and the long session's unique title in `/resume`.
+The terminal assertion reconstructs the screen
+from ANSI updates; searching the output byte stream cannot verify a changed
+count because the TUI may emit only the changed digit. These checks do not yet
+establish the full TUI acceptance gate. The overrides do
 not change the published package bytes or relax peer checks for any other
 dependency; a future installer must include them in its frozen graph and
 reject an unexpected working-activity version.
+
+Manual TUI `/rename` is a known blocker in this candidate graph:
+dsh-TUI 0.11.0 appends `session/title` without the `messageSeqs` array required
+by DSH 0.1.7-rc.1. A later exact-ID resume rejects the log as semantically
+invalid. See [#24](https://github.com/sympoies/dsh-workbench/issues/24).
+The long-session acceptance relies on the valid automatic title path; it does
+not establish manual rename compatibility.
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the
