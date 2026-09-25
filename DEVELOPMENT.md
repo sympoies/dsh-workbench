@@ -9,6 +9,12 @@ Use exact source tags or commits and keep a candidate graph separate from an
 accepted release. Test Web and TUI against the same DSH session store and
 workspace identity before claiming cross-interface resume.
 
+Run `node --test tests/contract.test.mjs` and `node scripts/contract.mjs check`
+when changing the [compatibility contract](compatibility/workbench.json). A
+change to any component source or package identity requires a new Workbench
+release version; CI compares the contract with `main`. See the
+[contract guide](docs/compatibility.md) for acceptance and release rules.
+
 For durable design or compatibility outcomes, update the current owner first,
 then use `devlog new` to append one evidence-backed entry. Run `devlog check`
 before delivery. The log's format and privacy rules are in

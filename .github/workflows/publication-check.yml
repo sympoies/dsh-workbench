@@ -14,7 +14,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - name: Scan tracked source
         run: bash scripts/check-publication.sh
       - name: Verify scan behavior
         run: bash tests/check-publication.sh
+      - name: Validate compatibility contract
+        run: |
+          node --test tests/contract.test.mjs
+          node scripts/contract.mjs check
+          git rev-parse --verify 'origin/main^{commit}' >/dev/null
+          if git cat-file -e 'origin/main:compatibility/workbench.json' 2>/dev/null; then
+            git show 'origin/main:compatibility/workbench.json' > "$RUNNER_TEMP/workbench-previous.json"
+            node scripts/contract.mjs compare --previous "$RUNNER_TEMP/workbench-previous.json"
+          fi
