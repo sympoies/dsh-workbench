@@ -23,8 +23,9 @@ For the Web plugin, run `pnpm web:metadata:check` and `pnpm web:build` before
 ensures the Web package version, DSH catalog, and generated Client identity
 match the contract. The package build runs this check before bundling. See the
 [Web port notes](docs/web-port.md) for the current acceptance boundary.
-Run the native browser acceptance with a Chromium executable and an installed
-DSH executable at the exact contract version:
+On Linux with util-linux `script` and `zstdcat`, run the native browser
+acceptance with a Chromium executable and an installed DSH executable at the
+exact contract version:
 
 ```sh
 pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chromium
@@ -34,7 +35,10 @@ The script builds and packs the Web plugin, installs Web and patched TUI
 profiles in a disposable DSH home, and runs four sessions against authenticated
 local mock LLM servers. It creates and renames a TUI session, stops TUI, then
 checks its exact ID, title, prompt, and answer in native Web before and after a
-Web Host restart. It also checks distinct Web IDs, isolated histories, a
+Web Host restart. While Web still holds a session writer, it checks that TUI
+refuses an exact-ID resume without changing the archive. After Web stops, TUI
+resumes that Web session, completes another turn, and Web reads the continuation
+on restart. It also checks distinct Web IDs, isolated histories, a
 pending turn, tool approval and rejection, a provider error, and Web Host
 restart recovery. The fixture, profiles, and mock endpoints are removed
 afterward. Package installation is isolated from caller credentials, and
