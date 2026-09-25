@@ -1,0 +1,201 @@
+name: Combined DSH profile
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authenticated-profile:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux
+            arch: x64
+            nils_target: x86_64-unknown-linux-gnu
+          - runner: macos-15
+            platform: darwin
+            arch: arm64
+            nils_target: aarch64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: dsh-workbench
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.3.0'
+      - name: Select exact Workbench source identities
+        id: pins
+        working-directory: dsh-workbench
+        run: |
+          node -e '
+            const c=require("./compatibility/workbench.json");
+            const fs=require("node:fs");
+            const t=c.components.tui.package;
+            const outputs={
+              kit_commit:c.components.runtimeKit.source.commit,
+              dsh_commit:c.components.dsh.source.commit,
+              dsh_pnpm:c.components.dsh.toolchain.pnpm,
+              workbench_pnpm:c.runtime.pnpm,
+              tui_spec:`${t.name}@${t.version}`,
+              tui_file:`${t.name.slice(1).replace("/","-")}-${t.version}.tgz`
+            };
+            fs.appendFileSync(process.env.GITHUB_OUTPUT,
+              Object.entries(outputs).map(([key,value])=>`${key}=${value}\n`).join(""));
+          '
+          node -e 'if(process.platform!==process.argv[1]||process.arch!==process.argv[2])process.exit(1)' "${{ matrix.platform }}" "${{ matrix.arch }}"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: sympoies/dsh-runtime-kit
+          ref: ${{ steps.pins.outputs.kit_commit }}
+          path: dsh-runtime-kit
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ steps.pins.outputs.dsh_commit }}
+          path: deepseek-harness
+          persist-credentials: false
+      - name: Authenticate checked-out source trees
+        working-directory: dsh-workbench
+        run: |
+          node -e '
+            const cp=require("node:child_process");
+            const c=require("./compatibility/workbench.json");
+            for(const [path,pin] of [["../dsh-runtime-kit",c.components.runtimeKit.source],["../deepseek-harness",c.components.dsh.source]]){
+              const read=args=>cp.execFileSync("/usr/bin/git",args,{cwd:path,encoding:"utf8"}).trim();
+              if(read(["rev-parse","HEAD"])!==pin.commit||read(["rev-parse","HEAD^{tree}"])!==pin.tree)process.exit(1);
+            }
+          '
+      - name: Select runtime-kit's exact nils-cli release artifacts
+        id: nils
+        working-directory: dsh-runtime-kit
+        env:
+          NILS_TARGET: ${{ matrix.nils_target }}
+        run: |
+          node -e '
+            const fs=require("node:fs");
+            const m=require("./compatibility/nils-cli.json");
+            if(m.status!=="released")process.exit(1);
+            const target=process.env.NILS_TARGET;
+            const artifact=target===m.release.platform?m.release:m.release.platforms[target];
+            if(!artifact?.archive?.name||!artifact.archive.sha256)process.exit(1);
+            const outputs={archive:artifact.archive.name,sha256:artifact.archive.sha256,
+              url:`https://github.com/sympoies/nils-cli/releases/download/${m.release.source_revision}/${artifact.archive.name}`,
+              bin_dir:`${process.env.RUNNER_TEMP}/${artifact.archive.name.slice(0,-7)}/bin`};
+            fs.appendFileSync(process.env.GITHUB_OUTPUT,
+              Object.entries(outputs).map(([key,value])=>`${key}=${value}\n`).join(""));
+          '
+      - name: Download and authenticate runtime-kit tools
+        env:
+          NILS_URL: ${{ steps.nils.outputs.url }}
+          NILS_ARCHIVE: ${{ steps.nils.outputs.archive }}
+          NILS_SHA256: ${{ steps.nils.outputs.sha256 }}
+          NILS_BIN_DIR: ${{ steps.nils.outputs.bin_dir }}
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/$NILS_ARCHIVE" "$NILS_URL"
+          test "$(shasum -a 256 "$RUNNER_TEMP/$NILS_ARCHIVE" | cut -d ' ' -f 1)" = "$NILS_SHA256"
+          tar -xzf "$RUNNER_TEMP/$NILS_ARCHIVE" -C "$RUNNER_TEMP"
+          test -x "$NILS_BIN_DIR/agent-hook"
+          test -x "$NILS_BIN_DIR/agent-docs"
+          echo "$NILS_BIN_DIR" >> "$GITHUB_PATH"
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: ${{ steps.pins.outputs.dsh_pnpm }}
+      - name: Build pinned runtime-kit owner tools
+        working-directory: dsh-runtime-kit
+        run: |
+          npm ci --ignore-scripts --omit=peer
+          npm run build:emit
+      - name: Apply reviewed DSH patch and build both faces
+        run: |
+          cd deepseek-harness
+          pnpm install --frozen-lockfile --ignore-scripts
+          cd ../dsh-runtime-kit
+          npm run --silent dsh-patch -- --action apply --source-root "$GITHUB_WORKSPACE/deepseek-harness"
+          cd ../deepseek-harness
+          ./node_modules/.bin/tsx scripts/clean.ts
+          ./node_modules/.bin/tsx native/system/scripts/build.ts --host-addon-only
+          node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b tsconfig.host.json
+          ./node_modules/.bin/tsdown --env.DSH_BUILD_FACE host
+          node ./node_modules/typescript/bin/tsc -b tsconfig.client.json
+          ./node_modules/.bin/tsdown --env.DSH_BUILD_FACE client
+      - name: Produce runtime-kit authenticated patched peer receipt
+        working-directory: dsh-runtime-kit
+        run: |
+          npm run --silent pack:compatibility-peers -- \
+            --source-root "$GITHUB_WORKSPACE/deepseek-harness" \
+            --artifact-root "$RUNNER_TEMP/dsh-patched-peers" \
+            --channel pinned --patch-state patched \
+            --pnpm-bin "$(command -v pnpm)" \
+            --receipt "$RUNNER_TEMP/dsh-patched-peer-pack.json"
+      - name: Cross-check every archive with runtime-kit's independent verifier
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir -p "$RUNNER_TEMP/kit-peer-verification"
+          printf '%s\n' '{"name":"@sympoies/dsh-runtime-kit","version":"0.0.0"}' \
+            > "$RUNNER_TEMP/kit-peer-verification/package.json"
+          node "$GITHUB_WORKSPACE/dsh-runtime-kit/dist/scripts/stage-dsh-compatibility-peers.js" \
+            --receipt "$RUNNER_TEMP/dsh-patched-peer-pack.json" \
+            --artifact-root "$RUNNER_TEMP/dsh-patched-peers" \
+            --consumer-root "$RUNNER_TEMP/kit-peer-verification" \
+            > "$RUNNER_TEMP/kit-peer-stage.json"
+          node -e 'const r=require(process.argv[1]);if(!r.ok||r.data.packages.length!==64||r.data.patch_state!=="patched")process.exit(1)' \
+            "$RUNNER_TEMP/kit-peer-stage.json"
+      - name: Download exact TUI archive and stage combined profile
+        working-directory: dsh-workbench
+        env:
+          TUI_SPEC: ${{ steps.pins.outputs.tui_spec }}
+          TUI_FILE: ${{ steps.pins.outputs.tui_file }}
+        run: |
+          npm pack "$TUI_SPEC" --ignore-scripts --silent \
+            --pack-destination "$RUNNER_TEMP" >/dev/null
+          install -d -m 0700 "$RUNNER_TEMP/dsh-home/profiles"
+          node scripts/combined-profile.mjs \
+            "$GITHUB_WORKSPACE/dsh-runtime-kit" \
+            "$RUNNER_TEMP/dsh-patched-peer-pack.json" \
+            "$RUNNER_TEMP/$TUI_FILE" \
+            "$RUNNER_TEMP/dsh-home"
+      - name: Install exact DSH/TUI graph with strict frozen peers
+        working-directory: ${{ runner.temp }}/dsh-home/profiles/workbench
+        env:
+          WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
+        run: |
+          test "$(npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm --version)" = "$WORKBENCH_PNPM"
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --strict-peer-dependencies --ignore-scripts
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
+      - name: Prepare exact profile toolchain and packaged runtime-kit
+        working-directory: dsh-runtime-kit
+        env:
+          WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
+        run: |
+          npm install --prefix "$RUNNER_TEMP/workbench-toolchain" --ignore-scripts --no-save "pnpm@$WORKBENCH_PNPM"
+          echo "$RUNNER_TEMP/workbench-toolchain/node_modules/.bin" >> "$GITHUB_PATH"
+          npm pack --ignore-scripts --silent --pack-destination "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/runtime-kit-tarball-name"
+          mkdir -p "$RUNNER_TEMP/runtime-kit-package"
+          tar -xzf "$RUNNER_TEMP/$(cat "$RUNNER_TEMP/runtime-kit-tarball-name")" \
+            -C "$RUNNER_TEMP/runtime-kit-package"
+          test -f "$RUNNER_TEMP/runtime-kit-package/package/dist/bin/dsh-runtime-kit.js"
+      - name: Verify digest-bound runtime-kit setup and healthy doctor
+        working-directory: dsh-workbench
+        env:
+          NILS_BIN_DIR: ${{ steps.nils.outputs.bin_dir }}
+          WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
+        run: |
+          test "$(pnpm --version)" = "$WORKBENCH_PNPM"
+          node scripts/verify-combined-runtime.ts \
+            "$RUNNER_TEMP/runtime-kit-package/package" \
+            "$GITHUB_WORKSPACE/deepseek-harness" \
+            "$RUNNER_TEMP/dsh-home" \
+            "$RUNNER_TEMP/dsh-runtime" \
+            "$NILS_BIN_DIR"
