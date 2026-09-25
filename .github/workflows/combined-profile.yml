@@ -32,6 +32,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24.3.0'
+      - name: Allocate isolated trusted verification root
+        run: |
+          root="$(mktemp -d "${TMPDIR:-/tmp}/dsh-workbench.XXXXXXXX")"
+          echo "VERIFICATION_ROOT=$root" >> "$GITHUB_ENV"
       - name: Select exact Workbench source identities
         id: pins
         working-directory: dsh-workbench
@@ -90,7 +94,7 @@ jobs:
             if(!artifact?.archive?.name||!artifact.archive.sha256)process.exit(1);
             const outputs={archive:artifact.archive.name,sha256:artifact.archive.sha256,
               url:`https://github.com/sympoies/nils-cli/releases/download/${m.release.source_revision}/${artifact.archive.name}`,
-              bin_dir:`${process.env.RUNNER_TEMP}/${artifact.archive.name.slice(0,-7)}/bin`};
+              bin_dir:`${process.env.VERIFICATION_ROOT}/${artifact.archive.name.slice(0,-7)}/bin`};
             fs.appendFileSync(process.env.GITHUB_OUTPUT,
               Object.entries(outputs).map(([key,value])=>`${key}=${value}\n`).join(""));
           '
@@ -102,9 +106,9 @@ jobs:
           NILS_BIN_DIR: ${{ steps.nils.outputs.bin_dir }}
         run: |
           curl --fail --location --proto '=https' --tlsv1.2 \
-            --output "$RUNNER_TEMP/$NILS_ARCHIVE" "$NILS_URL"
-          test "$(shasum -a 256 "$RUNNER_TEMP/$NILS_ARCHIVE" | cut -d ' ' -f 1)" = "$NILS_SHA256"
-          tar -xzf "$RUNNER_TEMP/$NILS_ARCHIVE" -C "$RUNNER_TEMP"
+            --output "$VERIFICATION_ROOT/$NILS_ARCHIVE" "$NILS_URL"
+          test "$(shasum -a 256 "$VERIFICATION_ROOT/$NILS_ARCHIVE" | cut -d ' ' -f 1)" = "$NILS_SHA256"
+          tar -xzf "$VERIFICATION_ROOT/$NILS_ARCHIVE" -C "$VERIFICATION_ROOT"
           test -x "$NILS_BIN_DIR/agent-hook"
           test -x "$NILS_BIN_DIR/agent-docs"
           echo "$NILS_BIN_DIR" >> "$GITHUB_PATH"
@@ -134,23 +138,23 @@ jobs:
         run: |
           npm run --silent pack:compatibility-peers -- \
             --source-root "$GITHUB_WORKSPACE/deepseek-harness" \
-            --artifact-root "$RUNNER_TEMP/dsh-patched-peers" \
+            --artifact-root "$VERIFICATION_ROOT/dsh-patched-peers" \
             --channel pinned --patch-state patched \
             --pnpm-bin "$(command -v pnpm)" \
-            --receipt "$RUNNER_TEMP/dsh-patched-peer-pack.json"
+            --receipt "$VERIFICATION_ROOT/dsh-patched-peer-pack.json"
       - name: Cross-check every archive with runtime-kit's independent verifier
         if: matrix.platform == 'linux'
         run: |
-          mkdir -p "$RUNNER_TEMP/kit-peer-verification"
+          mkdir -p "$VERIFICATION_ROOT/kit-peer-verification"
           printf '%s\n' '{"name":"@sympoies/dsh-runtime-kit","version":"0.0.0"}' \
-            > "$RUNNER_TEMP/kit-peer-verification/package.json"
+            > "$VERIFICATION_ROOT/kit-peer-verification/package.json"
           node "$GITHUB_WORKSPACE/dsh-runtime-kit/dist/scripts/stage-dsh-compatibility-peers.js" \
-            --receipt "$RUNNER_TEMP/dsh-patched-peer-pack.json" \
-            --artifact-root "$RUNNER_TEMP/dsh-patched-peers" \
-            --consumer-root "$RUNNER_TEMP/kit-peer-verification" \
-            > "$RUNNER_TEMP/kit-peer-stage.json"
+            --receipt "$VERIFICATION_ROOT/dsh-patched-peer-pack.json" \
+            --artifact-root "$VERIFICATION_ROOT/dsh-patched-peers" \
+            --consumer-root "$VERIFICATION_ROOT/kit-peer-verification" \
+            > "$VERIFICATION_ROOT/kit-peer-stage.json"
           node -e 'const r=require(process.argv[1]);if(!r.ok||r.data.packages.length!==64||r.data.patch_state!=="patched")process.exit(1)' \
-            "$RUNNER_TEMP/kit-peer-stage.json"
+            "$VERIFICATION_ROOT/kit-peer-stage.json"
       - name: Download exact TUI archive and stage combined profile
         working-directory: dsh-workbench
         env:
@@ -158,18 +162,18 @@ jobs:
           TUI_FILE: ${{ steps.pins.outputs.tui_file }}
         run: |
           npm pack "$TUI_SPEC" --ignore-scripts --silent \
-            --pack-destination "$RUNNER_TEMP" >/dev/null
-          install -d -m 0700 "$RUNNER_TEMP/dsh-home/profiles"
+            --pack-destination "$VERIFICATION_ROOT" >/dev/null
+          install -d -m 0700 "$VERIFICATION_ROOT/dsh-home/profiles"
           node scripts/combined-profile.mjs \
             "$GITHUB_WORKSPACE/dsh-runtime-kit" \
-            "$RUNNER_TEMP/dsh-patched-peer-pack.json" \
-            "$RUNNER_TEMP/$TUI_FILE" \
-            "$RUNNER_TEMP/dsh-home"
+            "$VERIFICATION_ROOT/dsh-patched-peer-pack.json" \
+            "$VERIFICATION_ROOT/$TUI_FILE" \
+            "$VERIFICATION_ROOT/dsh-home"
       - name: Install exact DSH/TUI graph with strict frozen peers
-        working-directory: ${{ runner.temp }}/dsh-home/profiles/workbench
         env:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |
+          cd "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
           test "$(npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm --version)" = "$WORKBENCH_PNPM"
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --strict-peer-dependencies --ignore-scripts
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
@@ -178,14 +182,15 @@ jobs:
         env:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |
-          npm install --prefix "$RUNNER_TEMP/workbench-toolchain" --ignore-scripts --no-save "pnpm@$WORKBENCH_PNPM"
-          echo "$RUNNER_TEMP/workbench-toolchain/node_modules/.bin" >> "$GITHUB_PATH"
-          npm pack --ignore-scripts --silent --pack-destination "$RUNNER_TEMP" \
-            > "$RUNNER_TEMP/runtime-kit-tarball-name"
-          mkdir -p "$RUNNER_TEMP/runtime-kit-package"
-          tar -xzf "$RUNNER_TEMP/$(cat "$RUNNER_TEMP/runtime-kit-tarball-name")" \
-            -C "$RUNNER_TEMP/runtime-kit-package"
-          test -f "$RUNNER_TEMP/runtime-kit-package/package/dist/bin/dsh-runtime-kit.js"
+          npm install --prefix "$VERIFICATION_ROOT/workbench-toolchain" --ignore-scripts --no-save \
+            "npm@$(npm --version)" "pnpm@$WORKBENCH_PNPM"
+          echo "$VERIFICATION_ROOT/workbench-toolchain/node_modules/.bin" >> "$GITHUB_PATH"
+          npm pack --ignore-scripts --silent --pack-destination "$VERIFICATION_ROOT" \
+            > "$VERIFICATION_ROOT/runtime-kit-tarball-name"
+          mkdir -p "$VERIFICATION_ROOT/runtime-kit-package"
+          tar -xzf "$VERIFICATION_ROOT/$(cat "$VERIFICATION_ROOT/runtime-kit-tarball-name")" \
+            -C "$VERIFICATION_ROOT/runtime-kit-package"
+          test -f "$VERIFICATION_ROOT/runtime-kit-package/package/dist/bin/dsh-runtime-kit.js"
       - name: Verify digest-bound runtime-kit setup and healthy doctor
         working-directory: dsh-workbench
         env:
@@ -194,8 +199,8 @@ jobs:
         run: |
           test "$(pnpm --version)" = "$WORKBENCH_PNPM"
           node scripts/verify-combined-runtime.ts \
-            "$RUNNER_TEMP/runtime-kit-package/package" \
+            "$VERIFICATION_ROOT/runtime-kit-package/package" \
             "$GITHUB_WORKSPACE/deepseek-harness" \
-            "$RUNNER_TEMP/dsh-home" \
-            "$RUNNER_TEMP/dsh-runtime" \
+            "$VERIFICATION_ROOT/dsh-home" \
+            "$VERIFICATION_ROOT/dsh-runtime" \
             "$NILS_BIN_DIR"

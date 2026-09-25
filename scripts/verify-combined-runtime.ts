@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 
 const [kitPackage, dshSource, dshHome, runtimeRoot, nilsBin] = process.argv.slice(2);
@@ -24,6 +24,7 @@ const docsHome = join(root, 'agent-docs');
 const policyPath = join(kitPackage, 'policy', 'dsh-runtime-kit-v1.toml');
 const hookConfig = join(configHome, 'agent-hook', 'config.toml');
 const wrapper = join(root, 'dsh-wrapper.mjs');
+const wrapperFailure = join(root, 'dsh-wrapper-failure.log');
 const dshCli = join(dshSource, 'apps', 'cli', 'lib', 'bin.js');
 for (const directory of [runtimeRoot, root, configHome, stateHome, docsHome,
   join(configHome, 'agent-hook'), join(root, 'codex'), join(root, 'claude'),
@@ -39,9 +40,15 @@ writeFileSync(hookConfig,
   { mode: 0o600 });
 writeFileSync(wrapper, `#!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 const result = spawnSync(process.execPath, [${JSON.stringify(dshCli)}, ...process.argv.slice(2)], {
-  cwd: ${JSON.stringify(dshSource)}, env: process.env, stdio: 'inherit',
+  cwd: ${JSON.stringify(dshSource)}, env: process.env, encoding: 'utf8',
+  maxBuffer: 1024 * 1024,
 });
+if (result.stdout) process.stdout.write(result.stdout);
+if (result.stderr) process.stderr.write(result.stderr);
+if (result.status !== 0) writeFileSync(${JSON.stringify(wrapperFailure)},
+  (result.stderr ?? '').slice(0, 4096), { mode: 0o600 });
 process.exitCode = result.status ?? 1;
 `, { mode: 0o755 });
 chmodSync(wrapper, 0o755);
@@ -73,6 +80,19 @@ function invoke(command: string, args: string[]): { [key: string]: unknown } {
   if (result.status !== 0) {
     process.stderr.write(result.stdout ?? '');
     process.stderr.write(result.stderr ?? '');
+    try {
+      process.stderr.write(`DSH command diagnostic: ${readFileSync(wrapperFailure, 'utf8')}\n`);
+    } catch { /* failure occurred before DSH started */ }
+    try {
+      const logRoot = join(profile, '.plugin-manager', 'logs');
+      const recent = readdirSync(logRoot)
+        .map(name => ({ name, modified: statSync(join(logRoot, name)).mtimeMs }))
+        .sort((a, b) => b.modified - a.modified)[0]?.name;
+      if (recent) {
+        const log = readFileSync(join(logRoot, recent, 'pnpm.log'), 'utf8');
+        process.stderr.write(`DSH package-manager diagnostic: ${log.slice(-4096)}\n`);
+      }
+    } catch { /* failure occurred before pnpm started */ }
     throw new Error(`${command} failed with status ${result.status ?? 'unknown'}`);
   }
   const parsed = JSON.parse(result.stdout);
