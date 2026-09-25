@@ -53,8 +53,11 @@ payload. The patch path and SHA-256 digest are part of the single contract;
 the frozen profile lock records pnpm's patch hash. A real-terminal regression
 proved manual rename, exact-ID restart, and another completed turn against
 the patched profile. It also exercised the stopped-session title writer and
-another exact-ID restart. Native Web visibility of that renamed title still needs
-the cross-interface gate in [#7](https://github.com/sympoies/dsh-workbench/issues/7).
+another exact-ID restart. The native Web browser acceptance now opens a
+TUI-renamed Session V4 archive under the same ID and verifies its title,
+prompt, and answer before and after a Web Host restart. The broader
+cross-interface gate remains
+under [#7](https://github.com/sympoies/dsh-workbench/issues/7).
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the

@@ -30,14 +30,16 @@ DSH executable at the exact contract version:
 pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chromium
 ```
 
-The script builds and packs the Web plugin, installs it in a disposable DSH
-profile, and runs three sessions against the pinned DSH mock LLM server. It
-checks distinct IDs, isolated histories, a pending turn, tool approval and
-rejection, a provider error, and Web Host restart recovery for all three. The
-fixture, profile, and mock endpoint are local and removed afterward. This
-test isolates package installation from caller credentials, authenticates the
-mock endpoint with a per-run key, and keeps Chromium sandboxing enabled. It
-does not claim TUI handoff, image composition, or release acceptance.
+The script builds and packs the Web plugin, installs Web and patched TUI
+profiles in a disposable DSH home, and runs four sessions against authenticated
+local mock LLM servers. It creates and renames a TUI session, stops TUI, then
+checks its exact ID, title, prompt, and answer in native Web before and after a
+Web Host restart. It also checks distinct Web IDs, isolated histories, a
+pending turn, tool approval and rejection, a provider error, and Web Host
+restart recovery. The fixture, profiles, and mock endpoints are removed
+afterward. Package installation is isolated from caller credentials, and
+Chromium sandboxing remains enabled. This does not establish the full
+cross-interface handoff, image composition, or release acceptance gates.
 
 Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`

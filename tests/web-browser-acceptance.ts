@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
+import headless from '@xterm/headless';
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 import { workbenchIdentity } from '../web/src/identity.ts';
+import { readEvents } from './session-events.ts';
+import { stopTerminal } from './terminal-process.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
@@ -16,6 +19,9 @@ const answer = 'WORKBENCH_SMOKE_OK';
 const prompts = ['FIRST_FIXTURE_PROMPT', 'SECOND_FIXTURE_PROMPT'] as const;
 const errorPrompt = 'ERROR_FIXTURE_PROMPT';
 const editorName = 'Describe what you want to build, / commands, @ files or sessions';
+const tuiPrompt = 'TUI_TO_WEB_RENAMED_PROMPT';
+const tuiAnswer = 'TUI_TO_WEB_RENAMED_ANSWER';
+const tuiTitle = 'TUI_TO_WEB_MANUAL_TITLE';
 
 function option(name: string): string {
   const index = process.argv.indexOf(name);
@@ -32,6 +38,98 @@ function command(binary: string, args: string[], cwd: string,
   assert.equal(result.error, undefined, `${binary} did not start`);
   assert.equal(result.status, 0, `${binary} failed with exit ${result.status}:\n${result.stdout}\n${result.stderr}`);
   return result.stdout.trim();
+}
+
+function quote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function sessionLogs(root: string): string[] {
+  const found: string[] = [];
+  const pending = [root];
+  while (pending.length) {
+    const path = pending.pop()!;
+    for (const entry of readdirSync(path, { withFileTypes: true })) {
+      const child = join(path, entry.name);
+      if (entry.isDirectory()) pending.push(child);
+      else if (entry.isFile() && entry.name === 'session.v4.jsonl.zstd') found.push(child);
+    }
+  }
+  return found;
+}
+
+async function waitForTui(child: ChildProcess, condition: () => boolean, label: string): Promise<void> {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`TUI exited before ${label}: ${child.exitCode ?? child.signalCode}`);
+    }
+    await new Promise(resolveWait => setTimeout(resolveWait, 100));
+  }
+  throw new Error(`TUI did not reach ${label}`);
+}
+
+async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
+  agents: string, workspace: string, userConfig: string, globalConfig: string): Promise<string> {
+  const profile = join(home, 'profiles', 'dsh-tui');
+  mkdirSync(join(profile, 'patches'), { recursive: true });
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    name: 'dsh-profile-dsh-tui', private: true,
+    dependencies: { [contract.components.tui.package.name]: contract.components.tui.package.version },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', contract.components.tui.package.name] } },
+  }, null, 2));
+  writeFileSync(join(profile, 'cordis.yml'), '[]\n');
+  writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n');
+  writeFileSync(join(profile, 'pnpm-workspace.yaml'),
+    command(process.execPath, [join(repo, 'scripts/tui-compat.mjs')], repo) + '\n');
+  copyFileSync(join(repo, 'compatibility/tui-profile/pnpm-lock.yaml'), join(profile, 'pnpm-lock.yaml'));
+  copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path), join(profile, 'patches/tui-rename.patch'));
+  command('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies', '--ignore-scripts'], profile,
+    300_000, { PATH: process.env.PATH ?? '', HOME: home, XDG_CONFIG_HOME: join(fixture, 'config'),
+      npm_config_userconfig: userConfig, npm_config_globalconfig: globalConfig });
+  const apiKey = randomBytes(24).toString('hex');
+  const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
+    apiKey, successText: tuiAnswer });
+  const logRoot = join(home, 'sessions');
+  mkdirSync(logRoot, { recursive: true });
+  const previous = new Set(sessionLogs(logRoot));
+  const child = spawn('script', ['-q', '-e', '-c', `${quote(dsh)} --profile dsh-tui`, '/dev/null'], {
+    cwd: workspace, detached: true,
+    env: { PATH: `${dirname(dsh)}:${process.env.PATH ?? ''}`, HOME: home, DSH_HOME: home,
+      DSH_AGENTS_HOME: agents, XDG_CONFIG_HOME: join(fixture, 'config'),
+      LANG: 'en_US.UTF-8', TERM: 'xterm-256color',
+      DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_BASE_URL: `${mock.baseURL}/v1`, DEEPSEEK_API_KEY: apiKey },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const screen = new headless.Terminal({ cols: 80, rows: 24, scrollback: 1_000, allowProposedApi: true });
+  child.stdout.on('data', chunk => { screen.write(chunk); });
+  child.stderr.resume();
+  try {
+    await waitForTui(child, () => Array.from({ length: screen.rows }, (_, row) =>
+      screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '')
+      .join('\n').includes('Explore the uncharted!'), 'startup');
+    child.stdin?.write(`${tuiPrompt}\r`);
+    let logPath: string | undefined;
+    await waitForTui(child, () => {
+      const added = sessionLogs(logRoot).filter(path => !previous.has(path));
+      if (added.length !== 1) return false;
+      logPath = added[0];
+      return readEvents(logPath).some(event => event.type === 'turn/end');
+    }, 'settled first turn');
+    child.stdin?.write(`/rename ${tuiTitle}\r`);
+    await waitForTui(child, () => readEvents(logPath!).some(event =>
+      event.type === 'session/title' && event.data?.title === tuiTitle), 'manual title');
+    await stopTerminal(child);
+    assert.equal(child.exitCode, 0, 'TUI did not exit cleanly before Web handoff');
+    const events = readEvents(logPath!, { strict: true });
+    assert.deepEqual(events.filter(event => event.type === 'session/title').at(-1)?.data,
+      { title: tuiTitle, messageSeqs: [], source: { kind: 'user' } });
+    return basename(dirname(logPath!));
+  } finally {
+    const cleanup = await Promise.allSettled([stopTerminal(child), mock.close()]);
+    if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI seed cleanup failed');
+  }
 }
 
 async function startHost(binary: string, home: string, agents: string, workspace: string,
@@ -119,7 +217,8 @@ async function copiedSessionId(page: Page): Promise<string> {
   assert.ok(title.includes(`TUI ${contract.components.tui.package.version}`));
   await button.click();
   const id = await page.evaluate(() => navigator.clipboard.readText());
-  assert.ok(/^session-[0-9a-f-]{36}$/.test(id), 'copied ID is not a DSH session ID');
+  assert.ok(/^(?:session-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id),
+    'copied ID is not a DSH session ID');
   return id;
 }
 
@@ -171,6 +270,19 @@ async function checkHistory(page: Page, id: string, own: string, other: string):
   assert.ok(body.includes(own), 'session lost its prompt');
   assert.ok(!body.includes(other), 'session shows another session prompt');
   assert.ok(body.includes(answer), 'session lost its mock answer');
+}
+
+async function checkTuiHandoff(page: Page, id: string): Promise<void> {
+  const row = page.locator(`[data-row-key="session:${id}"]`);
+  await row.waitFor({ timeout: 30_000 });
+  await row.click();
+  assert.equal(await copiedSessionId(page), id, 'Web opened another TUI session ID');
+  await row.getByText(tuiTitle, { exact: true }).waitFor({ timeout: 30_000 });
+  const conversation = page.locator('[data-conversation-content]');
+  await conversation.getByText(tuiPrompt, { exact: false }).first().waitFor({ timeout: 30_000 });
+  const body = await conversation.innerText();
+  assert.ok(body.includes(tuiPrompt), 'Web lost the TUI prompt');
+  assert.ok(body.includes(tuiAnswer), 'Web lost the TUI answer');
 }
 
 async function openToolDetails(page: Page) {
@@ -256,6 +368,9 @@ async function main(): Promise<void> {
       npm_config_globalconfig: globalConfig,
     });
 
+    const tuiSessionId = await seedTuiRenamedSession(dsh, fixture, home, agents,
+      workspace, userConfig, globalConfig);
+
     const apiKey = randomBytes(24).toString('hex');
     mock = await startMockLlmServer({ sequence: ['tool_call_success', 'success', 'success', 'tool_call_success', 'success'],
       repeatLast: true, successText: answer, apiKey, toolName: 'bash',
@@ -270,18 +385,8 @@ async function main(): Promise<void> {
     let opened = await openPage(browser, host.url);
     const firstPage = opened.page;
     const firstErrors = opened.errors;
-    await firstPage.getByRole('button', { name: 'New Session' }).first().click();
-    const chooseWorkspace = firstPage.getByRole('button', { name: 'Choose workspace' });
-    if (await chooseWorkspace.count()) {
-      await chooseWorkspace.click();
-      await firstPage.getByRole('button', { name: 'Edit path' }).click();
-      const pathInput = firstPage.getByRole('textbox', { name: 'Edit path' });
-      await pathInput.fill(workspace);
-      await pathInput.press('Enter');
-      await firstPage.getByRole('button', { name: 'Open', exact: true }).click();
-    }
-    const editor = firstPage.getByRole('textbox', { name: editorName });
-    await editor.waitFor({ timeout: 30_000 });
+    await checkTuiHandoff(firstPage, tuiSessionId);
+    const editor = await startNewSession(firstPage, 'first', [tuiSessionId]);
     await editor.fill(prompts[0]);
     await editor.press('Enter');
     const approval = firstPage.locator('[data-approval-key]');
@@ -323,6 +428,7 @@ async function main(): Promise<void> {
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
     opened = await openPage(browser, host.url);
+    await checkTuiHandoff(opened.page, tuiSessionId);
     await checkHistory(opened.page, firstId, prompts[0], prompts[1]);
     await checkToolResult(opened.page);
     await checkHistory(opened.page, secondId, prompts[1], prompts[0]);
@@ -368,7 +474,7 @@ async function main(): Promise<void> {
     assert.equal(pageErrors, 0, 'browser reported JavaScript errors');
     assert.equal(hostErrors, 0, 'DSH Web Host reported errors');
     assert.equal(mock.requests[0]?.behavior, 'invalid_request');
-    console.log(JSON.stringify({ result: 'pass', sessions: 3, toolApproval: true,
+    console.log(JSON.stringify({ result: 'pass', sessions: 4, tuiToWebTitle: true, toolApproval: true,
       toolRejection: true, runningTurn: true, errorResume: true,
       toolResultsAfterRestart: true, restartResume: true,
       interactionRequests, errorRequests: mock.requests.length, pageErrors, hostErrors }));
