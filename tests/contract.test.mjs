@@ -84,6 +84,18 @@ test('platform and toolchain changes require a new Workbench version', () => {
   }
 });
 
+test('runtime Node baseline cannot fall below the pinned runtime-kit requirement', () => {
+  const lower = fixture(contract => { contract.runtime.node = '>=23.0.0'; });
+  const higher = fixture(contract => { contract.runtime.node = '>=25.0.0'; });
+  try {
+    assert.match(run('check', lower.path).stderr, /runtime\.node.*runtimeKit/i);
+    assert.equal(run('check', higher.path).status, 0);
+  } finally {
+    rmSync(lower.dir, { recursive: true, force: true });
+    rmSync(higher.dir, { recursive: true, force: true });
+  }
+});
+
 test('a product-only release can advance the Workbench version', () => {
   const { dir, path } = fixture(contract => {
     contract.release.version = '0.1.0-rc.1';

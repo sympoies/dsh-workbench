@@ -42,6 +42,12 @@ function read(path) {
   }
 }
 
+function nodeFloor(value, name) {
+  const found = /^>=(\d+)\.(\d+)\.(\d+)$/.exec(string(value, name));
+  if (!found) fail(`${name} must be a minimum Node version`);
+  return found.slice(1).map(Number);
+}
+
 function validate(contract) {
   exactKeys(contract, ['schemaVersion', 'release', 'status', 'runtime', 'components', 'acceptance'], 'contract');
   if (contract.schemaVersion !== 1) fail('unsupported contract schemaVersion');
@@ -50,7 +56,7 @@ function validate(contract) {
   if (contract.release.tag !== `v${contract.release.version}`) fail('release.tag must match release.version');
   if (!['candidate', 'accepted'].includes(contract.status)) fail('invalid contract status');
   exactKeys(contract.runtime, ['node', 'platforms'], 'runtime');
-  match(contract.runtime.node, /^>=\d+\.\d+\.\d+$/, 'runtime.node');
+  const runtimeNodeFloor = nodeFloor(contract.runtime.node, 'runtime.node');
   if (!Array.isArray(contract.runtime.platforms) || !contract.runtime.platforms.length ||
       new Set(contract.runtime.platforms).size !== contract.runtime.platforms.length ||
       !contract.runtime.platforms.every(value => platform.test(value))) fail('invalid runtime.platforms');
@@ -77,6 +83,11 @@ function validate(contract) {
     string(item.toolchain.node, `${id}.toolchain.node`);
     if (item.toolchain.pnpm !== undefined) match(item.toolchain.pnpm, version, `${id}.toolchain.pnpm`);
     if (!['candidate', 'accepted'].includes(item.status)) fail(`invalid ${id}.status`);
+  }
+  const kitNodeFloor = nodeFloor(contract.components.runtimeKit.toolchain.node, 'runtimeKit.toolchain.node');
+  for (let index = 0; index < 3; index++) {
+    if (runtimeNodeFloor[index] > kitNodeFloor[index]) break;
+    if (runtimeNodeFloor[index] < kitNodeFloor[index]) fail('runtime.node must meet runtimeKit.toolchain.node');
   }
   exactKeys(contract.acceptance, gates, 'acceptance');
   const allEvidenceUrls = new Set();

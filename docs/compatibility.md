@@ -28,8 +28,9 @@ local schema check alone does not
 establish that upstream packages match the recorded hashes; the build and
 installation workflows must verify those bytes when implemented.
 
-The common runtime baseline is Node.js 24 or newer on the target platform
-set recorded in the contract. A target platform is a planned test target while
+The current common runtime baseline is Node.js 24 or newer, derived from the
+pinned runtime-kit's minimum, on the target platform set recorded in the
+contract. A target platform is a planned test target while
 the contract is a candidate; it becomes a supported platform only when its
 release acceptance passes. Upstream package manager versions are recorded as
 source-build facts, not an instruction to install floating dependencies.
