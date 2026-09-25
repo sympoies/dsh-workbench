@@ -13,7 +13,8 @@ TypeScript is the default for product source, substantive scripts, and tests.
 Node 24.3.0 or later runs the erasable TypeScript directly without an
 experimental warning. The `.mjs` files in `scripts/` are thin CLI entrypoints:
 `contract.mjs` delegates to `src/contract.ts`, `tui-compat.mjs` delegates to
-`src/tui-compat.ts`, and `web-metadata.mjs` delegates to `src/web-metadata.ts`.
+`src/tui-compat.ts`, `web-metadata.mjs` delegates to `src/web-metadata.ts`, and
+`combined-profile.mjs` delegates to `src/combined-profile.ts`.
 Keep new CLI wrappers equally thin, with their logic in typechecked TypeScript.
 Install the exact development toolchain with
 `pnpm install --frozen-lockfile --strict-peer-dependencies`, then run `pnpm typecheck` and
