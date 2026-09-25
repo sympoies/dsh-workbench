@@ -22,9 +22,15 @@ jobs:
       - name: Install Workbench package manager
         run: npm install --global pnpm@11.24.0
       - name: Install pinned development tools
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
+      - name: Validate and build Web plugin
+        run: |
+          pnpm web:metadata:check
+          pnpm web:build
       - name: Typecheck source and tests
         run: pnpm typecheck
+      - name: Verify Web plugin integration
+        run: node --test tests/web-metadata.test.ts web/tests/registration.test.ts
       - name: Scan tracked source
         run: bash scripts/check-publication.sh
       - name: Verify scan behavior

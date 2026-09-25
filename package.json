@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.ts"
+    "test": "pnpm web:build && node --test tests/*.test.ts web/tests/*.test.ts",
+    "web:metadata:check": "node scripts/web-metadata.mjs check",
+    "web:build": "pnpm --filter @sympoies/dsh-workbench-web build"
   },
   "devDependencies": {
     "@types/node": "24.10.2",

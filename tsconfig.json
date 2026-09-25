@@ -10,5 +10,5 @@
     "strict": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "web/scripts/**/*.ts", "web/tests/**/*.ts"]
 }
