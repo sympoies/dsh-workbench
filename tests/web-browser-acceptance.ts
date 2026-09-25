@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
@@ -23,14 +24,16 @@ function option(name: string): string {
   return resolve(value);
 }
 
-function command(binary: string, args: string[], cwd: string, timeout = 300_000): string {
-  const result = spawnSync(binary, args, { cwd, encoding: 'utf8', timeout });
+function command(binary: string, args: string[], cwd: string,
+  timeout = 300_000, env: NodeJS.ProcessEnv = process.env): string {
+  const result = spawnSync(binary, args, { cwd, env, encoding: 'utf8', timeout });
   assert.equal(result.error, undefined, `${binary} did not start`);
   assert.equal(result.status, 0, `${binary} failed with exit ${result.status}:\n${result.stdout}\n${result.stderr}`);
   return result.stdout.trim();
 }
 
-async function startHost(binary: string, home: string, agents: string, workspace: string, baseURL: string) {
+async function startHost(binary: string, home: string, agents: string, workspace: string,
+  baseURL: string, apiKey: string) {
   const child = spawn(binary, ['--profile', 'web', '--host', '127.0.0.1', '--no-open', '--port', '0'], {
     cwd: workspace,
     env: {
@@ -41,7 +44,7 @@ async function startHost(binary: string, home: string, agents: string, workspace
       DSH_AGENTS_HOME: agents,
       DSH_TELEMETRY_DISABLED: '1',
       DEEPSEEK_BASE_URL: `${baseURL}/v1`,
-      DEEPSEEK_API_KEY: 'workbench-local-mock-key',
+      DEEPSEEK_API_KEY: apiKey,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -145,13 +148,31 @@ async function main(): Promise<void> {
     }, null, 2));
     writeFileSync(join(profile, 'cordis.patch.yml'),
       "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n");
-    command('pnpm', ['install', '--strict-peer-dependencies', '--reporter', 'append-only'], profile);
+    const userConfig = join(fixture, 'user.npmrc');
+    const globalConfig = join(fixture, 'global.npmrc');
+    writeFileSync(userConfig, '');
+    writeFileSync(globalConfig, '');
+    command('pnpm', ['install', '--strict-peer-dependencies', '--ignore-scripts',
+      '--reporter', 'append-only'], profile, 300_000, {
+      PATH: process.env.PATH ?? '',
+      LANG: process.env.LANG ?? 'C.UTF-8',
+      HOME: home,
+      XDG_CONFIG_HOME: join(fixture, 'config'),
+      npm_config_userconfig: userConfig,
+      npm_config_globalconfig: globalConfig,
+    });
 
-    mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true, successText: answer });
-    host = await startHost(dsh, home, agents, workspace, mock.baseURL);
+    const apiKey = randomBytes(24).toString('hex');
+    mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
+      successText: answer, apiKey });
+    const unauthorized = await fetch(`${mock.baseURL}/v1/messages`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+    });
+    assert.equal(unauthorized.status, 401, 'mock endpoint accepted an unauthenticated request');
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await chromium.launch({ executablePath: browserBin, headless: true,
       env: { PATH: process.env.PATH ?? '', HOME: home, LANG: process.env.LANG ?? 'C.UTF-8' },
-      args: process.platform === 'linux' ? ['--no-sandbox'] : [] });
+      chromiumSandbox: true });
     let opened = await openPage(browser, host.url);
     const firstPage = opened.page;
     const firstErrors = opened.errors;
@@ -188,10 +209,10 @@ async function main(): Promise<void> {
     await stopHost(host.child);
     host = undefined;
 
-    host = await startHost(dsh, home, agents, workspace, mock.baseURL);
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await chromium.launch({ executablePath: browserBin, headless: true,
       env: { PATH: process.env.PATH ?? '', HOME: home, LANG: process.env.LANG ?? 'C.UTF-8' },
-      args: process.platform === 'linux' ? ['--no-sandbox'] : [] });
+      chromiumSandbox: true });
     opened = await openPage(browser, host.url);
     await checkHistory(opened.page, firstId, prompts[0], prompts[1]);
     await checkHistory(opened.page, secondId, prompts[1], prompts[0]);
@@ -203,10 +224,15 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({ result: 'pass', sessions: 2, restartResume: true,
       mockRequests: mock.requests.length, pageErrors, hostErrors }));
   } finally {
-    await browser?.close();
-    await stopHost(host?.child);
-    await mock?.close();
+    const cleanup = await Promise.allSettled([
+      browser?.close() ?? Promise.resolve(),
+      stopHost(host?.child),
+      mock?.close() ?? Promise.resolve(),
+    ]);
     rmSync(fixture, { recursive: true, force: true });
+    if (cleanup.some(result => result.status === 'rejected')) {
+      throw new Error('Browser acceptance resource cleanup failed');
+    }
   }
 }
 

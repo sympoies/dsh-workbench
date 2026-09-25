@@ -33,7 +33,9 @@ The script builds and packs the Web plugin, installs it in a disposable DSH
 profile, and runs two sessions against the pinned DSH mock LLM server. It
 checks distinct IDs, isolated histories, and Web Host restart recovery. The
 fixture, profile, and mock endpoint are local and removed afterward. This
-test does not claim TUI handoff, tool approval, or release acceptance.
+test isolates package installation from caller credentials, authenticates the
+mock endpoint with a per-run key, and keeps Chromium sandboxing enabled. It
+does not claim TUI handoff, tool approval, or release acceptance.
 
 Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`
