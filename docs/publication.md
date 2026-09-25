@@ -36,6 +36,12 @@ distribution. The Workbench's own source is MIT-licensed in [LICENSE](../LICENSE
 
 ## Repeatable checks
 
+The public `main` branch has an active GitHub ruleset with no bypass actors.
+It requires a pull request and the `source` status check before an update,
+and rejects deletion and force pushes. Verify the effective branch rules and
+the required check in GitHub before a release; a workflow that runs only after
+a direct push would be too late to protect public history.
+
 Run `scripts/check-publication.sh` from the repository root on every PR. Pass
 each generated bundle or release asset tree with `--artifact PATH`. For a
 container candidate, export its image configuration and labels to a text/JSON
