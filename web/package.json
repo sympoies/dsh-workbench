@@ -4,7 +4,9 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "files": ["lib/"],
+  "files": [
+    "lib/"
+  ],
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "exports": {
@@ -28,7 +30,7 @@
     }
   },
   "scripts": {
-    "build": "tsc --project tsconfig.build.json && node scripts/build-client.ts"
+    "build": "node ../scripts/web-metadata.mjs check && tsc --project tsconfig.build.json && node scripts/build-client.ts"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.4",

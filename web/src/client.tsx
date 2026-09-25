@@ -4,8 +4,16 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
+import { workbenchIdentity } from './identity.js';
 
 type HandoffActionProps = PropsRuntime<'conversation.session.header.utilities'>;
+const versionSummary = [
+  `Workbench ${workbenchIdentity.release.version} (${workbenchIdentity.status})`,
+  `DSH ${workbenchIdentity.components.dsh.package.version}`,
+  `runtime-kit ${workbenchIdentity.components.runtimeKit.source.commit}`,
+  `TUI ${workbenchIdentity.components.tui.package.version}`,
+  workbenchIdentity.contractDigest,
+].join(' | ');
 
 /** Copy only the opaque Session identity; the other interface may resume after Web Host exit. */
 function HandoffAction({ sessionId }: HandoffActionProps) {
@@ -23,7 +31,8 @@ function HandoffAction({ sessionId }: HandoffActionProps) {
   };
   return (
     <span>
-      <button type="button" onClick={() => void copy()} aria-label="Copy Session ID for TUI">
+      <button type="button" onClick={() => void copy()} aria-label="Copy Session ID for TUI"
+        title={versionSummary}>
         {copied ? 'Session ID copied' : 'Copy Session ID'}
       </button>
       <span role="status">

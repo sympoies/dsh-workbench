@@ -20,8 +20,12 @@ to copy a session ID for TUI handoff. It reminds the user to stop the Web Host
 before TUI resume. It never releases a writer, modifies session data, or
 replaces the native conversation.
 
-The Web package version and pnpm DSH catalog are checked against the sole
-Workbench contract by `node scripts/web-metadata.mjs check`. After a deliberate
+The Web package version, pnpm DSH catalog, and generated Client identity are
+checked against the sole Workbench contract by
+`node scripts/web-metadata.mjs check`. The identity reports the Workbench
+version, contract status and digest, and all three pinned component identities
+through the Web handoff action and the package's server export. The package
+build rejects stale generated identity before bundling. After a deliberate
 contract revision, run `node scripts/web-metadata.mjs write` and regenerate
 the frozen lockfile. The package remains private until release packaging and
 artifact review are established.
@@ -36,7 +40,7 @@ histories and copied IDs, exercises a pending turn, a tool approval and
 rejection, and a provider error. It restarts the Web Host and reopens all
 three, including the settled tool results and failed turn. It
 requires explicit paths to the pinned DSH executable and a Chromium executable;
-see [development instructions](../DEVELOPMENT.md). Exact version reporting,
-image composition, and cross-platform evidence remain acceptance work under
+see [development instructions](../DEVELOPMENT.md). Image composition, installed
+graph mismatch rejection, and cross-platform evidence remain acceptance work under
 [#5](https://github.com/sympoies/dsh-workbench/issues/5); cross-interface
 handoff remains under [#7](https://github.com/sympoies/dsh-workbench/issues/7).

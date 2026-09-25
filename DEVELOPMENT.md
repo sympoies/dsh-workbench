@@ -20,7 +20,8 @@ graph. Generated files and `node_modules/` are not published.
 
 For the Web plugin, run `pnpm web:metadata:check` and `pnpm web:build` before
 `pnpm typecheck`; its generated `web/lib/` is ignored. The metadata check
-ensures the Web package version and DSH catalog match the contract. See the
+ensures the Web package version, DSH catalog, and generated Client identity
+match the contract. The package build runs this check before bundling. See the
 [Web port notes](docs/web-port.md) for the current acceptance boundary.
 Run the native browser acceptance with a Chromium executable and an installed
 DSH executable at the exact contract version:

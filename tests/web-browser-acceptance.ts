@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core';
 import type { WorkbenchContract } from '../src/contract-types.ts';
+import { workbenchIdentity } from '../web/src/identity.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
@@ -108,6 +109,14 @@ function launchBrowser(executablePath: string, home: string): Promise<Browser> {
 async function copiedSessionId(page: Page): Promise<string> {
   const button = page.getByRole('button', { name: 'Copy Session ID for TUI' });
   await button.waitFor({ timeout: 30_000 });
+  const title = await button.getAttribute('title');
+  assert.ok(title, 'Web plugin did not report its contract identity');
+  assert.ok(title.includes(workbenchIdentity.contractDigest), 'Web plugin did not report the exact contract digest');
+  assert.ok(title.includes(`Workbench ${contract.release.version}`));
+  assert.ok(title.includes(`(${contract.status})`));
+  assert.ok(title.includes(`DSH ${contract.components.dsh.package.version}`));
+  assert.ok(title.includes(contract.components.runtimeKit.source.commit));
+  assert.ok(title.includes(`TUI ${contract.components.tui.package.version}`));
   await button.click();
   const id = await page.evaluate(() => navigator.clipboard.readText());
   assert.ok(/^session-[0-9a-f-]{36}$/.test(id), 'copied ID is not a DSH session ID');

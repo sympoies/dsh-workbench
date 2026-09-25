@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,9 +13,9 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 test('Web manifest and DSH catalog are derived from the single Workbench contract', () => {
   const stage = mkdtempSync(join(tmpdir(), 'dsh-workbench-web-metadata-'));
   try {
-    for (const dir of ['scripts', 'src', 'compatibility', 'web']) mkdirSync(join(stage, dir));
+    for (const dir of ['scripts', 'src', 'compatibility', 'web/src']) mkdirSync(join(stage, dir), { recursive: true });
     for (const file of ['scripts/web-metadata.mjs', 'src/web-metadata.ts',
-      'compatibility/workbench.json', 'web/package.json', 'pnpm-workspace.yaml']) {
+      'compatibility/workbench.json', 'web/package.json', 'web/src/identity.ts', 'pnpm-workspace.yaml']) {
       copyFileSync(join(root, file), join(stage, file));
     }
     const run = (command: 'check' | 'write') => spawnSync(process.execPath, [join(stage, 'scripts/web-metadata.mjs'), command],
@@ -43,6 +44,40 @@ test('Web manifest and DSH catalog are derived from the single Workbench contrac
     assert.match(readFileSync(join(stage, 'pnpm-workspace.yaml'), 'utf8'), /0\.1\.7-rc\.99/);
     const repaired = run('check');
     assert.equal(repaired.status, 0, repaired.stderr);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
+});
+
+test('Web identity is generated from the complete contract and rejects stale metadata', () => {
+  const stage = mkdtempSync(join(tmpdir(), 'dsh-workbench-web-identity-'));
+  try {
+    for (const dir of ['scripts', 'src', 'compatibility', 'web/src']) mkdirSync(join(stage, dir), { recursive: true });
+    for (const file of ['scripts/web-metadata.mjs', 'src/web-metadata.ts',
+      'compatibility/workbench.json', 'web/package.json', 'pnpm-workspace.yaml']) {
+      copyFileSync(join(root, file), join(stage, file));
+    }
+    const run = (command: 'check' | 'write') => spawnSync(process.execPath,
+      [join(stage, 'scripts/web-metadata.mjs'), command], { encoding: 'utf8' });
+    assert.equal(run('write').status, 0);
+    const contractPath = join(stage, 'compatibility/workbench.json');
+    const contract = JSON.parse(readFileSync(contractPath, 'utf8')) as WorkbenchContract;
+    const digest = createHash('sha256').update(JSON.stringify(contract)).digest('hex');
+    const identity = readFileSync(join(stage, 'web/src/identity.ts'), 'utf8');
+    assert.match(identity, new RegExp(`sha256:${digest}`));
+    assert.match(identity, new RegExp(contract.release.version.replaceAll('.', '\\.')));
+    for (const component of Object.values(contract.components)) {
+      assert.ok(identity.includes(component.source.commit));
+      assert.ok(identity.includes(component.package.version));
+    }
+    assert.equal(run('check').status, 0);
+    contract.components.runtimeKit.source.commit = 'a'.repeat(40);
+    writeFileSync(contractPath, JSON.stringify(contract));
+    const stale = run('check');
+    assert.notEqual(stale.status, 0);
+    assert.match(stale.stderr, /identity differs/);
+    assert.equal(run('write').status, 0);
+    assert.equal(run('check').status, 0);
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
