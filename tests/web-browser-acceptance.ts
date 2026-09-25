@@ -114,10 +114,13 @@ async function copiedSessionId(page: Page): Promise<string> {
   return id;
 }
 
-async function startNewSession(page: Page, phase: string): Promise<Locator> {
+async function startNewSession(page: Page, phase: string, completedIds: readonly string[]): Promise<Locator> {
   const selected = page.locator('[data-row-key^="session:"][aria-selected="true"]');
   const previous = await selected.getAttribute('data-row-key');
-  const alreadyBlank = await selected.getByText('New Session', { exact: true }).count() > 0;
+  const alreadyBlank = previous !== null
+    && !completedIds.some(id => previous === `session:${id}`)
+    && await selected.getByText('New Session', { exact: true }).count() > 0
+    && await page.locator('[data-conversation-content] [data-chat-flow-kind="user"]').count() === 0;
   await page.getByRole('button', { name: 'New Session' }).first().click();
   if (!alreadyBlank) {
     try {
@@ -289,7 +292,7 @@ async function main(): Promise<void> {
     // Let it consume its scripted success before the next tool scenario begins.
     await waitForMockRequests(mock, 3);
 
-    const secondEditor = await startNewSession(firstPage, 'second');
+    const secondEditor = await startNewSession(firstPage, 'second', [firstId]);
     await secondEditor.fill(prompts[1]);
     await secondEditor.press('Enter');
     await approval.waitFor({ timeout: 30_000 });
@@ -333,7 +336,7 @@ async function main(): Promise<void> {
     browser = await launchBrowser(browserBin, home);
     let errorOpened = await openPage(browser, host.url);
     const errorPage = errorOpened.page;
-    const errorEditor = await startNewSession(errorPage, 'error');
+    const errorEditor = await startNewSession(errorPage, 'error', [firstId, secondId]);
     await errorEditor.fill(errorPrompt);
     await errorEditor.press('Enter');
     await errorPage.locator('[data-conversation-content]')
