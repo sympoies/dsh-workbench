@@ -1,0 +1,57 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import type { WorkbenchContract } from './contract-types.ts';
+
+const contractPath = fileURLToPath(new URL('../compatibility/workbench.json', import.meta.url));
+const catalogPath = fileURLToPath(new URL('../pnpm-workspace.yaml', import.meta.url));
+const packagePath = fileURLToPath(new URL('../web/package.json', import.meta.url));
+const packages = [
+  '@deepseek-ai/dsh-client-ui-conversation',
+  '@deepseek-ai/dsh-client-ui-renderer',
+  '@deepseek-ai/dsh-client-ui-session',
+  '@deepseek-ai/dsh-client-ui-slots',
+] as const;
+
+function catalog(version: string): string {
+  return [
+    'packages:',
+    '  - web',
+    'allowBuilds:',
+    '  esbuild: true',
+    'catalogs:',
+    '  dsh:',
+    ...packages.map(name => `    '${name}': ${version}`),
+    '',
+  ].join('\n');
+}
+
+function fail(message: string): never {
+  throw new Error(message);
+}
+
+try {
+  const [command] = process.argv.slice(2);
+  if (command !== 'check' && command !== 'write') fail('usage: web-metadata.mjs <check|write>');
+  const contract = JSON.parse(readFileSync(contractPath, 'utf8')) as WorkbenchContract;
+  const manifest = JSON.parse(readFileSync(packagePath, 'utf8')) as Record<string, unknown>;
+  const expectedCatalog = catalog(contract.components.dsh.package.version);
+  if (command === 'write') {
+    manifest.version = contract.release.version;
+    writeFileSync(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
+    writeFileSync(catalogPath, expectedCatalog);
+  } else {
+    if (manifest.version !== contract.release.version) fail('Web package version differs from Workbench contract');
+    if (readFileSync(catalogPath, 'utf8') !== expectedCatalog) fail('Web DSH catalog differs from Workbench contract');
+    const peer = manifest.peerDependencies as Record<string, string>;
+    const dev = manifest.devDependencies as Record<string, string>;
+    for (const name of packages) {
+      if (peer?.[name] !== 'catalog:dsh' || dev?.[name] !== 'catalog:dsh') {
+        fail(`Web dependency ${name} must use the contract-derived DSH catalog`);
+      }
+    }
+    process.stdout.write('Web metadata matches Workbench contract.\n');
+  }
+} catch (error) {
+  process.stderr.write(`Web metadata check failed: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
+}

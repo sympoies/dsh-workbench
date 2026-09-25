@@ -3,6 +3,7 @@
 !.env.example
 node_modules/
 dist/
+web/lib/
 coverage/
 .cache/
 *.log

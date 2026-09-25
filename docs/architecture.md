@@ -4,7 +4,9 @@ DSH Workbench packages a reviewed combination of the official DeepSeek Harness
 (DSH) Web experience, dsh-TUI, and dsh-runtime-kit. It owns the portable
 integration, one immutable version contract, installation checks, and acceptance
 tests. The current repository contains no imported predecessor application
-source. The [roadmap](https://github.com/sympoies/dsh-workbench/issues/10)
+source. Its [Web extension candidate](web-port.md) uses DSH's native Session
+Controller and an additive header slot. The
+[roadmap](https://github.com/sympoies/dsh-workbench/issues/10)
 tracks the work needed before a release is installable.
 
 ## Component ownership

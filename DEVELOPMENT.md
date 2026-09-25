@@ -18,6 +18,11 @@ entry points. Install the exact development toolchain with
 [compatibility contract](compatibility/workbench.json) pins the DSH product
 graph. Generated files and `node_modules/` are not published.
 
+For the Web plugin, run `pnpm web:metadata:check` and `pnpm web:build` before
+`pnpm typecheck`; its generated `web/lib/` is ignored. The metadata check
+ensures the Web package version and DSH catalog match the contract. See the
+[Web port notes](docs/web-port.md) for the current acceptance boundary.
+
 Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`
 when changing the [compatibility contract](compatibility/workbench.json). A
