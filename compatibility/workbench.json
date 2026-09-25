@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "release": {
+    "version": "0.1.0-rc.0",
+    "tag": "v0.1.0-rc.0"
+  },
+  "status": "candidate",
+  "runtime": {
+    "node": ">=24.0.0",
+    "platforms": ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]
+  },
+  "components": {
+    "dsh": {
+      "source": {
+        "url": "https://github.com/deepseek-ai/deepseek-harness",
+        "tag": "dsh-v0.1.7-rc.1",
+        "commit": "46a7f68b0922371ce7144b668b90e377d8e799f4",
+        "tree": "55a4a1b1e7df3324c3c2a7f6fa27e61fedbb7278"
+      },
+      "package": {
+        "name": "@deepseek-ai/dsh",
+        "version": "0.1.7-rc.1",
+        "integrity": "sha512-O1K076aCmqE+h4fB5J+mi3twNSAnh26OqHepaqvS5f1tccFnxhVyGpUmjcncVM5x1SX4niznmvsGrsRo9p733A=="
+      },
+      "toolchain": {
+        "node": "^22.19.0 || >=24.0.0",
+        "pnpm": "11.7.0"
+      },
+      "status": "candidate"
+    },
+    "runtimeKit": {
+      "source": {
+        "url": "https://github.com/sympoies/dsh-runtime-kit",
+        "commit": "d559389c94ad6f42d11899ca22f994815c382440",
+        "tree": "1b917c20683507f0eb3a15c768e011bb45dc5cf0"
+      },
+      "package": {
+        "name": "@sympoies/dsh-runtime-kit",
+        "version": "0.0.0",
+        "integrity": "git-tree:1b917c20683507f0eb3a15c768e011bb45dc5cf0"
+      },
+      "toolchain": {
+        "node": ">=24.0.0"
+      },
+      "status": "candidate"
+    },
+    "tui": {
+      "source": {
+        "url": "https://github.com/ccch1mneyyy/dsh-TUI",
+        "tag": "v0.11.0",
+        "commit": "19c76a1d877b69ee3f399147bf84f2bae3b10e58",
+        "tree": "2219051d157c6f402f94dab9c2025408466b0c5e"
+      },
+      "package": {
+        "name": "@deepseek-harness-tui/dsh-tui",
+        "version": "0.11.0",
+        "integrity": "sha512-yoH6BQ5mtC3J1V6wxGZCoPFPUT0zARphrBJWz1WMXrl5DZ/5RS6ufr1CA5ELViDJMal+n8vN/8NbCJe5AR/jjA=="
+      },
+      "toolchain": {
+        "node": "^22.19 || >=24",
+        "pnpm": "11.21.0"
+      },
+      "status": "candidate"
+    }
+  },
+  "acceptance": {
+    "runtimeKit": { "status": "pending", "evidence": [] },
+    "tui": { "status": "pending", "evidence": [] },
+    "web": { "status": "pending", "evidence": [] },
+    "handoff": { "status": "pending", "evidence": [] }
+  }
+}
