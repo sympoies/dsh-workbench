@@ -2,18 +2,16 @@
 export const workbenchIdentity = {
   "schemaVersion": 1,
   "release": {
-    "version": "0.1.0-rc.3",
-    "tag": "v0.1.0-rc.3"
+    "version": "0.1.0-rc.4",
+    "tag": "v0.1.0-rc.4"
   },
   "status": "candidate",
-  "contractDigest": "sha256:a8d439378d97836417385c504e153a23b628f6b68a9b4c6a026144a5e44f5045",
+  "contractDigest": "sha256:c70a41847c15f1c722b3a5b06b96627627de9ead81031e588f6fbfde647110d4",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",
     "platforms": [
       "linux-x64",
-      "linux-arm64",
-      "darwin-x64",
       "darwin-arm64"
     ]
   },
