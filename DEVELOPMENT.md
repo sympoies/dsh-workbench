@@ -9,13 +9,21 @@ Use exact source tags or commits and keep a candidate graph separate from an
 accepted release. Test Web and TUI against the same DSH session store and
 workspace identity before claiming cross-interface resume.
 
-Run `node --test tests/contract.test.mjs tests/tui-compat.test.mjs` and
+TypeScript is the default for source and tests. Node 24 runs the erasable
+TypeScript directly; the two `.mjs` files in `scripts/` preserve stable CLI
+entry points. Install the exact development toolchain with
+`pnpm install --frozen-lockfile --ignore-scripts`, then run `pnpm typecheck` and
+`pnpm test`. The root lockfile pins development tools; the separate
+[compatibility contract](compatibility/workbench.json) pins the DSH product
+graph. Generated files and `node_modules/` are not published.
+
+Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`
 when changing the [compatibility contract](compatibility/workbench.json). A
 change to any component source or package identity requires a new Workbench
 release version; CI compares the contract with `main`. See the
 [contract guide](docs/compatibility.md) for acceptance and release rules.
-Run `node --test tests/tui-graph.test.mjs` with the pinned pnpm version when
+Run `node --test tests/tui-graph.test.ts` with the pinned pnpm version when
 changing the TUI peer correction. It reproduces the uncorrected strict peer
 failure, then resolves and installs the exact DSH/TUI graph with the correction.
 
