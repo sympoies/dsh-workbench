@@ -766,7 +766,12 @@ async function main(): Promise<void> {
     await recoveredRow.click();
     assert.equal(await copiedSessionId(recoveredOpened.page), interruptedId,
       'Web reopened the interrupted session under another ID');
-    const recovered = await recoveredOpened.page.locator('[data-conversation-content]').innerText();
+    const recoveredConversation = recoveredOpened.page.locator('[data-conversation-content]');
+    await recoveredConversation.getByText(recoveredAnswer, { exact: false }).first()
+      .waitFor({ timeout: 30_000 });
+    await recoveredOpened.page.locator('[data-approval-key]')
+      .waitFor({ state: 'hidden', timeout: 30_000 });
+    const recovered = await recoveredConversation.innerText();
     assert.ok(recovered.includes(interruptedPrompt), 'Web lost the interrupted prompt');
     assert.ok(recovered.includes(recoveredPrompt), 'Web lost the post-crash TUI prompt');
     assert.ok(recovered.includes(recoveredAnswer), 'Web lost the post-crash TUI answer');
