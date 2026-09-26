@@ -360,9 +360,8 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
 
 async function runScenario(binary: string, fixture: string, scenario: typeof scenarios[number]): Promise<void> {
   const apiKey = randomBytes(24).toString('hex');
-  const marker = join(fixture, 'workspace', `.tui-${scenario.name}-executed`);
-  const toolCommand = installedHome ? `printf ${scenario.toolOutput}`
-    : `touch ${quote(marker)} && printf ${scenario.toolOutput}`;
+  const marker = join(fixture, `.tui-${scenario.name}-executed`);
+  const toolCommand = `touch ${quote(marker)} && printf ${scenario.toolOutput}`;
   const mock = await startMockLlmServer({ sequence: ['tool_call_success', 'success'], repeatLast: true,
     apiKey, successText: scenario.answer, toolName: 'bash',
     toolArguments: JSON.stringify({ command: toolCommand,
@@ -396,10 +395,10 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     if (scenario.error) {
       assert.ok(content.includes('the user rejected escalating this command'));
       assert.ok(!content.includes(scenario.toolOutput));
-      if (!installedHome) assert.equal(existsSync(marker), false, 'Rejected Bash command still executed');
+      assert.equal(existsSync(marker), false, 'Rejected Bash command still executed');
     } else {
       assert.ok(content.includes(scenario.toolOutput));
-      if (!installedHome) assert.equal(existsSync(marker), true, 'Allowed Bash command did not execute');
+      assert.equal(existsSync(marker), true, 'Allowed Bash command did not execute');
     }
     assert.ok(mock.requests.some(request => request.behavior === 'tool_call_success'));
   } catch (error) {
