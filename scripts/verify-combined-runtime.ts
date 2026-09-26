@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
 import { chromium } from 'playwright-core';
@@ -108,6 +108,19 @@ function invoke(command: string, args: string[]): { [key: string]: unknown } {
   assert.equal(parsed.data?.profile ?? parsed.data?.plan?.profile ?? 'workbench', 'workbench');
   return parsed.data;
 }
+const unmanagedHomeFile = join(dshHome, 'AGENTS.md');
+const unmanagedHomeBytes = Buffer.from('# Existing DSH home instructions\n');
+writeFileSync(unmanagedHomeFile, unmanagedHomeBytes, { mode: 0o600 });
+const unmanagedPreview = spawnSync(process.execPath,
+  [launcher, '--runtime-root', runtimeRoot, '--', process.execPath, cli,
+    'setup', '--profile', 'workbench', '--package', kitPackage, '--format', 'json'],
+  { env: environment, encoding: 'utf8', timeout: 180_000, maxBuffer: 4 * 1024 * 1024 });
+assert.equal(unmanagedPreview.status, 65, 'Unmanaged DSH home instructions were not refused');
+const unmanagedDenial = JSON.parse(unmanagedPreview.stdout);
+assert.equal(unmanagedDenial.error?.code, 'agent-home-unmanaged');
+assert.deepEqual(readFileSync(unmanagedHomeFile), unmanagedHomeBytes,
+  'Runtime-kit changed an unmanaged DSH home instructions file');
+unlinkSync(unmanagedHomeFile);
 const preview = invoke('setup', ['--package', kitPackage]);
 assert.equal(preview.mode, 'dry-run');
 assert.match(preview.plan_digest as string, /^[a-f0-9]{64}$/);

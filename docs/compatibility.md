@@ -10,14 +10,16 @@ dependency resolution for the recorded identities.
 
 The current graph is **candidate**. Its DSH and TUI package integrity values
 come from the npm registry at the pinned package versions. Git commit and tree
-values identify the upstream source revisions. The runtime-kit source now pins
-the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runtime-kit/pull/272)
-and the authenticated patched peer closure from
-[PR #274](https://github.com/sympoies/dsh-runtime-kit/pull/274);
+values identify the upstream source revisions. The runtime-kit source pins
+the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runtime-kit/pull/272),
+the authenticated patched peer closure from
+[PR #274](https://github.com/sympoies/dsh-runtime-kit/pull/274), and the typed
+finish-line denial diagnostics from
+[PR #277](https://github.com/sympoies/dsh-runtime-kit/pull/277);
 runtime-kit has no published npm release at this revision, so its Git tree is
 its source integrity identity. The contract records the upstream package
 version `0.0.0` for runtime-kit; that is not a Workbench release version.
-These identities were checked on 2026-09-25. Runtime-kit compatibility and
+These identities were checked on 2026-09-26. Runtime-kit compatibility and
 managed-worktree recovery passed its owner CI; Web/TUI composition and
 cross-interface session handoff remain candidate gates.
 
@@ -86,10 +88,23 @@ behavior on both targets but does not yet exercise a real TTY on the combined
 package name, version, and canonical artifact SHA-256 against the reviewed
 [`web-artifact.json`](../compatibility/web-artifact.json) record before adding
 the official Web bundle and plugin to the same profile. The combined Web/TUI
-graph must still pass hosted CI.
+graph passed hosted Linux x64 and macOS arm64 CI, including an activated Web
+turn, but governed Bash remains a separate acceptance gate.
 The publication comparison treats the reviewed Web artifact digest as part of
 the release identity, including the first addition of the record. A changed
 digest requires a higher Workbench release version.
+Workbench `v0.1.0-rc.7` pins runtime-kit's typed nils host-denial diagnostics
+and records the resulting Web plugin identity and artifact digest. This
+diagnostic change does not provide the missing macOS finish-line backend or
+accept the candidate graph.
+The pin also includes runtime-kit's managed DSH home instructions at
+`<dshHome>/AGENTS.md`. Setup, update, and rollback preview refuse an existing
+file without a recorded runtime-kit digest with exit 65 and
+`agent-home-unmanaged`, leaving that file unchanged. An operator must move or
+merge the existing instructions before retrying; the portable installer must
+test this migration on copies under [#9](https://github.com/sympoies/dsh-workbench/issues/9).
+The [rc.7 combined-profile matrix](https://github.com/sympoies/dsh-workbench/actions/runs/36242300610)
+passed this refusal check and clean activation on Linux x64 and macOS arm64.
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the
