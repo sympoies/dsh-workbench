@@ -111,7 +111,8 @@ tuiPlugin = tuiPlugin.replace(tuiApprovalHandler,
   + "    workbenchPolicyStage('tui-approval-handler:fallback');\n"
   + "    return next();\n"
   + "  });\n"
-  + '}, { global: true });');
+  + '}, { global: true });\n'
+  + "workbenchPolicyStage('tui-approval-handler:registered:' + ctx.events._hooks['approval/request'].map(hook => hook.global ? 'global' : 'scoped').join(','));");
 writeFileSync(tuiPluginPath, marker + tuiPlugin);
 instrument(tuiRoot, 'dsh-adapter/approvals.js', [
   ['this.queue.push(pending);\n            this.startNext();', 'tui-approval-park'],
@@ -140,7 +141,10 @@ assert.equal(cordisEvents.split(cordisFilter).length, 2,
   'Cordis listener filter instrumentation target must occur exactly once');
 cordisEvents = cordisEvents.replace(cordisFilter,
   'const selected = (this._hooks[name] || []).filter((hook) => hook.global || !filter || filter.call(thisArg, hook.ctx));\n'
-  + 'if (name === "approval/request") workbenchPolicyStage("cordis-approval-listeners:" + selected.length);\n'
-  + 'return selected.map((hook) => hook.callback.bind(thisArg));');
+  + 'if (name === "approval/request") workbenchPolicyStage("cordis-approval-listeners:" + selected.map(hook => (hook.global ? "global" : "scoped") + ":" + String(hook.ctx.fiber.name ?? "unknown").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 48)).join(","));\n'
+  + 'return selected.map((hook) => (...callbackArgs) => {\n'
+  + '  if (name === "approval/request") workbenchPolicyStage("cordis-approval-callback:" + String(hook.ctx.fiber.name ?? "unknown").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 48));\n'
+  + '  return hook.callback.apply(thisArg, callbackArgs);\n'
+  + '});');
 writeFileSync(cordisEventsPath, marker + cordisEvents);
 console.log('Installed disposable profile has stage-only diagnostic instrumentation');
