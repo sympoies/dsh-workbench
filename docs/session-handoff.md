@@ -166,9 +166,12 @@ compressed archive. After Web Host stops, TUI resumes a Web-created session,
 completes another turn, and Web reads that continuation on restart. These
 checks also reject TUI exact-ID resume while Web awaits tool approval: the
 pending archive's existing bytes remain intact and Web can still approve its
-own turn. They do not establish transfer after cancellation of an executing
-turn or pending approval, attachments, live cross-interface title updates, complete projection-cache behavior,
-crash recovery, cross-platform operation, or existing-session migration.
+own turn. The browser fixture also terminates Web Host with SIGKILL while it
+owns a settled session, then requires TUI continuation and native Web recovery
+under the same ID. These checks do not establish transfer after cancellation
+of an executing turn or pending approval, attachments, live cross-interface
+title updates, complete projection-cache behavior, recovery from a crash during
+an active turn, or existing-session migration.
 Those are release acceptance work under
 [#7](https://github.com/sympoies/dsh-workbench/issues/7), with TUI-specific
 checks under [#4](https://github.com/sympoies/dsh-workbench/issues/4).
