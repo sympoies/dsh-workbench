@@ -113,6 +113,7 @@ const doctor = invoke('doctor', []);
 assert.equal(doctor.profile, 'workbench');
 assert.equal(doctor.status, 'healthy');
 assert.deepEqual(doctor.advisories, []);
+writeFileSync(join(dshHome, '.workbench-terminal-acceptance'), 'disposable CI profile\n', { mode: 0o600 });
 const composition = spawnSync(process.execPath,
   [launcher, '--runtime-root', runtimeRoot, '--', wrapper,
     '--profile', 'workbench', '--dump-config'],

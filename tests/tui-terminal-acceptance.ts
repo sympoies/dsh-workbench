@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
 import headless from '@xterm/headless';
@@ -14,6 +14,8 @@ import { readEvents } from './session-events.ts';
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const { Terminal } = headless;
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
+const installedHome = option('--installed-dsh-home');
+const profileName = installedHome ? 'workbench' : 'dsh-tui';
 const scenarios = [
   { name: 'allow', decision: '\r', outcome: 'allowed-once', toolOutput: 'TUI_ALLOW_TOOL_OK',
     answer: 'TUI_ALLOW_FINISHED', error: false },
@@ -21,11 +23,18 @@ const scenarios = [
     answer: 'TUI_REJECT_FINISHED', error: true },
 ] as const;
 
-function binaryOption(name: string): string {
+function option(name: string): string | undefined {
   const index = process.argv.indexOf(name);
+  if (index < 0) return undefined;
   const value = process.argv[index + 1];
-  if (index < 0 || !value || value.startsWith('--')) throw new Error(`Required option: ${name} <absolute path>`);
+  if (!value || !isAbsolute(value)) throw new Error(`Required absolute path after ${name}`);
   return resolve(value);
+}
+
+function binaryOption(name: string): string {
+  const value = option(name);
+  if (!value) throw new Error(`Required option: ${name} <absolute path>`);
+  return value;
 }
 
 function command(binary: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = process.env): string {
@@ -93,7 +102,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
   waitForAfter: (first: string, second: string) => Promise<void>;
 } {
   const home = join(fixture, 'home');
-  const child = pty.spawn(binary, ['--profile', 'dsh-tui', ...appArgs], {
+  const child = pty.spawn(binary, ['--profile', profileName, ...appArgs], {
     name: 'xterm-256color', cols: 80, rows: 24,
     cwd: join(fixture, 'workspace'),
     env: {
@@ -279,7 +288,7 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
     await terminal.stop();
     assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after renamed resume');
     const offlineTitle = 'WB_OFFLINE_RENAME';
-    const offlineWriter = pathToFileURL(join(fixture, 'home', 'profiles', 'dsh-tui', 'node_modules',
+    const offlineWriter = pathToFileURL(join(fixture, 'home', 'profiles', profileName, 'node_modules',
       contract.components.tui.package.name, 'lib/types/dsh-adapter/compat/sessionLog.js')).href;
     command(process.execPath, ['--input-type=module', '-e',
       `import { appendSessionTitle } from ${JSON.stringify(offlineWriter)};
@@ -367,30 +376,43 @@ async function main(): Promise<void> {
   const fixture = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-'));
   try {
     const home = join(fixture, 'home');
-    const profile = join(home, 'profiles', 'dsh-tui');
-    for (const path of [profile, join(fixture, 'agents'), join(fixture, 'workspace')]) {
+    if (installedHome) {
+      assert.ok(existsSync(join(installedHome, '.workbench-terminal-acceptance')),
+        'Installed DSH home is not marked as a disposable terminal acceptance fixture');
+      symlinkSync(installedHome, home, 'dir');
+    }
+    const profile = join(home, 'profiles', profileName);
+    for (const path of [join(fixture, 'agents'), join(fixture, 'workspace')]) {
       mkdirSync(path, { recursive: true });
     }
-    writeFileSync(join(profile, 'package.json'), JSON.stringify({
-      name: 'dsh-profile-dsh-tui', private: true,
-      dependencies: { [contract.components.tui.package.name]: contract.components.tui.package.version },
-      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', contract.components.tui.package.name] } },
-    }, null, 2));
-    writeFileSync(join(profile, 'cordis.yml'), '[]\n');
-    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n');
-    writeFileSync(join(profile, 'pnpm-workspace.yaml'), command(process.execPath,
-      [join(repo, 'scripts/tui-compat.mjs')], repo) + '\n');
-    copyFileSync(join(repo, 'compatibility/tui-profile/pnpm-lock.yaml'), join(profile, 'pnpm-lock.yaml'));
-    mkdirSync(join(profile, 'patches'));
-    copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path), join(profile, 'patches/tui-rename.patch'));
-    const userConfig = join(fixture, 'user.npmrc');
-    const globalConfig = join(fixture, 'global.npmrc');
-    writeFileSync(userConfig, '');
-    writeFileSync(globalConfig, '');
-    command('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies', '--ignore-scripts'], profile, {
-      PATH: process.env.PATH ?? '', HOME: home, XDG_CONFIG_HOME: join(fixture, 'config'),
-      npm_config_userconfig: userConfig, npm_config_globalconfig: globalConfig,
-    });
+    if (!installedHome) {
+      mkdirSync(profile, { recursive: true });
+      writeFileSync(join(profile, 'package.json'), JSON.stringify({
+        name: 'dsh-profile-dsh-tui', private: true,
+        dependencies: { [contract.components.tui.package.name]: contract.components.tui.package.version },
+        dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', contract.components.tui.package.name] } },
+      }, null, 2));
+      writeFileSync(join(profile, 'cordis.yml'), '[]\n');
+      writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n');
+      writeFileSync(join(profile, 'pnpm-workspace.yaml'), command(process.execPath,
+        [join(repo, 'scripts/tui-compat.mjs')], repo) + '\n');
+      copyFileSync(join(repo, 'compatibility/tui-profile/pnpm-lock.yaml'), join(profile, 'pnpm-lock.yaml'));
+      mkdirSync(join(profile, 'patches'));
+      copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path), join(profile, 'patches/tui-rename.patch'));
+      const userConfig = join(fixture, 'user.npmrc');
+      const globalConfig = join(fixture, 'global.npmrc');
+      writeFileSync(userConfig, '');
+      writeFileSync(globalConfig, '');
+      command('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies', '--ignore-scripts'], profile, {
+        PATH: process.env.PATH ?? '', HOME: home, XDG_CONFIG_HOME: join(fixture, 'config'),
+        npm_config_userconfig: userConfig, npm_config_globalconfig: globalConfig,
+      });
+    }
+    const profileManifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
+      name: string; dsh: { profile: { bundles: string[] } };
+    };
+    assert.equal(profileManifest.name, `dsh-profile-${profileName}`);
+    assert.ok(profileManifest.dsh.profile.bundles.includes(contract.components.tui.package.name));
     const installedTui = JSON.parse(readFileSync(join(profile, 'node_modules',
       contract.components.tui.package.name, 'package.json'), 'utf8')) as { version: string };
     assert.equal(installedTui.version, contract.components.tui.package.version);
