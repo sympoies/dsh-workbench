@@ -76,7 +76,7 @@ async function waitForTui(tui: TuiProcess, condition: () => boolean, label: stri
     }
     await new Promise(resolveWait => setTimeout(resolveWait, 100));
   }
-  throw new Error(`TUI did not reach ${label}`);
+  throw new Error(`TUI did not reach ${label}; screen: ${visibleScreen(tui.screen).slice(-600)}`);
 }
 
 function visibleScreen(screen: InstanceType<typeof headless.Terminal>): string {
@@ -228,7 +228,12 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
       event.type === 'turn/end'
       && (event.data?.reason as { kind?: string } | undefined)?.kind === 'interrupted'),
     'durable interrupted-turn closure');
+    await waitForTui(tui, () => visibleScreen(tui.screen).includes(interruptedPrompt),
+      'rendered interrupted session');
     tui.write(`${recoveredPrompt}\r`);
+    await waitForTui(tui, () => JSON.stringify(readEvents(logPath)
+      .filter(event => event.type === 'user/message')).includes(recoveredPrompt),
+    'persisted post-crash TUI prompt');
     await waitForTui(tui, () => readEvents(logPath).filter(event => event.type === 'turn/end').length === 2,
       'completed post-crash TUI continuation');
     await tui.stop();
