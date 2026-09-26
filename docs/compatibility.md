@@ -96,6 +96,12 @@ Workbench `v0.1.0-rc.7` pins runtime-kit's typed nils host-denial diagnostics
 and records the resulting Web plugin identity and artifact digest. This
 diagnostic change does not provide the missing macOS finish-line backend or
 accept the candidate graph.
+The pin also includes runtime-kit's managed DSH home instructions at
+`<dshHome>/AGENTS.md`. Setup, update, and rollback preview refuse an existing
+file without a recorded runtime-kit digest with exit 65 and
+`agent-home-unmanaged`, leaving that file unchanged. An operator must move or
+merge the existing instructions before retrying; the portable installer must
+test this migration on copies under [#9](https://github.com/sympoies/dsh-workbench/issues/9).
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the

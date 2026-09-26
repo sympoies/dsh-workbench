@@ -90,7 +90,10 @@ of the patched closure.
    --profile workbench` to report `healthy` with no advisories. The combined
    profile CI verifies this sequence against the isolated `$DSH_HOME` above,
    an exact package packed from the pinned runtime-kit source, and the
-   runtime-kit's authenticated nils-cli binaries.
+   runtime-kit's authenticated nils-cli binaries. Before setup, the matrix
+   verifies that runtime-kit refuses an existing unmanaged
+   `$DSH_HOME/AGENTS.md` without changing its bytes; the disposable fixture
+   then removes that test file and continues with a clean home.
 6. Launch the pinned DSH binary **through the same runtime-kit owner launcher**
    with `--profile workbench`. The compatible nils-cli set required by the
    pinned kit includes authenticated `agent-hook`, `agent-docs`, and adjacent
