@@ -228,8 +228,8 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
       event.type === 'turn/end'
       && (event.data?.reason as { kind?: string } | undefined)?.kind === 'interrupted'),
     'durable interrupted-turn closure');
-    await waitForTui(tui, () => visibleScreen(tui.screen).includes(interruptedPrompt),
-      'rendered interrupted session');
+    await waitForTui(tui, () => visibleScreen(tui.screen).includes(recoveredAnswer),
+      'completed interrupted-session recap');
     tui.write(`${recoveredPrompt}\r`);
     await waitForTui(tui, () => JSON.stringify(readEvents(logPath)
       .filter(event => event.type === 'user/message')).includes(recoveredPrompt),
@@ -244,6 +244,8 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(interruptedPrompt));
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(recoveredPrompt));
     assert.ok(JSON.stringify(events.filter(event => event.type === 'assistant/message')).includes(recoveredAnswer));
+    assert.ok(mock.requests.length >= 2,
+      'TUI did not request both its resume recap and the post-crash continuation');
   } finally {
     const cleanup = await Promise.allSettled([tui.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('Interrupted-turn cleanup failed');
