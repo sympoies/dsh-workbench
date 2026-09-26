@@ -230,6 +230,8 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     'durable interrupted-turn closure');
     await waitForTui(tui, () => visibleScreen(tui.screen).includes(recoveredAnswer),
       'completed interrupted-session recap');
+    const answerCountBeforeContinuation = readEvents(logPath).filter(event =>
+      event.type === 'assistant/message' && JSON.stringify(event.data?.message).includes(recoveredAnswer)).length;
     tui.write(`${recoveredPrompt}\r`);
     await waitForTui(tui, () => JSON.stringify(readEvents(logPath)
       .filter(event => event.type === 'user/message')).includes(recoveredPrompt),
@@ -241,9 +243,15 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [],
       'Interrupted-turn TUI resume created another session');
     const events = readEvents(logPath, { strict: true });
+    const endedTurns = events.filter(event => event.type === 'turn/end');
+    assert.equal((endedTurns.at(-1)?.data?.reason as { kind?: string } | undefined)?.kind, 'completed',
+      'the post-crash TUI continuation did not complete');
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(interruptedPrompt));
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(recoveredPrompt));
-    assert.ok(JSON.stringify(events.filter(event => event.type === 'assistant/message')).includes(recoveredAnswer));
+    const answerCountAfterContinuation = events.filter(event => event.type === 'assistant/message'
+      && JSON.stringify(event.data?.message).includes(recoveredAnswer)).length;
+    assert.ok(answerCountAfterContinuation > answerCountBeforeContinuation,
+      'the completed post-crash TUI continuation did not persist its answer');
     assert.ok(mock.requests.length >= 2,
       'TUI did not request both its resume recap and the post-crash continuation');
   } finally {
