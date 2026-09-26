@@ -18,7 +18,8 @@ consumer's private deployment configuration.
 See the [product and deployment boundary](docs/architecture.md),
 [candidate session handoff decision](docs/session-handoff.md), and
 [public source and release audit](docs/publication.md). Workbench source is
-available under the [MIT license](LICENSE).
+available under the [MIT license](LICENSE); pinned upstream notices are in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 The [contract guide](docs/compatibility.md) explains the release identity and
 the candidate-to-accepted gate.

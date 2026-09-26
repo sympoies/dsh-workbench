@@ -23,16 +23,16 @@ history. For each proposed import from private work, record in its PR:
 The initial candidate sources were checked at their selected immutable
 revisions. All three upstream source licenses are MIT:
 
-| Component | Candidate source | License evidence |
+| Component | Candidate source | Copyright holder | License evidence |
 | --- | --- | --- |
-| DeepSeek Harness | [dsh-v0.1.7-rc.1](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1) | [MIT license at the tag](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/LICENSE) |
-| dsh-TUI | [v0.11.0](https://github.com/ccch1mneyyy/dsh-TUI/releases/tag/v0.11.0) | [MIT license at the tag](https://github.com/ccch1mneyyy/dsh-TUI/blob/v0.11.0/LICENSE) |
-| dsh-runtime-kit | [candidate commit](https://github.com/sympoies/dsh-runtime-kit/commit/dd53024fb892831bd55fc2466259e9f5f4062cf1) | [MIT license at the commit](https://github.com/sympoies/dsh-runtime-kit/blob/dd53024fb892831bd55fc2466259e9f5f4062cf1/LICENSE) |
+| DeepSeek Harness | [`dsh-v0.1.7-rc.1` at `46a7f68b0922371ce7144b668b90e377d8e799f4`](https://github.com/deepseek-ai/deepseek-harness/tree/46a7f68b0922371ce7144b668b90e377d8e799f4) | DeepSeek | [MIT license at the pinned commit](https://github.com/deepseek-ai/deepseek-harness/blob/46a7f68b0922371ce7144b668b90e377d8e799f4/LICENSE) |
+| dsh-TUI | [`v0.11.0` at `19c76a1d877b69ee3f399147bf84f2bae3b10e58`](https://github.com/ccch1mneyyy/dsh-TUI/tree/19c76a1d877b69ee3f399147bf84f2bae3b10e58) | chimney (`ccch1mneyyy`) | [MIT license at the pinned commit](https://github.com/ccch1mneyyy/dsh-TUI/blob/19c76a1d877b69ee3f399147bf84f2bae3b10e58/LICENSE) |
+| dsh-runtime-kit | [candidate commit `dd53024fb892831bd55fc2466259e9f5f4062cf1`](https://github.com/sympoies/dsh-runtime-kit/tree/dd53024fb892831bd55fc2466259e9f5f4062cf1) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/dd53024fb892831bd55fc2466259e9f5f4062cf1/LICENSE) |
 
-These are candidate identities, not accepted pins or a complete dependency
-license inventory. Before a release, inventory the exact packaged dependency
-closure and include each required copyright and license notice in the
-distribution. The Workbench's own source is MIT-licensed in [LICENSE](../LICENSE).
+The upstream copyright lines and license texts for these pinned source trees
+are preserved in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). These are
+candidate identities, not accepted pins or a complete dependency license
+inventory. The Workbench's own source is MIT-licensed in [LICENSE](../LICENSE).
 
 ## Repeatable checks
 
@@ -54,6 +54,19 @@ rejected as opaque inputs, including renamed archives detected by file content.
 Other binary assets also require a separate audited handling path before release.
 Extract the exact finalized archive safely into a disposable tree and scan that
 tree, then inspect the archive and manifest before publishing.
+
+For the combined candidate profile, CI verifies that the staged manifest has no
+development dependencies, then runs the pinned package manager's
+`licenses list --json` against the installed profile. That profile contains
+only runtime dependencies, so the inventory covers its complete production
+graph. The
+`scripts/license-inventory.ts` adapter emits only package names, versions, and
+declared license identifiers; it drops install paths and package-author
+metadata, then the publication scanner checks the sanitized report. Each
+platform's path-free inventory is included in the workflow summary. This is a
+metadata inventory, not a legal conclusion or a substitute for the package
+license files. Before distribution, review the exact inventory and preserve
+the required notices from the included packages in the release output.
 
 Before the first release, a human reviewer must also inspect:
 
