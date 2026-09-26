@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
+import { installedPackageRoot } from './installed-package-root.ts';
 
 const profile = process.argv[2];
 assert.ok(profile && isAbsolute(profile), 'A disposable absolute profile path is required');
@@ -34,22 +35,6 @@ function instrument(root: string, file: string,
         : `${before}\n${statement}\n${after}`);
   }
   writeFileSync(path, marker + source);
-}
-
-function installedPackageRoot(packageName: string): string {
-  const packageParts = packageName.split('/');
-  const direct = join(profile, 'node_modules', ...packageParts);
-  const candidates = [direct];
-  const virtualStore = join(profile, 'node_modules', '.pnpm');
-  if (existsSync(virtualStore)) {
-    for (const entry of readdirSync(virtualStore)) {
-      candidates.push(join(virtualStore, entry, 'node_modules', ...packageParts));
-    }
-  }
-  const matches = candidates.filter(candidate => existsSync(join(candidate, 'package.json'))
-    && JSON.parse(readFileSync(join(candidate, 'package.json'), 'utf8')).name === packageName);
-  assert.equal(matches.length, 1, `${packageName} must have one installed package root`);
-  return realpathSync(matches[0]!);
 }
 
 instrument(packageRoot, 'dist/src/policy/index.js', [
@@ -129,12 +114,12 @@ writeFileSync(tuiPluginPath, marker + tuiPlugin);
 instrument(tuiRoot, 'dsh-adapter/approvals.js', [
   ['this.queue.push(pending);\n            this.startNext();', 'tui-approval-park'],
 ]);
-const approvalRoot = installedPackageRoot('@deepseek-ai/dsh-user-approval');
+const approvalRoot = installedPackageRoot(profile, '@deepseek-ai/dsh-user-approval');
 instrument(approvalRoot, 'lib/index.js', [
   ['const answer = Promise.resolve().then(() => this.ctx.waterfall(scopeTarget(req.agent, req.agent), "approval/request", req, () => Promise.resolve("unavailable"))).then((outcome) => OUTCOMES.includes(outcome) ? outcome : "unavailable", () => "unavailable");',
     'approval-service-waterfall'],
 ]);
-const cordisRoot = installedPackageRoot('@deepseek-ai/cordis');
+const cordisRoot = installedPackageRoot(profile, '@deepseek-ai/cordis');
 const cordisEventsPath = join(cordisRoot, 'lib/index.js');
 let cordisEvents = readFileSync(cordisEventsPath, 'utf8');
 const cordisDispatch = 'if (!name.startsWith("internal/")) this.emit("internal/dispatch", type, name, args, thisArg);';
