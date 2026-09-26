@@ -122,6 +122,8 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       XDG_CONFIG_HOME: join(fixture, 'config'),
       ...managerEnvironment,
       ...runtimeEnvironment,
+      ...(process.env.WORKBENCH_POLICY_TRACE
+        ? { WORKBENCH_POLICY_TRACE: process.env.WORKBENCH_POLICY_TRACE } : {}),
       DSH_TELEMETRY_DISABLED: '1',
       DEEPSEEK_BASE_URL: `${baseURL}/v1`,
       DEEPSEEK_API_KEY: apiKey,
