@@ -45,7 +45,10 @@ TUI-created session's manual title and history in Web, writer contention while
 Web owns a session, and exact-ID TUI continuation after Web stops. It
 requires explicit paths to the pinned DSH executable and a Chromium executable;
 see [development instructions](../DEVELOPMENT.md). CI runs this native browser
-test on Linux x64 and macOS arm64. Image composition and installed graph
-mismatch rejection remain acceptance work under
+test on Linux x64 and macOS arm64. Its Chromium archives are pinned by URL and
+SHA-256 in [the browser CI contract](../compatibility/browser-ci.json); the
+installer verifies the Playwright package and Chromium revision, then checks
+the archive digest before extracting and executing it. Image composition and
+installed graph mismatch rejection remain acceptance work under
 [#5](https://github.com/sympoies/dsh-workbench/issues/5); cross-interface
 handoff remains under [#7](https://github.com/sympoies/dsh-workbench/issues/7).
