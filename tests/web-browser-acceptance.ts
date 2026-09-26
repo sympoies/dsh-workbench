@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +24,9 @@ const tuiAnswer = 'TUI_TO_WEB_RENAMED_ANSWER';
 const tuiTitle = 'TUI_TO_WEB_MANUAL_TITLE';
 const continuationPrompt = 'WEB_TO_TUI_CONTINUATION_PROMPT';
 const continuationAnswer = 'WEB_TO_TUI_CONTINUATION_ANSWER';
+const interruptedPrompt = 'WEB_APPROVAL_CRASH_PROMPT';
+const recoveredPrompt = 'INTERRUPTED_WEB_TO_TUI_PROMPT';
+const recoveredAnswer = 'INTERRUPTED_WEB_TO_TUI_ANSWER';
 
 function option(name: string): string {
   const index = process.argv.indexOf(name);
@@ -202,6 +205,43 @@ async function continueWebSessionInTui(dsh: string, fixture: string, home: strin
   } finally {
     const cleanup = await Promise.allSettled([tui.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI continuation cleanup failed');
+  }
+}
+
+async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, home: string,
+  agents: string, workspace: string, id: string): Promise<void> {
+  const logRoot = join(home, 'sessions');
+  const logPath = sessionLog(logRoot, id);
+  const before = readEvents(logPath, { strict: true });
+  assert.ok(before.some(event => event.type === 'turn/start'),
+    'crashed Web turn was not durable before TUI resume');
+  assert.ok(!before.some(event => event.type === 'turn/end'),
+    'the approval turn settled before the Web Host crash');
+  const previous = new Set(sessionLogs(logRoot));
+  const apiKey = randomBytes(24).toString('hex');
+  const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
+    apiKey, successText: recoveredAnswer });
+  const tui = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey,
+    ['--resume', id]);
+  try {
+    await waitForTui(tui, () => readEvents(logPath).some(event =>
+      event.type === 'turn/end'
+      && (event.data?.reason as { kind?: string } | undefined)?.kind === 'interrupted'),
+    'durable interrupted-turn closure');
+    tui.write(`${recoveredPrompt}\r`);
+    await waitForTui(tui, () => readEvents(logPath).filter(event => event.type === 'turn/end').length === 2,
+      'completed post-crash TUI continuation');
+    await tui.stop();
+    assert.equal(tui.exitCode, 0, 'TUI did not exit cleanly after interrupted Web handoff');
+    assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [],
+      'Interrupted-turn TUI resume created another session');
+    const events = readEvents(logPath, { strict: true });
+    assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(interruptedPrompt));
+    assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(recoveredPrompt));
+    assert.ok(JSON.stringify(events.filter(event => event.type === 'assistant/message')).includes(recoveredAnswer));
+  } finally {
+    const cleanup = await Promise.allSettled([tui.stop(), mock.close()]);
+    if (cleanup.some(result => result.status === 'rejected')) throw new Error('Interrupted-turn cleanup failed');
   }
 }
 
@@ -641,11 +681,77 @@ async function main(): Promise<void> {
     assert.equal(pageErrors, 0, 'browser reported JavaScript errors');
     assert.equal(hostErrors, 0, 'DSH Web Host reported errors');
     assert.equal(mock.requests[0]?.behavior, 'invalid_request');
-    console.log(JSON.stringify({ result: 'pass', sessions: 4, tuiToWebTitle: true,
+    const errorRequests = mock.requests.length;
+
+    await browser.close();
+    browser = undefined;
+    await stopHost(host.child);
+    host = undefined;
+    await mock.close();
+    const approvalMarker = join(workspace, 'interrupted-approval-command-executed');
+    mock = await startMockLlmServer({ sequence: ['tool_call_success', 'success'],
+      repeatLast: true, successText: answer, apiKey, toolName: 'bash',
+      toolArguments: JSON.stringify({ command: `touch '${approvalMarker}'`,
+        description: 'Require an approval before the crash',
+        sandbox_permissions: 'danger-full-access',
+        justification: 'Verify interrupted-turn recovery in a disposable workspace' }) });
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
+    browser = await launchBrowser(browserBin, home);
+    const interruptedOpened = await openPage(browser, host);
+    const interruptedEditor = await startNewSession(interruptedOpened.page, 'interrupted',
+      [firstId, secondId, errorId]);
+    await interruptedEditor.fill(interruptedPrompt);
+    await interruptedEditor.press('Enter');
+    const interruptedApproval = interruptedOpened.page.locator('[data-approval-key]');
+    await interruptedApproval.waitFor({ timeout: 30_000 });
+    const interruptedRow = await interruptedOpened.page
+      .locator('[data-row-key^="session:"][aria-selected="true"]')
+      .getAttribute('data-row-key');
+    assert.match(interruptedRow ?? '', /^session:(?:session-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,
+      'pending Web approval has no exact session ID');
+    const interruptedId = interruptedRow!.slice('session:'.length);
+    await checkWebWriterContention(dsh, fixture, home, agents, workspace, interruptedId,
+      mock.baseURL, apiKey, 'pending');
+    assert.ok(await interruptedApproval.isVisible(), 'Web approval vanished before the crash');
+    pageErrors += interruptedOpened.errors.length;
+    hostErrors += host.errorCount();
+    await crashHost(host.child);
+    await browser.close();
+    browser = undefined;
+    host = undefined;
+    await mock.close();
+    mock = undefined;
+
+    await continueInterruptedWebSessionInTui(dsh, fixture, home, agents, workspace, interruptedId);
+    assert.equal(existsSync(approvalMarker), false,
+      'the unapproved Web command executed during TUI recovery');
+
+    mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
+      apiKey, successText: answer });
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
+    browser = await launchBrowser(browserBin, home);
+    const recoveredOpened = await openPage(browser, host);
+    const recoveredRow = recoveredOpened.page.locator(`[data-row-key="session:${interruptedId}"]`);
+    await recoveredRow.waitFor({ timeout: 30_000 });
+    await recoveredRow.click();
+    assert.equal(await copiedSessionId(recoveredOpened.page), interruptedId,
+      'Web reopened the interrupted session under another ID');
+    const recovered = await recoveredOpened.page.locator('[data-conversation-content]').innerText();
+    assert.ok(recovered.includes(interruptedPrompt), 'Web lost the interrupted prompt');
+    assert.ok(recovered.includes(recoveredPrompt), 'Web lost the post-crash TUI prompt');
+    assert.ok(recovered.includes(recoveredAnswer), 'Web lost the post-crash TUI answer');
+    assert.equal(existsSync(approvalMarker), false,
+      'the unapproved Web command executed after Web reopened');
+    pageErrors += recoveredOpened.errors.length;
+    hostErrors += host.errorCount();
+    assert.equal(pageErrors, 0, 'browser reported JavaScript errors');
+    assert.equal(hostErrors, 0, 'DSH Web Host reported errors');
+    console.log(JSON.stringify({ result: 'pass', sessions: 5, tuiToWebTitle: true,
       webToTuiContinuation: true, writerContention: true, toolApproval: true,
       toolRejection: true, runningTurn: true, errorResume: true,
       toolResultsAfterRestart: true, restartResume: true, settledHostCrashHandoff: true,
-      interactionRequests, errorRequests: mock.requests.length, pageErrors, hostErrors }));
+      interruptedHostCrashHandoff: true,
+      interactionRequests, errorRequests, recoveryRequests: mock.requests.length, pageErrors, hostErrors }));
   } finally {
     const cleanup = await Promise.allSettled([
       browser?.close() ?? Promise.resolve(),
