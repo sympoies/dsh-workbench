@@ -113,4 +113,25 @@ writeFileSync(tuiPluginPath, marker + tuiPlugin);
 instrument(tuiRoot, 'dsh-adapter/approvals.js', [
   ['this.queue.push(pending);\n            this.startNext();', 'tui-approval-park'],
 ]);
+const approvalRoot = realpathSync(join(profile, 'node_modules', '@deepseek-ai', 'dsh-user-approval'));
+instrument(approvalRoot, 'lib/index.js', [
+  ['const answer = Promise.resolve().then(() => this.ctx.waterfall(scopeTarget(req.agent, req.agent), "approval/request", req, () => Promise.resolve("unavailable"))).then((outcome) => OUTCOMES.includes(outcome) ? outcome : "unavailable", () => "unavailable");',
+    'approval-service-waterfall'],
+]);
+const cordisRoot = realpathSync(join(profile, 'node_modules', '@deepseek-ai', 'cordis'));
+const cordisEventsPath = join(cordisRoot, 'lib/index.js');
+let cordisEvents = readFileSync(cordisEventsPath, 'utf8');
+const cordisDispatch = 'if (!name.startsWith("internal/")) this.emit("internal/dispatch", type, name, args, thisArg);';
+assert.equal(cordisEvents.split(cordisDispatch).length, 2,
+  'Cordis dispatch instrumentation target must occur exactly once');
+cordisEvents = cordisEvents.replace(cordisDispatch,
+  'if (name === "approval/request") workbenchPolicyStage("cordis-approval-dispatch");\n' + cordisDispatch);
+const cordisFilter = 'return (this._hooks[name] || []).filter((hook) => hook.global || !filter || filter.call(thisArg, hook.ctx)).map((hook) => hook.callback.bind(thisArg));';
+assert.equal(cordisEvents.split(cordisFilter).length, 2,
+  'Cordis listener filter instrumentation target must occur exactly once');
+cordisEvents = cordisEvents.replace(cordisFilter,
+  'const selected = (this._hooks[name] || []).filter((hook) => hook.global || !filter || filter.call(thisArg, hook.ctx));\n'
+  + 'if (name === "approval/request") workbenchPolicyStage("cordis-approval-listeners:" + selected.length);\n'
+  + 'return selected.map((hook) => hook.callback.bind(thisArg));');
+writeFileSync(cordisEventsPath, marker + cordisEvents);
 console.log('Installed disposable profile has stage-only diagnostic instrumentation');
