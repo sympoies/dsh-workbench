@@ -99,7 +99,7 @@ assert.equal(tuiPlugin.split(tuiApprovalAvailabilityGuard).length, 2,
 tuiPlugin = tuiPlugin.replace(tuiApprovalAvailabilityGuard,
   "workbenchPolicyStage('tui-approval-available:' + (ctx.get('approval') !== undefined));\n"
   + tuiApprovalAvailabilityGuard);
-const tuiApprovalHandler = "ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()), { global: true });";
+const tuiApprovalHandler = "ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()), { global: true, prepend: true });";
 assert.equal(tuiPlugin.split(tuiApprovalHandler).length, 2, 'TUI approval handler must occur exactly once');
 tuiPlugin = tuiPlugin.replace(tuiApprovalHandler,
   "ctx.on('approval/request', (req, next) => {\n"
@@ -111,7 +111,7 @@ tuiPlugin = tuiPlugin.replace(tuiApprovalHandler,
   + "    workbenchPolicyStage('tui-approval-handler:fallback');\n"
   + "    return next();\n"
   + "  });\n"
-  + '}, { global: true });\n'
+  + '}, { global: true, prepend: true });\n'
   + "workbenchPolicyStage('tui-approval-handler:registered:' + ctx.events._hooks['approval/request'].map(hook => hook.global ? 'global' : 'scoped').join(','));");
 writeFileSync(tuiPluginPath, marker + tuiPlugin);
 instrument(tuiRoot, 'dsh-adapter/approvals.js', [

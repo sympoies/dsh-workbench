@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "release": {
-    "version": "0.1.0-rc.8",
-    "tag": "v0.1.0-rc.8"
+    "version": "0.1.0-rc.9",
+    "tag": "v0.1.0-rc.9"
   },
   "status": "candidate",
   "runtime": {
@@ -67,7 +67,7 @@
       },
       "compatibilityPatch": {
         "path": "compatibility/patches/tui-rename.patch",
-        "sha256": "63bb6b8ac491ac39a5cbc5a71dbde7b13b9ba065d18db20f37157f17c8b16fa3"
+        "sha256": "4aeefbbbf6715325706472a30d6e3b8573894e69114ca879e7ae46f40205f035"
       },
       "status": "candidate"
     }

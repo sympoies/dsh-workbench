@@ -1,6 +1,6 @@
 {
   "schemaVersion": "dsh-workbench.web-artifact.v1",
-  "releaseVersion": "0.1.0-rc.8",
+  "releaseVersion": "0.1.0-rc.9",
   "name": "@sympoies/dsh-workbench-web",
-  "artifactSha256": "32b823a147c1377244c776d9da465552cf65f07341e7144a83e8f10915319c48"
+  "artifactSha256": "b99f5f5578b13813037347c0228487cb251fbcd556c0504b54b7c4b80ec09186"
 }

@@ -102,8 +102,8 @@ test('reviewed TUI profile lock installs without resolving a new graph', { timeo
     const tuiRoot = join(stage, 'node_modules', contract.components.tui.package.name);
     const patchedPlugin = readFileSync(join(tuiRoot, 'lib/types/dsh-adapter/plugin.js'), 'utf8');
     assert.match(patchedPlugin,
-      /ctx\.on\('approval\/request', \(req, next\) => approvalStore\.park\(req\)\.catch\(\(\) => next\(\)\), \{ global: true \}\);/,
-      'installed TUI approval handler must receive agent-scoped dispatch');
+      /ctx\.on\('approval\/request', \(req, next\) => approvalStore\.park\(req\)\.catch\(\(\) => next\(\)\), \{ global: true, prepend: true \}\);/,
+      'installed TUI approval handler must receive agent-scoped dispatch before other global listeners');
     const { ApprovalStore } = await import(pathToFileURL(join(tuiRoot, 'lib/types/dsh-adapter/approvals.js')).href);
     const approvalStore = new ApprovalStore({ mode: 'legacy', slices: [] });
     const sharedCallId = 'shared-low-entropy-call-id';

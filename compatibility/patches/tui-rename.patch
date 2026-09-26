@@ -42,7 +42,7 @@ diff --git a/lib/types/dsh-adapter/plugin.js b/lib/types/dsh-adapter/plugin.js
      bindApprovalStore(ctx, approvalStore);
      if (ctx.get('approval') !== undefined) {
 -        ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()));
-+        ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()), { global: true });
++        ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()), { global: true, prepend: true });
          // Badge-flip push (P-4): React does not know the session log appended —
          // a source-badge verdict that only flips inside getSnapshot() surfaces
          // solely when something else re-renders. Feed the session firehose to
