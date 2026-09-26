@@ -82,7 +82,10 @@ pnpm test:tui:terminal --dsh-bin /path/to/pinned/dsh
 ```
 
 The combined-profile CI runs this acceptance on Linux x64 and macOS arm64
-after its authenticated graph setup and doctor check. The terminal test itself
+after its authenticated graph setup and doctor check. It also starts the
+activated `workbench` Web Host through runtime-kit's owner launcher and checks
+a real browser turn and embedded identity in that installed profile. The
+terminal test itself
 installs the frozen TUI-only profile in a separate disposable home and uses a
 native pseudoterminal through the development-only `node-pty` package. It drives Allow once and
 Reject through two real TTY sessions against an authenticated local mock, and
