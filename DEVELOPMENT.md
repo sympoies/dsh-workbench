@@ -9,10 +9,14 @@ Use exact source tags or commits and keep a candidate graph separate from an
 accepted release. Test Web and TUI against the same DSH session store and
 workspace identity before claiming cross-interface resume.
 
-TypeScript is the default for source and tests. Node 24.3.0 or later runs the
-erasable TypeScript directly without an experimental warning; the two `.mjs`
-files in `scripts/` preserve stable CLI
-entry points. Install the exact development toolchain with
+TypeScript is the default for product source, substantive scripts, and tests.
+Node 24.3.0 or later runs the erasable TypeScript directly without an
+experimental warning. The `.mjs` files in `scripts/` are thin CLI entrypoints:
+`contract.mjs` delegates to `src/contract.ts`, `tui-compat.mjs` delegates to
+`src/tui-compat.ts`, `web-metadata.mjs` delegates to `src/web-metadata.ts`, and
+`combined-profile.mjs` delegates to `src/combined-profile.ts`.
+Keep new CLI wrappers equally thin, with their logic in typechecked TypeScript.
+Install the exact development toolchain with
 `pnpm install --frozen-lockfile --strict-peer-dependencies`, then run `pnpm typecheck` and
 `pnpm test`. The root lockfile pins development tools; the separate
 [compatibility contract](compatibility/workbench.json) pins the DSH product
