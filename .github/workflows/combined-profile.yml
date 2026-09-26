@@ -204,6 +204,13 @@ jobs:
           tar -xzf "$VERIFICATION_ROOT/$(cat "$VERIFICATION_ROOT/runtime-kit-tarball-name")" \
             -C "$VERIFICATION_ROOT/runtime-kit-package"
           test -f "$VERIFICATION_ROOT/runtime-kit-package/package/dist/bin/dsh-runtime-kit.js"
+      - name: Install exact browser for activated Web acceptance
+        working-directory: dsh-workbench
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            pnpm exec playwright-core install-deps chromium
+          fi
+          node scripts/install-verified-browser.ts --out "$VERIFICATION_ROOT/browser"
       - name: Verify digest-bound runtime-kit setup and healthy doctor
         working-directory: dsh-workbench
         env:
@@ -216,7 +223,8 @@ jobs:
             "$GITHUB_WORKSPACE/deepseek-harness" \
             "$VERIFICATION_ROOT/dsh-home" \
             "$VERIFICATION_ROOT/dsh-runtime" \
-            "$NILS_BIN_DIR"
+            "$NILS_BIN_DIR" \
+            "$WORKBENCH_BROWSER_BIN"
       - name: Prepare real TTY acceptance dependencies
         working-directory: dsh-workbench
         run: |
@@ -230,13 +238,6 @@ jobs:
       - name: Exercise TUI in a real terminal
         working-directory: dsh-workbench
         run: pnpm test:tui:terminal --dsh-bin "$VERIFICATION_ROOT/dsh-bin"
-      - name: Install exact browser for native Web acceptance
-        working-directory: dsh-workbench
-        run: |
-          if [ "$RUNNER_OS" = Linux ]; then
-            pnpm exec playwright-core install-deps chromium
-          fi
-          node scripts/install-verified-browser.ts --out "$VERIFICATION_ROOT/browser"
       - name: Exercise native Web and TUI handoff in a browser
         working-directory: dsh-workbench
         run: |

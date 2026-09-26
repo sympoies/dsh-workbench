@@ -97,6 +97,12 @@ of the patched closure.
    `agent-session` binaries. The kit declaration governs their exact version
    and hashes.
 
+The combined-profile CI also starts the activated `workbench` Web Host through
+that launcher, opens its native UI in an authenticated Chromium, completes a
+mock turn, and checks the loaded plugin's exact contract identity. This is a
+single-profile Web startup proof; the full Web/TUI handoff acceptance still
+uses separate profiles and governed Bash remains a distinct release gate.
+
 Do not change `package.json`, its bundle order, or `pnpm-lock.yaml` after
 runtime-kit setup. An update must stage a new graph and re-run the managed
 operation against that complete generation. The staged profile, its pnpm lock,
