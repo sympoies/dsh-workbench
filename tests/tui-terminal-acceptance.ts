@@ -160,6 +160,12 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
   };
   const visibleScreen = () => Array.from({ length: screen.rows }, (_, row) =>
     screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '').join('\n');
+  const diagnosticScreen = () => {
+    let value = visibleScreen().replaceAll(apiKey, '[redacted key]')
+      .replaceAll(baseURL, '[mock endpoint]').replaceAll(fixture, '[fixture]');
+    if (installedHome) value = value.replaceAll(installedHome, '[installed home]');
+    return value.trim().slice(-1_500);
+  };
   return {
     write: data => child.write(data),
     get exitCode() { return exitCode; },
@@ -206,7 +212,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
         reject(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
         return;
       }
-      const timer = setTimeout(() => finish(new Error(`TUI did not show ${marker}`)), 60_000);
+      const timer = setTimeout(() => finish(new Error(`TUI did not show ${marker}; screen: ${diagnosticScreen()}`)), 60_000);
       const onExit = () => finish(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
       const check = () => {
         const frame = visibleScreen();
@@ -374,6 +380,9 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
       assert.equal(existsSync(marker), true, 'Allowed Bash command did not execute');
     }
     assert.ok(mock.requests.some(request => request.behavior === 'tool_call_success'));
+  } catch (error) {
+    const behaviors = mock.requests.map(request => request.behavior).join(',') || 'none';
+    throw new Error(`${error instanceof Error ? error.message : String(error)}; mock behaviors: ${behaviors}`);
   } finally {
     const cleanup = await Promise.allSettled([terminal?.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI acceptance cleanup failed');
