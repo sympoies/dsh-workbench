@@ -5,7 +5,8 @@ import { isAbsolute, join } from 'node:path';
 const profile = process.argv[2];
 assert.ok(profile && isAbsolute(profile), 'A disposable absolute profile path is required');
 const packageRoot = realpathSync(join(profile, 'node_modules', '@sympoies', 'dsh-runtime-kit'));
-const tuiRoot = realpathSync(join(profile, 'node_modules', '@deepseek-harness-tui', 'dsh-tui', 'lib', 'types'));
+const tuiRoot = realpathSync(join(profile, '..', 'dsh-tui', 'node_modules',
+  '@deepseek-harness-tui', 'dsh-tui', 'lib', 'types'));
 
 const marker = `
 import { appendFileSync as workbenchAppendStage } from 'node:fs';
