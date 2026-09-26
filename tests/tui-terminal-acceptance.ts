@@ -91,8 +91,10 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
   waitForAfter: (first: string, second: string) => Promise<void>;
 } {
   const home = join(fixture, 'home');
-  const child = spawn('script', ['-q', '-e', '-c',
-    `${quote(binary)} --profile dsh-tui ${appArgs.map(quote).join(' ')}`, '/dev/null'], {
+  const scriptArgs = process.platform === 'darwin'
+    ? ['-q', '/dev/null', binary, '--profile', 'dsh-tui', ...appArgs]
+    : ['-q', '-e', '-c', `${quote(binary)} --profile dsh-tui ${appArgs.map(quote).join(' ')}`, '/dev/null'];
+  const child = spawn('script', scriptArgs, {
     cwd: join(fixture, 'workspace'),
     detached: true,
     env: {
@@ -320,11 +322,13 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
 }
 
 async function main(): Promise<void> {
-  if (process.platform !== 'linux') throw new Error('This real TTY acceptance currently requires Linux util-linux script');
+  if (process.platform !== 'linux' && process.platform !== 'darwin') {
+    throw new Error('This real TTY acceptance requires Linux or macOS script');
+  }
   const dsh = binaryOption('--dsh-bin');
   assert.equal(command(dsh, ['--version'], repo), contract.components.dsh.package.version);
   assert.equal(command('pnpm', ['--version'], repo), contract.runtime.pnpm);
-  command('script', ['--version'], repo);
+  if (process.platform === 'linux') command('script', ['--version'], repo);
   command('zstdcat', ['--version'], repo);
   const fixture = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-'));
   try {
