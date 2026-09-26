@@ -230,16 +230,17 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     'durable interrupted-turn closure');
     await waitForTui(tui, () => visibleScreen(tui.screen).includes(recoveredAnswer),
       'completed interrupted-session recap');
-    await waitForTui(tui, () => readEvents(logPath).some(event =>
-      event.type === 'assistant/message' && JSON.stringify(event.data?.message).includes(recoveredAnswer)),
-    'persisted interrupted-session recap');
-    const answerCountBeforeContinuation = readEvents(logPath).filter(event =>
-      event.type === 'assistant/message' && JSON.stringify(event.data?.message).includes(recoveredAnswer)).length;
-    assert.ok(answerCountBeforeContinuation > 0, 'the interrupted-session recap was not persisted');
     tui.write(`${recoveredPrompt}\r`);
     await waitForTui(tui, () => JSON.stringify(readEvents(logPath)
       .filter(event => event.type === 'user/message')).includes(recoveredPrompt),
     'persisted post-crash TUI prompt');
+    await waitForTui(tui, () => {
+      const events = readEvents(logPath);
+      const promptIndex = events.findIndex(event => event.type === 'user/message'
+        && JSON.stringify(event.data?.message).includes(recoveredPrompt));
+      return promptIndex >= 0 && events.slice(promptIndex + 1).some(event => event.type === 'assistant/message'
+        && JSON.stringify(event.data?.message).includes(recoveredAnswer));
+    }, 'persisted post-crash TUI continuation answer');
     await waitForTui(tui, () => readEvents(logPath).filter(event => event.type === 'turn/end').length === 2,
       'completed post-crash TUI continuation');
     await tui.stop();
@@ -252,10 +253,11 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
       'the post-crash TUI continuation did not complete');
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(interruptedPrompt));
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(recoveredPrompt));
-    const answerCountAfterContinuation = events.filter(event => event.type === 'assistant/message'
-      && JSON.stringify(event.data?.message).includes(recoveredAnswer)).length;
-    assert.ok(answerCountAfterContinuation > answerCountBeforeContinuation,
-      'the completed post-crash TUI continuation did not persist its answer');
+    const continuationPromptIndex = events.findIndex(event => event.type === 'user/message'
+      && JSON.stringify(event.data?.message).includes(recoveredPrompt));
+    assert.ok(continuationPromptIndex >= 0 && events.slice(continuationPromptIndex + 1).some(event =>
+      event.type === 'assistant/message' && JSON.stringify(event.data?.message).includes(recoveredAnswer)),
+    'the completed post-crash TUI continuation did not persist an answer after its prompt');
     assert.ok(mock.requests.length >= 2,
       'TUI did not request both its resume recap and the post-crash continuation');
   } finally {
