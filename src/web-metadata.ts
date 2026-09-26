@@ -20,6 +20,7 @@ function catalog(version: string): string {
     '  - web',
     'allowBuilds:',
     '  esbuild: true',
+    '  node-pty: false',
     'catalogs:',
     '  dsh:',
     ...packages.map(name => `    '${name}': ${version}`),
