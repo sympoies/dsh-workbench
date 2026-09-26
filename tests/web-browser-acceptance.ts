@@ -291,7 +291,8 @@ async function stopHost(child: ChildProcess | undefined): Promise<void> {
 async function openPage(browser: Browser, host: Awaited<ReturnType<typeof startHost>>): Promise<{ page: Page; errors: string[] }> {
   const exchange = await fetch(host.url, { redirect: 'manual' });
   assert.equal(exchange.status, 303, `DSH Web Host rejected its complete launch token: HTTP ${exchange.status}`);
-  assert.equal(exchange.headers.get('location'), '/', 'DSH Web Host did not redirect after launch token exchange');
+  assert.equal(new URL(exchange.headers.get('location') ?? '', host.url).href,
+    new URL('/', host.url).href, 'DSH Web Host did not redirect to the root after launch token exchange');
   assert.ok(exchange.headers.has('set-cookie'), 'DSH Web Host did not issue a browser cookie');
   const page = await browser.newPage({ locale: 'en-US' });
   const errors: string[] = [];
