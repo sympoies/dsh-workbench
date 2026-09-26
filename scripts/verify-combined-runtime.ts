@@ -191,7 +191,13 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
     if (await continueButton.isVisible()) await continueButton.click();
     await page.getByRole('button', { name: 'New Session' }).first().click();
     const chooseWorkspace = page.getByRole('textbox', { name: 'Choose workspace' });
-    if (await chooseWorkspace.isVisible()) {
+    const editor = page.getByRole('textbox',
+      { name: 'Describe what you want to build, / commands, @ files or sessions' });
+    const readySurface = await Promise.any([
+      chooseWorkspace.waitFor({ timeout: 30_000 }).then(() => 'choose-workspace' as const),
+      editor.waitFor({ timeout: 30_000 }).then(() => 'editor' as const),
+    ]);
+    if (readySurface === 'choose-workspace') {
       await chooseWorkspace.click();
       const dialog = page.getByRole('dialog', { name: 'Select Workspace Directory' });
       await dialog.waitFor({ timeout: 10_000 });
@@ -201,8 +207,6 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
       await pathInput.press('Enter');
       await dialog.getByRole('button', { name: 'Open', exact: true }).click();
     }
-    const editor = page.getByRole('textbox',
-      { name: 'Describe what you want to build, / commands, @ files or sessions' });
     try {
       await editor.waitFor({ timeout: 30_000 });
     } catch {
