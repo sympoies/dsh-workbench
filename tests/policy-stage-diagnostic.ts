@@ -5,6 +5,7 @@ import { isAbsolute, join } from 'node:path';
 const profile = process.argv[2];
 assert.ok(profile && isAbsolute(profile), 'A disposable absolute profile path is required');
 const packageRoot = realpathSync(join(profile, 'node_modules', '@sympoies', 'dsh-runtime-kit'));
+const tuiRoot = realpathSync(join(profile, 'node_modules', '@deepseek-harness-tui', 'dsh-tui', 'lib', 'types'));
 
 const marker = `
 import { appendFileSync as workbenchAppendStage } from 'node:fs';
@@ -14,9 +15,9 @@ function workbenchPolicyStage(stage) {
 }
 `;
 
-function instrument(file: string,
+function instrument(root: string, file: string,
   stages: ReadonlyArray<readonly [string, string, ('before' | 'around')?]>): void {
-  const path = join(packageRoot, file);
+  const path = join(root, file);
   let source = readFileSync(path, 'utf8');
   for (const [statement, stage, placement] of stages) {
     assert.equal(source.split(statement).length, 2, `${file}: ${stage} must occur exactly once`);
@@ -34,7 +35,7 @@ function instrument(file: string,
   writeFileSync(path, marker + source);
 }
 
-instrument('dist/src/policy/index.js', [
+instrument(packageRoot, 'dist/src/policy/index.js', [
   ['prerequisiteProof = await prerequisites.begin(exec, correlation.context);', 'prerequisite'],
   ['finishProbe = await finishLine.probe(exec, correlation.context);', 'finish-probe'],
   ['decision = await transport.evaluate(exec, correlation.context, prerequisiteProof);', 'policy'],
@@ -49,7 +50,7 @@ instrument('dist/src/policy/index.js', [
   ['const headerCwd = session.header.cwd;', 'validation-header-cwd', 'before'],
   ['const spec = resolveFinishLineShellSpec(shell, operation, {', 'validation-shell-spec', 'before'],
 ]);
-instrument('dist/src/workspace-lease/index.js', [
+instrument(packageRoot, 'dist/src/workspace-lease/index.js', [
   ['const downstream = await next();', 'lease-downstream'],
   ['const targets = await this.#resolutionFor(exec, provider, slot, identity, admissionSignal.signal);',
     'lease-targets'],
@@ -64,7 +65,7 @@ instrument('dist/src/workspace-lease/index.js', [
   ['const granted = await this.#begin(binding, target, slot.session.header.cwd, identity, admissionSignal.signal);',
     'lease-begin'],
 ]);
-instrument('dist/src/finish-line/index.js', [
+instrument(packageRoot, 'dist/src/finish-line/index.js', [
   ['const registration = editRegistrations.get(exec);', 'finish-execute-entry'],
   ['const prepared = pending.prepared;', 'finish-validation-ready'],
   ['let operationId = pending.operationId;', 'finish-validation-probe'],
@@ -73,12 +74,31 @@ instrument('dist/src/finish-line/index.js', [
   ['const probe = await client.run({', 'finish-run-probe', 'before'],
   ['const runtime = await prepareValidationRuntime(exec, {', 'finish-runtime', 'before'],
 ]);
-instrument('dist/src/finish-line/nils-client.js', [
+instrument(packageRoot, 'dist/src/finish-line/nils-client.js', [
   ['executionLease = authenticatedExecution.acquire(operation.controller.signal);', 'nils-acquire'],
   ['const argv = await resolveSubprocessArgv(ctx, agentHook.argv([\'finish-line\', action, \'--format\', \'json\']), executionSignal);',
     'nils-argv'],
   ['operation.handle = executionLease.spawn({', 'nils-spawn', 'before'],
   ['const handle = operation.handle;', 'nils-spawn-after', 'before'],
   ['const first = await Promise.race([', 'nils-wait', 'before'],
+]);
+const tuiPluginPath = join(tuiRoot, 'dsh-adapter/plugin.js');
+let tuiPlugin = readFileSync(tuiPluginPath, 'utf8');
+const tuiApprovalHandler = "ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()));";
+assert.equal(tuiPlugin.split(tuiApprovalHandler).length, 2, 'TUI approval handler must occur exactly once');
+tuiPlugin = tuiPlugin.replace(tuiApprovalHandler,
+  "ctx.on('approval/request', (req, next) => {\n"
+  + "  workbenchPolicyStage('tui-approval-handler:before');\n"
+  + "  return approvalStore.park(req).then(outcome => {\n"
+  + "    workbenchPolicyStage('tui-approval-handler:resolved');\n"
+  + "    return outcome;\n"
+  + "  }).catch(() => {\n"
+  + "    workbenchPolicyStage('tui-approval-handler:fallback');\n"
+  + "    return next();\n"
+  + "  });\n"
+  + '});');
+writeFileSync(tuiPluginPath, marker + tuiPlugin);
+instrument(tuiRoot, 'dsh-adapter/approvals.js', [
+  ['this.queue.push(pending);\n            this.startNext();', 'tui-approval-park'],
 ]);
 console.log('Installed disposable profile has stage-only diagnostic instrumentation');
