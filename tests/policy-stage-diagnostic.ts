@@ -94,8 +94,19 @@ const instrumentedNilsClient = nilsClient.replace(spawnCall[0], `try {
     : request.cwd.startsWith('/') ? 'absolute' : 'other';
   const argvKind = Array.isArray(argv) && typeof argv[0] === 'string' && argv[0].length > 0
     ? 'valid' : 'invalid';
+  const cancelCause = ['caller', 'timeout', 'disposed', 'degraded'].includes(operation.cause)
+    ? operation.cause : 'none';
+  const signalReason = executionSignal.reason;
+  const reasonName = signalReason instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,31}$/u.test(signalReason.name)
+    ? signalReason.name : 'none';
+  const rawReasonCode = signalReason !== null && typeof signalReason === 'object'
+    && 'code' in signalReason ? signalReason.code : undefined;
+  const reasonCode = typeof rawReasonCode === 'string' && /^[A-Z0-9_-]{1,64}$/u.test(rawReasonCode)
+    ? rawReasonCode : 'none';
   workbenchPolicyStage('nils-spawn-spec:' + action + ':' + cwdKind + ':' + argvKind
-    + ':' + (executionSignal.aborted ? 'aborted' : 'live'));
+    + ':' + (executionSignal.aborted ? 'aborted' : 'live')
+    + ':' + (operation.controller.signal.aborted ? 'parent-aborted' : 'parent-live')
+    + ':' + cancelCause + ':' + reasonName + ':' + reasonCode);
 ${spawnCall[0]}
   workbenchPolicyStage('nils-spawn-created:' + action);
 } catch (error) {
