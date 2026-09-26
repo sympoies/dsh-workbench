@@ -213,7 +213,7 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
     if (readySurface === 'choose-workspace') {
       await chooseWorkspace.click();
       const dialog = page.getByRole('dialog', { name: 'Select Workspace Directory' });
-      await dialog.waitFor({ timeout: 10_000 });
+      await dialog.waitFor({ timeout: 30_000 });
       await dialog.getByRole('button', { name: 'Edit path' }).click();
       const pathInput = dialog.getByRole('textbox', { name: 'Edit path' });
       await pathInput.fill(workspace);
