@@ -241,9 +241,12 @@ async function startHost(binary: string, home: string, agents: string, workspace
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
+  let stderr = '';
   let errorLines = 0;
   child.stderr.on('data', chunk => {
-    errorLines += String(chunk).split('\n').filter(line => /\berror\b/i.test(line)).length;
+    const text = String(chunk);
+    errorLines += text.split('\n').filter(line => /\berror\b/i.test(line)).length;
+    stderr = `${stderr}${text}`.slice(-4_096);
   });
   try {
     const url = await new Promise<string>((resolveReady, reject) => {
@@ -261,7 +264,15 @@ async function startHost(binary: string, home: string, agents: string, workspace
         reject(new Error(`DSH Web Host exited before readiness: ${code}`));
       });
     });
-    return { child, url, errorCount: () => errorLines };
+    const diagnostic = () => stderr
+      .replaceAll(apiKey, '[redacted key]')
+      .replaceAll(baseURL, '[mock endpoint]')
+      .replaceAll(home, '[home]')
+      .replaceAll(agents, '[agents]')
+      .replaceAll(workspace, '[workspace]')
+      .replace(/([?&]token=)[^\s"']+/gi, '$1[redacted]')
+      .slice(-1_500);
+    return { child, url, errorCount: () => errorLines, diagnostic };
   } catch (error) {
     await stopHost(child);
     throw error;
@@ -277,11 +288,17 @@ async function stopHost(child: ChildProcess | undefined): Promise<void> {
   });
 }
 
-async function openPage(browser: Browser, url: string): Promise<{ page: Page; errors: string[] }> {
+async function openPage(browser: Browser, host: Awaited<ReturnType<typeof startHost>>): Promise<{ page: Page; errors: string[] }> {
   const page = await browser.newPage({ locale: 'en-US' });
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.name));
-  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  let response;
+  try {
+    response = await page.goto(host.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  } catch (error) {
+    const status = await fetch(host.url).then(result => result.status, () => 'unavailable');
+    throw new Error(`Web navigation failed; HTTP ${status}; host diagnostic: ${host.diagnostic()}; browser: ${error instanceof Error ? error.message : String(error)}`);
+  }
   assert.equal(response?.status(), 200, 'DSH Web Host did not serve the UI');
   const continueButton = page.getByRole('button', { name: 'Continue' });
   await continueButton.waitFor({ timeout: 5_000 }).catch(() => {});
@@ -291,9 +308,13 @@ async function openPage(browser: Browser, url: string): Promise<{ page: Page; er
 }
 
 function launchBrowser(executablePath: string, home: string): Promise<Browser> {
+  const ciWithoutSandbox = process.argv.includes('--ci-no-browser-sandbox');
+  if (ciWithoutSandbox && (process.env.CI !== 'true' || process.platform !== 'linux')) {
+    throw new Error('The browser sandbox exception is limited to Linux CI');
+  }
   return chromium.launch({ executablePath, headless: true,
     env: { PATH: process.env.PATH ?? '', HOME: home, LANG: process.env.LANG ?? 'C.UTF-8' },
-    chromiumSandbox: true });
+    chromiumSandbox: !ciWithoutSandbox });
 }
 
 async function copiedSessionId(page: Page): Promise<string> {
@@ -474,7 +495,7 @@ async function main(): Promise<void> {
     assert.equal(unauthorized.status, 401, 'mock endpoint accepted an unauthenticated request');
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
-    let opened = await openPage(browser, host.url);
+    let opened = await openPage(browser, host);
     const firstPage = opened.page;
     const firstErrors = opened.errors;
     await checkTuiHandoff(firstPage, tuiSessionId);
@@ -523,7 +544,7 @@ async function main(): Promise<void> {
 
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
-    opened = await openPage(browser, host.url);
+    opened = await openPage(browser, host);
     await checkTuiHandoff(opened.page, tuiSessionId);
     await checkHistory(opened.page, firstId, prompts[0], prompts[1]);
     const continued = await opened.page.locator('[data-conversation-content]').innerText();
@@ -548,7 +569,7 @@ async function main(): Promise<void> {
     mock = await startMockLlmServer({ sequence: ['invalid_request'], repeatLast: true, apiKey });
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
-    let errorOpened = await openPage(browser, host.url);
+    let errorOpened = await openPage(browser, host);
     const errorPage = errorOpened.page;
     const errorEditor = await startNewSession(errorPage, 'error', [firstId, secondId]);
     await errorEditor.fill(errorPrompt);
@@ -566,7 +587,7 @@ async function main(): Promise<void> {
 
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
-    errorOpened = await openPage(browser, host.url);
+    errorOpened = await openPage(browser, host);
     await checkFailedHistory(errorOpened.page, errorId);
     pageErrors += errorOpened.errors.length;
     hostErrors += host.errorCount();

@@ -47,8 +47,10 @@ resumes that Web session, completes another turn, and Web reads the continuation
 on restart. It also checks distinct Web IDs, isolated histories, a
 pending turn, tool approval and rejection, a provider error, and Web Host
 restart recovery. The fixture, profiles, and mock endpoints are removed
-afterward. Package installation is isolated from caller credentials, and
-Chromium sandboxing remains enabled. This does not establish the full
+afterward. Package installation is isolated from caller credentials. Local
+Chromium sandboxing remains enabled; the Linux GitHub-hosted CI runner uses an
+explicit test-only exception because its browser sandbox cannot initialize.
+This does not establish the full
 cross-interface handoff, image composition, or release acceptance gates.
 The combined-profile CI installs the browser revision selected by the pinned
 `playwright-core` package and runs this acceptance on both first-release

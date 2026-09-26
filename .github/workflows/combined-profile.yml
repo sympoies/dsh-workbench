@@ -238,6 +238,9 @@ jobs:
       - name: Exercise native Web and TUI handoff in a browser
         working-directory: dsh-workbench
         run: |
+          browser_args=()
+          if [ "$RUNNER_OS" = Linux ]; then browser_args+=(--ci-no-browser-sandbox); fi
           pnpm test:web:browser \
             --dsh-bin "$VERIFICATION_ROOT/dsh-bin" \
-            --browser-bin "$WORKBENCH_BROWSER_BIN"
+            --browser-bin "$WORKBENCH_BROWSER_BIN" \
+            "${browser_args[@]}"
