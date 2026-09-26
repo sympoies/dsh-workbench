@@ -88,7 +88,8 @@ behavior on both targets but does not yet exercise a real TTY on the combined
 package name, version, and canonical artifact SHA-256 against the reviewed
 [`web-artifact.json`](../compatibility/web-artifact.json) record before adding
 the official Web bundle and plugin to the same profile. The combined Web/TUI
-graph must still pass hosted CI.
+graph passed hosted Linux x64 and macOS arm64 CI, including an activated Web
+turn, but governed Bash remains a separate acceptance gate.
 The publication comparison treats the reviewed Web artifact digest as part of
 the release identity, including the first addition of the record. A changed
 digest requires a higher Workbench release version.
@@ -102,6 +103,8 @@ file without a recorded runtime-kit digest with exit 65 and
 `agent-home-unmanaged`, leaving that file unchanged. An operator must move or
 merge the existing instructions before retrying; the portable installer must
 test this migration on copies under [#9](https://github.com/sympoies/dsh-workbench/issues/9).
+The [rc.7 combined-profile matrix](https://github.com/sympoies/dsh-workbench/actions/runs/36242300610)
+passed this refusal check and clean activation on Linux x64 and macOS arm64.
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the
