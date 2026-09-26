@@ -141,7 +141,15 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       ['missing-command', /command not found|no such file or directory/i],
     ] as const;
     const category = categories.find(([, pattern]) => pattern.test(startupOutput))?.[0] ?? 'unclassified';
-    return `TUI exited with ${exitCode ?? exitSignal}; startup category ${category}`;
+    const diagnostic = startupOutput
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+      .replaceAll(apiKey, '[redacted key]')
+      .replaceAll(baseURL, '[mock endpoint]')
+      .replaceAll(fixture, '[fixture]')
+      .replaceAll(home, '[home]')
+      .replace(/[\x00-\x1f\x7f]/g, ' ')
+      .slice(-1_500);
+    return `TUI exited with ${exitCode ?? exitSignal}; startup category ${category}; output: ${diagnostic}`;
   };
   const visibleScreen = () => Array.from({ length: screen.rows }, (_, row) =>
     screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '').join('\n');
