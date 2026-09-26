@@ -55,8 +55,11 @@ Other binary assets also require a separate audited handling path before release
 Extract the exact finalized archive safely into a disposable tree and scan that
 tree, then inspect the archive and manifest before publishing.
 
-For the combined candidate profile, CI runs the pinned package manager's
-`licenses list --prod --json` against the installed profile. The
+For the combined candidate profile, CI verifies that the staged manifest has no
+development dependencies, then runs the pinned package manager's
+`licenses list --json` against the installed profile. That profile contains
+only runtime dependencies, so the inventory covers its complete production
+graph. The
 `scripts/license-inventory.ts` adapter emits only package names, versions, and
 declared license identifiers; it drops install paths and package-author
 metadata, then the publication scanner checks the sanitized report. Each

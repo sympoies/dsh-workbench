@@ -69,9 +69,9 @@ function compareText(left: string, right: string): number {
 }
 
 /**
- * Reduce `pnpm licenses list --prod --json` to package identity and declared
- * license only. In particular, pnpm's install paths and package authors are
- * not part of the public inventory.
+ * Reduce pnpm license-list JSON from the production-only profile to package
+ * identity and declared license only. In particular, pnpm's install paths and
+ * package authors are not part of the public inventory.
  */
 export function normalizePnpmLicenseReport(input: unknown): DependencyLicenseInventory {
   if (!isRecord(input) || Object.keys(input).length === 0) {

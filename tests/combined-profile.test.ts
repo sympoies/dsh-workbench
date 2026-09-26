@@ -88,6 +88,7 @@ test('stages the native Web plugin in the same governed workbench profile', () =
     assert.equal(readFileSync(join(profile, 'THIRD_PARTY_NOTICES.md'), 'utf8'),
       readFileSync(new URL('../THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8'));
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'));
+    assert.equal(manifest.devDependencies, undefined);
     assert.deepEqual(manifest.dsh.profile.bundles, [
       '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-harness-tui/dsh-tui',
     ]);
