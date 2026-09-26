@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -42,6 +42,28 @@ function read(path: string): WorkbenchContract {
   } catch {
     fail('cannot read a valid contract file');
   }
+}
+
+function readWebArtifact(contractPath: string, contract: WorkbenchContract, optional = false): string | null {
+  const path = join(dirname(contractPath), 'web-artifact.json');
+  if (!existsSync(path)) {
+    if (optional) return null;
+    fail('Web artifact record cannot be read');
+  }
+  let record: Record<string, unknown>;
+  try {
+    record = object(JSON.parse(readFileSync(path, 'utf8')), 'Web artifact record');
+  } catch {
+    fail('Web artifact record cannot be read');
+  }
+  exactKeys(record, ['schemaVersion', 'releaseVersion', 'name', 'artifactSha256'], 'Web artifact record');
+  if (record.schemaVersion !== 'dsh-workbench.web-artifact.v1'
+    || record.releaseVersion !== contract.release.version
+    || record.name !== '@sympoies/dsh-workbench-web') {
+    fail('Web artifact record does not match Workbench contract');
+  }
+  match(record.artifactSha256, /^[a-f0-9]{64}$/, 'Web artifact digest');
+  return record.artifactSha256 as string;
 }
 
 function nodeFloor(value: unknown, name: string): number[] {
@@ -144,9 +166,10 @@ function validate(contract: WorkbenchContract, contractPath: string, { previous 
   }
 }
 
-function tuple(contract: WorkbenchContract) {
+function tuple(contract: WorkbenchContract, webArtifactDigest: string | null) {
   return {
     runtime: contract.runtime,
+    webArtifactDigest,
     components: components.map(id => {
       const item = contract.components[id];
       return [item.source.url, item.source.tag ?? '', item.source.commit, item.source.tree,
@@ -202,11 +225,14 @@ try {
   const { command, options } = args(process.argv.slice(2));
   const contract = read(options.contract);
   validate(contract, options.contract);
+  const webArtifactDigest = readWebArtifact(options.contract, contract);
   if (command === 'require-accepted' && contract.status !== 'accepted') fail('candidate contract cannot be activated');
   if (command === 'compare') {
     const previous = read(options.previous!);
     validate(previous, options.previous!, { previous: true });
-    const changed = JSON.stringify(tuple(contract)) !== JSON.stringify(tuple(previous));
+    const previousWebArtifactDigest = readWebArtifact(options.previous!, previous, true);
+    const changed = JSON.stringify(tuple(contract, webArtifactDigest)) !==
+      JSON.stringify(tuple(previous, previousWebArtifactDigest));
     if (changed && contract.release.version === previous.release.version) fail('component tuple changed without a new Workbench release.version');
     if (contract.release.version !== previous.release.version && compareVersions(contract.release.version, previous.release.version) <= 0) {
       fail('new Workbench release.version must advance');

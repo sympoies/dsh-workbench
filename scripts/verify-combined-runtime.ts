@@ -16,7 +16,7 @@ const profile = join(dshHome, 'profiles', 'workbench');
 const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'));
 assert.equal(manifest.name, 'dsh-profile-workbench');
 assert.deepEqual(manifest.dsh.profile.bundles,
-  ['@deepseek-ai/dsh-base', '@deepseek-harness-tui/dsh-tui']);
+  ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-harness-tui/dsh-tui']);
 const root = join(dirname(runtimeRoot), 'workbench-verification');
 const configHome = join(root, 'config');
 const stateHome = join(root, 'state');
@@ -124,6 +124,7 @@ if (composition.status !== 0) {
 }
 assert.match(composition.stdout, /@deepseek-harness-tui\/dsh-tui/);
 assert.match(composition.stdout, /@sympoies\/dsh-runtime-kit/);
+assert.match(composition.stdout, /@sympoies\/dsh-workbench-web/);
 process.stdout.write(JSON.stringify({
   schema_version: 'dsh-workbench.combined-runtime-verification.v1',
   ok: true, profile: 'workbench', status: 'healthy', composition: 'passed',
