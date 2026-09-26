@@ -237,9 +237,9 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     await waitForTui(tui, () => {
       const events = readEvents(logPath);
       const promptIndex = events.findIndex(event => event.type === 'user/message'
-        && JSON.stringify(event.data?.message).includes(recoveredPrompt));
+        && (JSON.stringify(event.data?.message) ?? '').includes(recoveredPrompt));
       return promptIndex >= 0 && events.slice(promptIndex + 1).some(event => event.type === 'assistant/message'
-        && JSON.stringify(event.data?.message).includes(recoveredAnswer));
+        && (JSON.stringify(event.data?.message) ?? '').includes(recoveredAnswer));
     }, 'persisted post-crash TUI continuation answer');
     await waitForTui(tui, () => readEvents(logPath).filter(event => event.type === 'turn/end').length === 2,
       'completed post-crash TUI continuation');
@@ -254,9 +254,10 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(interruptedPrompt));
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(recoveredPrompt));
     const continuationPromptIndex = events.findIndex(event => event.type === 'user/message'
-      && JSON.stringify(event.data?.message).includes(recoveredPrompt));
+      && (JSON.stringify(event.data?.message) ?? '').includes(recoveredPrompt));
     assert.ok(continuationPromptIndex >= 0 && events.slice(continuationPromptIndex + 1).some(event =>
-      event.type === 'assistant/message' && JSON.stringify(event.data?.message).includes(recoveredAnswer)),
+      event.type === 'assistant/message'
+        && (JSON.stringify(event.data?.message) ?? '').includes(recoveredAnswer)),
     'the completed post-crash TUI continuation did not persist an answer after its prompt');
     assert.ok(mock.requests.length >= 2,
       'TUI did not request both its resume recap and the post-crash continuation');
