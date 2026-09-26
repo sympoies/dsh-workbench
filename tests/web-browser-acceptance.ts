@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
@@ -60,10 +60,6 @@ function sessionLog(root: string, id: string): string {
   const matches = sessionLogs(root).filter(path => basename(dirname(path)) === id);
   assert.equal(matches.length, 1, 'Session has no unique Session V4 archive');
   return matches[0];
-}
-
-function logDigest(path: string): string {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
 type TuiProcess = ReturnType<typeof startTui>;
@@ -210,15 +206,22 @@ async function continueWebSessionInTui(dsh: string, fixture: string, home: strin
 }
 
 async function checkWebWriterContention(dsh: string, fixture: string, home: string, agents: string,
-  workspace: string, id: string, baseURL: string, apiKey: string): Promise<void> {
+  workspace: string, id: string, baseURL: string, apiKey: string,
+  archiveState: 'settled' | 'pending' = 'settled'): Promise<void> {
   const logPath = sessionLog(join(home, 'sessions'), id);
-  const before = logDigest(logPath);
+  const before = readFileSync(logPath);
   const tui = startTui(dsh, fixture, home, agents, workspace, baseURL, apiKey,
     ['--resume', id]);
   try {
     const exit = await tui.waitForExit(20_000);
     assert.notEqual(exit, 0, 'TUI did not refuse the Web-held writer with an error');
-    assert.equal(logDigest(logPath), before, 'Rejected TUI access changed the Web-held archive');
+    const after = readFileSync(logPath);
+    if (archiveState === 'settled') {
+      assert.ok(after.equals(before), 'Rejected TUI access changed the settled Web-held archive');
+    } else {
+      assert.ok(after.subarray(0, before.length).equals(before),
+        'Rejected TUI access rewrote the pending Web-held archive');
+    }
   } finally {
     await tui.stop();
   }
@@ -523,9 +526,18 @@ async function main(): Promise<void> {
     assert.ok(await approval.getByRole('button', { name: 'Reject' }).isVisible());
     assert.ok((await firstPage.locator('[data-turn-process="1"]').innerText()).includes('Deep diving'),
       'the turn appeared settled while approval was pending');
+    const pendingRow = await firstPage.locator('[data-row-key^="session:"][aria-selected="true"]')
+      .getAttribute('data-row-key');
+    assert.match(pendingRow ?? '', /^session:(?:session-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,
+      'pending Web turn has no exact session ID');
+    const pendingId = pendingRow!.slice('session:'.length);
+    await checkWebWriterContention(dsh, fixture, home, agents, workspace, pendingId,
+      mock.baseURL, apiKey, 'pending');
+    assert.ok(await approval.isVisible(), 'Web approval disappeared after refused TUI resume');
     await approval.getByRole('button', { name: 'Allow once' }).click();
     await firstPage.getByText('Worked', { exact: true }).first().waitFor({ timeout: 30_000 });
     const firstId = await copiedSessionId(firstPage);
+    assert.equal(firstId, pendingId, 'Web approval completed in a different session');
     await checkToolResult(firstPage);
 
     // First-turn title generation runs independently of the tool continuation.

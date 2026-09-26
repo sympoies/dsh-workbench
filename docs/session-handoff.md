@@ -164,8 +164,10 @@ answer, and title before and after a Web Host restart. The same automated
 fixture checks that a Web-held writer rejects TUI resume without changing the
 compressed archive. After Web Host stops, TUI resumes a Web-created session,
 completes another turn, and Web reads that continuation on restart. These
-checks do not establish safe transfer of an executing turn, pending
-input or approval, attachments, live cross-interface title updates, complete projection-cache behavior,
+checks also reject TUI exact-ID resume while Web awaits tool approval: the
+pending archive's existing bytes remain intact and Web can still approve its
+own turn. They do not establish transfer after cancellation of an executing
+turn or pending approval, attachments, live cross-interface title updates, complete projection-cache behavior,
 crash recovery, cross-platform operation, or existing-session migration.
 Those are release acceptance work under
 [#7](https://github.com/sympoies/dsh-workbench/issues/7), with TUI-specific
