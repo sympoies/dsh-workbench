@@ -85,6 +85,17 @@ instrument(packageRoot, 'dist/src/finish-line/nils-client.js', [
 ]);
 const tuiPluginPath = join(tuiRoot, 'dsh-adapter/plugin.js');
 let tuiPlugin = readFileSync(tuiPluginPath, 'utf8');
+const tuiApprovalStoreCreation = 'const approvalStore = new ApprovalStore(adapterRuntimeFor(ctx));';
+assert.equal(tuiPlugin.split(tuiApprovalStoreCreation).length, 2,
+  'TUI approval store initialization must occur exactly once');
+tuiPlugin = tuiPlugin.replace(tuiApprovalStoreCreation,
+  "workbenchPolicyStage('tui-adapter-loaded');\n" + tuiApprovalStoreCreation);
+const tuiApprovalAvailabilityGuard = "if (ctx.get('approval') !== undefined) {";
+assert.equal(tuiPlugin.split(tuiApprovalAvailabilityGuard).length, 2,
+  'TUI approval availability guard must occur exactly once');
+tuiPlugin = tuiPlugin.replace(tuiApprovalAvailabilityGuard,
+  "workbenchPolicyStage('tui-approval-available:' + (ctx.get('approval') !== undefined));\n"
+  + tuiApprovalAvailabilityGuard);
 const tuiApprovalHandler = "ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()));";
 assert.equal(tuiPlugin.split(tuiApprovalHandler).length, 2, 'TUI approval handler must occur exactly once');
 tuiPlugin = tuiPlugin.replace(tuiApprovalHandler,
