@@ -14,13 +14,15 @@ function workbenchPolicyStage(stage) {
 }
 `;
 
-function instrument(file: string, stages: ReadonlyArray<readonly [string, string]>): void {
+function instrument(file: string, stages: ReadonlyArray<readonly [string, string, 'before' | 'around'?]>): void {
   const path = join(packageRoot, file);
   let source = readFileSync(path, 'utf8');
-  for (const [statement, stage] of stages) {
+  for (const [statement, stage, placement] of stages) {
     assert.equal(source.split(statement).length, 2, `${file}: ${stage} must occur exactly once`);
     source = source.replace(statement,
-      `workbenchPolicyStage('${stage}:before');\n${statement}\nworkbenchPolicyStage('${stage}:after');`);
+      placement === 'before'
+        ? `workbenchPolicyStage('${stage}:before');\n${statement}`
+        : `workbenchPolicyStage('${stage}:before');\n${statement}\nworkbenchPolicyStage('${stage}:after');`);
   }
   writeFileSync(path, marker + source);
 }
@@ -52,5 +54,16 @@ instrument('dist/src/finish-line/index.js', [
   ['const registration = editRegistrations.get(exec);', 'finish-execute-entry'],
   ['const prepared = pending.prepared;', 'finish-validation-ready'],
   ['let operationId = pending.operationId;', 'finish-validation-probe'],
+  ['if (!await ensureRunnerCapability(ledger, prepared.identity, exec.signal, operation.command)) {',
+    'finish-capability'],
+  ['const probe = await client.run({', 'finish-run-probe', 'before'],
+  ['const runtime = await prepareValidationRuntime(exec, {', 'finish-runtime', 'before'],
+]);
+instrument('dist/src/finish-line/nils-client.js', [
+  ['executionLease = authenticatedExecution.acquire(operation.controller.signal);', 'nils-acquire'],
+  ['const argv = await resolveSubprocessArgv(ctx, agentHook.argv([\'finish-line\', action, \'--format\', \'json\']), executionSignal);',
+    'nils-argv'],
+  ['operation.handle = executionLease.spawn({', 'nils-spawn', 'before'],
+  ['const first = await Promise.race([', 'nils-wait', 'before'],
 ]);
 console.log('Installed disposable profile has stage-only diagnostic instrumentation');
