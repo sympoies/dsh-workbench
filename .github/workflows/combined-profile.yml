@@ -190,6 +190,26 @@ jobs:
           test "$(npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm --version)" = "$WORKBENCH_PNPM"
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --strict-peer-dependencies --ignore-scripts
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
+      - name: Inventory path-free production dependency licenses
+        working-directory: dsh-workbench
+        env:
+          WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
+        run: |
+          cd "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm licenses list --prod --json \
+            > "$VERIFICATION_ROOT/pnpm-production-licenses.json"
+          cd "$GITHUB_WORKSPACE/dsh-workbench"
+          node scripts/license-inventory.ts "$VERIFICATION_ROOT/pnpm-production-licenses.json" \
+            > "$VERIFICATION_ROOT/production-license-inventory.json"
+          bash scripts/check-publication.sh --artifact "$VERIFICATION_ROOT/production-license-inventory.json"
+          {
+            printf '### Production dependency licenses (%s %s)\n\n' \
+              "${{ matrix.platform }}" "${{ matrix.arch }}"
+            printf 'This path-free report is generated from the exact installed candidate profile.\n\n'
+            printf '```json\n'
+            cat "$VERIFICATION_ROOT/production-license-inventory.json"
+            printf '```\n'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Prepare exact profile toolchain and packaged runtime-kit
         working-directory: dsh-runtime-kit
         env:

@@ -175,6 +175,9 @@ expectedWebArtifactSha256 = webArtifact.artifactSha256): void {
     createdProfile = { dev: created.dev, ino: created.ino };
     mkdirSync(join(profile, 'artifacts'));
     mkdirSync(join(profile, 'patches'));
+    writeFileSync(join(profile, 'LICENSE'), readFileSync(join(root, 'LICENSE')), { flag: 'wx' });
+    writeFileSync(join(profile, 'THIRD_PARTY_NOTICES.md'),
+      readFileSync(join(root, 'THIRD_PARTY_NOTICES.md')), { flag: 'wx' });
     for (const [name, entry] of sorted) {
       writeFileSync(join(profile, 'artifacts', artifactFile(name, entry.version)),
         verifiedBytes.get(name)!, { flag: 'wx' });
