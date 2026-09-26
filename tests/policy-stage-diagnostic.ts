@@ -19,10 +19,16 @@ function instrument(file: string, stages: ReadonlyArray<readonly [string, string
   let source = readFileSync(path, 'utf8');
   for (const [statement, stage, placement] of stages) {
     assert.equal(source.split(statement).length, 2, `${file}: ${stage} must occur exactly once`);
+    const before = stage.startsWith('nils-')
+      ? `workbenchPolicyStage('${stage}:' + action + ':before');`
+      : `workbenchPolicyStage('${stage}:before');`;
+    const after = stage.startsWith('nils-')
+      ? `workbenchPolicyStage('${stage}:' + action + ':after');`
+      : `workbenchPolicyStage('${stage}:after');`;
     source = source.replace(statement,
       placement === 'before'
-        ? `workbenchPolicyStage('${stage}:before');\n${statement}`
-        : `workbenchPolicyStage('${stage}:before');\n${statement}\nworkbenchPolicyStage('${stage}:after');`);
+        ? `${before}\n${statement}`
+        : `${before}\n${statement}\n${after}`);
   }
   writeFileSync(path, marker + source);
 }
@@ -64,6 +70,7 @@ instrument('dist/src/finish-line/nils-client.js', [
   ['const argv = await resolveSubprocessArgv(ctx, agentHook.argv([\'finish-line\', action, \'--format\', \'json\']), executionSignal);',
     'nils-argv'],
   ['operation.handle = executionLease.spawn({', 'nils-spawn', 'before'],
+  ['const handle = operation.handle;', 'nils-spawn-after', 'before'],
   ['const first = await Promise.race([', 'nils-wait', 'before'],
 ]);
 console.log('Installed disposable profile has stage-only diagnostic instrumentation');
