@@ -473,11 +473,20 @@ async function main(): Promise<void> {
   try {
     const packed = command('pnpm', ['pack', '--pack-destination', fixture], join(repo, 'web'));
     const archive = resolve(fixture, packed.split('\n').at(-1)!);
+    mkdirSync(join(profile, 'patches'), { recursive: true });
     writeFileSync(join(profile, 'package.json'), JSON.stringify({
       name: 'dsh-workbench-web-browser-acceptance', private: true, type: 'module',
-      dependencies: { '@sympoies/dsh-workbench-web': `file:${relative(profile, archive)}` },
-      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } },
+      dependencies: {
+        '@sympoies/dsh-workbench-web': `file:${relative(profile, archive)}`,
+        [contract.components.tui.package.name]: contract.components.tui.package.version,
+      },
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app',
+        contract.components.tui.package.name] } },
     }, null, 2));
+    writeFileSync(join(profile, 'pnpm-workspace.yaml'),
+      command(process.execPath, [join(repo, 'scripts/tui-compat.mjs')], repo));
+    copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path),
+      join(profile, 'patches/tui-rename.patch'));
     writeFileSync(join(profile, 'cordis.patch.yml'),
       "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n");
     const userConfig = join(fixture, 'user.npmrc');

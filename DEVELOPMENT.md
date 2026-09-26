@@ -42,9 +42,10 @@ exact contract version:
 pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chromium
 ```
 
-The script builds and packs the Web plugin, installs Web and patched TUI
-profiles in a disposable DSH home, and runs four sessions against authenticated
-local mock LLM servers. Through a native pseudoterminal provided by the pinned
+The script builds and packs the Web plugin, installs a Web profile containing
+the patched TUI bundle and a separate patched TUI profile in a disposable DSH
+home, and runs four sessions against authenticated local mock LLM servers.
+Through a native pseudoterminal provided by the pinned
 development-only `node-pty` package, it creates and renames a TUI session,
 stops TUI, then checks that session's exact ID, title, prompt, and answer in
 native Web before and after a

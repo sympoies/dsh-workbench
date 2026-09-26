@@ -101,6 +101,12 @@ test('reviewed TUI profile lock installs without resolving a new graph', { timeo
     assert.equal(frozen.status, 0, errorCode(frozen));
     const tuiRoot = join(stage, 'node_modules', contract.components.tui.package.name);
     const patchedPlugin = readFileSync(join(tuiRoot, 'lib/types/dsh-adapter/plugin.js'), 'utf8');
+    const headlessHostGuard = patchedPlugin.indexOf("if (hostMode === 'headless-host') {");
+    const headlessHostReturn = patchedPlugin.indexOf('return;', headlessHostGuard);
+    const approvalHandler = patchedPlugin.indexOf("ctx.on('approval/request'");
+    assert.ok(headlessHostGuard >= 0 && headlessHostReturn > headlessHostGuard
+      && approvalHandler > headlessHostReturn,
+    'headless Web hosts must return before registering the global TUI approval handler');
     assert.match(patchedPlugin,
       /ctx\.on\('approval\/request', \(req, next\) => approvalStore\.park\(req\)\.catch\(\(\) => next\(\)\), \{ global: true, prepend: true \}\);/,
       'installed TUI approval handler must receive agent-scoped dispatch before other global listeners');
