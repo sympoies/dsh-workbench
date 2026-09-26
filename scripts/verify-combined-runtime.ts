@@ -22,6 +22,7 @@ assert.equal(manifest.name, 'dsh-profile-workbench');
 assert.deepEqual(manifest.dsh.profile.bundles,
   ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-harness-tui/dsh-tui']);
 const root = join(dirname(runtimeRoot), 'workbench-verification');
+const workspace = join(root, 'workspace');
 const configHome = join(root, 'config');
 const stateHome = join(root, 'state');
 const docsHome = join(root, 'agent-docs');
@@ -30,7 +31,7 @@ const hookConfig = join(configHome, 'agent-hook', 'config.toml');
 const wrapper = join(root, 'dsh-wrapper.mjs');
 const wrapperFailure = join(root, 'dsh-wrapper-failure.log');
 const dshCli = join(dshSource, 'apps', 'cli', 'lib', 'bin.js');
-for (const directory of [runtimeRoot, root, configHome, stateHome, docsHome,
+for (const directory of [runtimeRoot, root, workspace, configHome, stateHome, docsHome,
   join(configHome, 'agent-hook'), join(root, 'codex'), join(root, 'claude'),
   join(root, 'private-skills')]) {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -137,7 +138,7 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
   const host = spawn(process.execPath, [launcher, '--runtime-root', runtimeRoot, '--',
     process.execPath, dshCli, '--profile', 'workbench', '--host', '127.0.0.1',
     '--no-open', '--port', '0'], {
-    cwd: dshSource, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: workspace, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...environment, DEEPSEEK_BASE_URL: `${mock.baseURL}/v1`,
       DEEPSEEK_API_KEY: apiKey, DSH_TELEMETRY_DISABLED: '1' },
   });
@@ -189,6 +190,17 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
     await continueButton.waitFor({ timeout: 5_000 }).catch(() => {});
     if (await continueButton.isVisible()) await continueButton.click();
     await page.getByRole('button', { name: 'New Session' }).first().click();
+    const chooseWorkspace = page.getByRole('textbox', { name: 'Choose workspace' });
+    if (await chooseWorkspace.isVisible()) {
+      await chooseWorkspace.click();
+      const dialog = page.getByRole('dialog', { name: 'Select Workspace Directory' });
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog.getByRole('button', { name: 'Edit path' }).click();
+      const pathInput = dialog.getByRole('textbox', { name: 'Edit path' });
+      await pathInput.fill(workspace);
+      await pathInput.press('Enter');
+      await dialog.getByRole('button', { name: 'Open', exact: true }).click();
+    }
     const editor = page.getByRole('textbox',
       { name: 'Describe what you want to build, / commands, @ files or sessions' });
     try {
