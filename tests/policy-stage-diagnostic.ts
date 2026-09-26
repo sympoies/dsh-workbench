@@ -40,6 +40,13 @@ instrument('dist/src/policy/index.js', [
   ['acceptanceReservation = await acceptance.admit(exec, correlation.context);', 'acceptance'],
   ['const finishReservation = await finishLine.begin(exec, correlation.context);', 'finish-begin'],
   ['const routed = await finishLine.execute(exec);', 'policy-execute'],
+  ['if (!await ctx.sessions.flush(session)) {', 'validation-session-flush', 'before'],
+  ['const shell = (ctx.get(\'shell\'));', 'validation-session-flush-complete', 'before'],
+  ['const escalation = normalizeSandboxEscalationRequest({', 'validation-escalation', 'before'],
+  ['const approvedMode = await approveEscalation({', 'validation-approval', 'before'],
+  ['policy = { ...policy, mode: approvedMode };', 'validation-approval-returned', 'before'],
+  ['const headerCwd = session.header.cwd;', 'validation-header-cwd', 'before'],
+  ['const spec = resolveFinishLineShellSpec(shell, operation, {', 'validation-shell-spec', 'before'],
 ]);
 instrument('dist/src/workspace-lease/index.js', [
   ['const downstream = await next();', 'lease-downstream'],
