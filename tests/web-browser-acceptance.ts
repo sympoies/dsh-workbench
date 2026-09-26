@@ -7,11 +7,11 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
 import headless from '@xterm/headless';
+import * as pty from 'node-pty';
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 import { workbenchIdentity } from '../web/src/identity.ts';
 import { readEvents } from './session-events.ts';
-import { stopTerminal } from './terminal-process.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
@@ -42,10 +42,6 @@ function command(binary: string, args: string[], cwd: string,
   return result.stdout.trim();
 }
 
-function quote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 function sessionLogs(root: string): string[] {
   const found: string[] = [];
   const pending = [root];
@@ -70,12 +66,14 @@ function logDigest(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-async function waitForTui(child: ChildProcess, condition: () => boolean, label: string): Promise<void> {
+type TuiProcess = ReturnType<typeof startTui>;
+
+async function waitForTui(tui: TuiProcess, condition: () => boolean, label: string): Promise<void> {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     if (condition()) return;
-    if (child.exitCode !== null || child.signalCode !== null) {
-      throw new Error(`TUI exited before ${label}: ${child.exitCode ?? child.signalCode}`);
+    if (tui.exitCode !== null) {
+      throw new Error(`TUI exited before ${label}: ${tui.exitCode}`);
     }
     await new Promise(resolveWait => setTimeout(resolveWait, 100));
   }
@@ -89,19 +87,47 @@ function visibleScreen(screen: InstanceType<typeof headless.Terminal>): string {
 
 function startTui(dsh: string, fixture: string, home: string, agents: string, workspace: string,
   baseURL: string, apiKey: string, args: string[] = []) {
-  const child = spawn('script', ['-q', '-e', '-c',
-    `${quote(dsh)} --profile dsh-tui ${args.map(quote).join(' ')}`, '/dev/null'], {
-    cwd: workspace, detached: true,
+  const child = pty.spawn(dsh, ['--profile', 'dsh-tui', ...args], {
+    name: 'xterm-256color', cols: 80, rows: 24, cwd: workspace,
     env: { PATH: `${dirname(dsh)}:${process.env.PATH ?? ''}`, HOME: home, DSH_HOME: home,
       DSH_AGENTS_HOME: agents, XDG_CONFIG_HOME: join(fixture, 'config'),
       LANG: 'en_US.UTF-8', TERM: 'xterm-256color',
       DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_BASE_URL: `${baseURL}/v1`, DEEPSEEK_API_KEY: apiKey },
-    stdio: ['pipe', 'pipe', 'pipe'],
   });
   const screen = new headless.Terminal({ cols: 80, rows: 24, scrollback: 1_000, allowProposedApi: true });
-  child.stdout.on('data', chunk => { screen.write(chunk); });
-  child.stderr.resume();
-  return { child, screen };
+  child.onData(chunk => { screen.write(chunk); });
+  let exitCode: number | null = null;
+  const exitListeners = new Set<(code: number) => void>();
+  child.onExit(result => {
+    exitCode = result.signal ? 128 + result.signal : result.exitCode;
+    for (const listener of exitListeners) listener(exitCode);
+  });
+  const waitForExit = (milliseconds: number) => new Promise<number>((resolveExit, reject) => {
+    if (exitCode !== null) { resolveExit(exitCode); return; }
+    const timer = setTimeout(() => {
+      exitListeners.delete(onExit);
+      reject(new Error('TUI did not exit within the expected time'));
+    }, milliseconds);
+    const onExit = (code: number) => { clearTimeout(timer); exitListeners.delete(onExit); resolveExit(code); };
+    exitListeners.add(onExit);
+  });
+  return {
+    screen,
+    get exitCode() { return exitCode; },
+    write: (data: string) => child.write(data),
+    waitForExit,
+    stop: async () => {
+      if (exitCode !== null) return;
+      child.write('\x03\x03');
+      try { await waitForExit(5_000); return; } catch { /* escalate below */ }
+      if (exitCode !== null) return;
+      child.kill('SIGTERM');
+      try { await waitForExit(5_000); return; } catch { /* escalate below */ }
+      if (exitCode !== null) return;
+      child.kill('SIGKILL');
+      await waitForExit(5_000);
+    },
+  };
 }
 
 async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
@@ -128,28 +154,28 @@ async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
   const logRoot = join(home, 'sessions');
   mkdirSync(logRoot, { recursive: true });
   const previous = new Set(sessionLogs(logRoot));
-  const { child, screen } = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey);
+  const tui = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey);
   try {
-    await waitForTui(child, () => visibleScreen(screen).includes('Explore the uncharted!'), 'startup');
-    child.stdin?.write(`${tuiPrompt}\r`);
+    await waitForTui(tui, () => visibleScreen(tui.screen).includes('Explore the uncharted!'), 'startup');
+    tui.write(`${tuiPrompt}\r`);
     let logPath: string | undefined;
-    await waitForTui(child, () => {
+    await waitForTui(tui, () => {
       const added = sessionLogs(logRoot).filter(path => !previous.has(path));
       if (added.length !== 1) return false;
       logPath = added[0];
       return readEvents(logPath).some(event => event.type === 'turn/end');
     }, 'settled first turn');
-    child.stdin?.write(`/rename ${tuiTitle}\r`);
-    await waitForTui(child, () => readEvents(logPath!).some(event =>
+    tui.write(`/rename ${tuiTitle}\r`);
+    await waitForTui(tui, () => readEvents(logPath!).some(event =>
       event.type === 'session/title' && event.data?.title === tuiTitle), 'manual title');
-    await stopTerminal(child);
-    assert.equal(child.exitCode, 0, 'TUI did not exit cleanly before Web handoff');
+    await tui.stop();
+    assert.equal(tui.exitCode, 0, 'TUI did not exit cleanly before Web handoff');
     const events = readEvents(logPath!, { strict: true });
     assert.deepEqual(events.filter(event => event.type === 'session/title').at(-1)?.data,
       { title: tuiTitle, messageSeqs: [], source: { kind: 'user' } });
     return basename(dirname(logPath!));
   } finally {
-    const cleanup = await Promise.allSettled([stopTerminal(child), mock.close()]);
+    const cleanup = await Promise.allSettled([tui.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI seed cleanup failed');
   }
 }
@@ -163,22 +189,22 @@ async function continueWebSessionInTui(dsh: string, fixture: string, home: strin
   const apiKey = randomBytes(24).toString('hex');
   const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
     apiKey, successText: continuationAnswer });
-  const { child, screen } = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey,
+  const tui = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey,
     ['--resume', id]);
   try {
-    await waitForTui(child, () => visibleScreen(screen).includes(answer), 'resumed Web history');
-    child.stdin?.write(`${continuationPrompt}\r`);
-    await waitForTui(child, () => readEvents(logPath).filter(event => event.type === 'turn/end').length
+    await waitForTui(tui, () => visibleScreen(tui.screen).includes(answer), 'resumed Web history');
+    tui.write(`${continuationPrompt}\r`);
+    await waitForTui(tui, () => readEvents(logPath).filter(event => event.type === 'turn/end').length
       === turnsBefore + 1, 'completed TUI continuation');
-    await stopTerminal(child);
-    assert.equal(child.exitCode, 0, 'TUI did not exit cleanly after Web handoff');
+    await tui.stop();
+    assert.equal(tui.exitCode, 0, 'TUI did not exit cleanly after Web handoff');
     assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [],
       'Exact-ID TUI continuation created another session');
     const events = readEvents(logPath, { strict: true });
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(continuationPrompt));
     assert.ok(JSON.stringify(events.filter(event => event.type === 'assistant/message')).includes(continuationAnswer));
   } finally {
-    const cleanup = await Promise.allSettled([stopTerminal(child), mock.close()]);
+    const cleanup = await Promise.allSettled([tui.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI continuation cleanup failed');
   }
 }
@@ -187,18 +213,14 @@ async function checkWebWriterContention(dsh: string, fixture: string, home: stri
   workspace: string, id: string, baseURL: string, apiKey: string): Promise<void> {
   const logPath = sessionLog(join(home, 'sessions'), id);
   const before = logDigest(logPath);
-  const { child } = startTui(dsh, fixture, home, agents, workspace, baseURL, apiKey,
+  const tui = startTui(dsh, fixture, home, agents, workspace, baseURL, apiKey,
     ['--resume', id]);
   try {
-    const exit = await new Promise<number | null>((resolveExit, reject) => {
-      if (child.exitCode !== null) { resolveExit(child.exitCode); return; }
-      const timer = setTimeout(() => reject(new Error('TUI did not reject the Web-held writer')), 20_000);
-      child.once('exit', code => { clearTimeout(timer); resolveExit(code); });
-    });
-    assert.ok(exit !== null && exit !== 0, 'TUI did not refuse the Web-held writer with an error');
+    const exit = await tui.waitForExit(20_000);
+    assert.notEqual(exit, 0, 'TUI did not refuse the Web-held writer with an error');
     assert.equal(logDigest(logPath), before, 'Rejected TUI access changed the Web-held archive');
   } finally {
-    await stopTerminal(child);
+    await tui.stop();
   }
 }
 

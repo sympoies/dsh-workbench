@@ -27,7 +27,7 @@ For the Web plugin, run `pnpm web:metadata:check` and `pnpm web:build` before
 ensures the Web package version, DSH catalog, and generated Client identity
 match the contract. The package build runs this check before bundling. See the
 [Web port notes](docs/web-port.md) for the current acceptance boundary.
-On Linux with util-linux `script` and `zstdcat`, run the native browser
+On Linux or macOS with `zstdcat`, run the native browser
 acceptance with a Chromium executable and an installed DSH executable at the
 exact contract version:
 
@@ -37,8 +37,10 @@ pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chrom
 
 The script builds and packs the Web plugin, installs Web and patched TUI
 profiles in a disposable DSH home, and runs four sessions against authenticated
-local mock LLM servers. It creates and renames a TUI session, stops TUI, then
-checks its exact ID, title, prompt, and answer in native Web before and after a
+local mock LLM servers. Through a native pseudoterminal provided by the pinned
+development-only `node-pty` package, it creates and renames a TUI session,
+stops TUI, then checks that session's exact ID, title, prompt, and answer in
+native Web before and after a
 Web Host restart. While Web still holds a session writer, it checks that TUI
 refuses an exact-ID resume without changing the archive. After Web stops, TUI
 resumes that Web session, completes another turn, and Web reads the continuation
@@ -48,6 +50,9 @@ restart recovery. The fixture, profiles, and mock endpoints are removed
 afterward. Package installation is isolated from caller credentials, and
 Chromium sandboxing remains enabled. This does not establish the full
 cross-interface handoff, image composition, or release acceptance gates.
+The combined-profile CI installs the browser revision selected by the pinned
+`playwright-core` package and runs this acceptance on both first-release
+platforms after the exact DSH build.
 
 Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`

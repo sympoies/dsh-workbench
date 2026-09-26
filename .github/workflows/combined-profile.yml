@@ -220,3 +220,24 @@ jobs:
       - name: Exercise TUI in a real terminal
         working-directory: dsh-workbench
         run: pnpm test:tui:terminal --dsh-bin "$VERIFICATION_ROOT/dsh-bin"
+      - name: Install exact browser for native Web acceptance
+        working-directory: dsh-workbench
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            pnpm exec playwright-core install --with-deps chromium
+          else
+            pnpm exec playwright-core install chromium
+          fi
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const { chromium } = require('playwright-core');
+          const binary = chromium.executablePath();
+          fs.accessSync(binary, fs.constants.X_OK);
+          fs.appendFileSync(process.env.GITHUB_ENV, `WORKBENCH_BROWSER_BIN=${binary}\n`);
+          NODE
+      - name: Exercise native Web and TUI handoff in a browser
+        working-directory: dsh-workbench
+        run: |
+          pnpm test:web:browser \
+            --dsh-bin "$VERIFICATION_ROOT/dsh-bin" \
+            --browser-bin "$WORKBENCH_BROWSER_BIN"
