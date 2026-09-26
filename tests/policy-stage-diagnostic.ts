@@ -90,6 +90,12 @@ let nilsClient = readFileSync(nilsClientPath, 'utf8');
 const spawnCall = nilsClient.match(/operation\.handle = executionLease\.spawn\(\{[\s\S]*?\n\s{16}\}\);/gu) ?? [];
 assert.equal(spawnCall.length, 1, 'finish-line operation spawn must occur exactly once');
 const instrumentedNilsClient = nilsClient.replace(spawnCall[0], `try {
+  const cwdKind = typeof request.cwd !== 'string' ? 'missing'
+    : request.cwd.startsWith('/') ? 'absolute' : 'other';
+  const argvKind = Array.isArray(argv) && typeof argv[0] === 'string' && argv[0].length > 0
+    ? 'valid' : 'invalid';
+  workbenchPolicyStage('nils-spawn-spec:' + action + ':' + cwdKind + ':' + argvKind
+    + ':' + (executionSignal.aborted ? 'aborted' : 'live'));
 ${spawnCall[0]}
   workbenchPolicyStage('nils-spawn-created:' + action);
 } catch (error) {
@@ -98,7 +104,17 @@ ${spawnCall[0]}
   const rawCode = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined;
   const errorCode = typeof rawCode === 'string' && /^[A-Z0-9_-]{1,40}$/u.test(rawCode)
     ? rawCode : 'none';
-  workbenchPolicyStage('nils-spawn-threw:' + action + ':' + errorName + ':' + errorCode);
+  const message = error instanceof Error ? error.message : '';
+  const errorCategory = /^aborted before spawn:/u.test(message) ? 'pre-aborted'
+    : /^invalid argv:/u.test(message) ? 'invalid-argv'
+      : /^subprocess graceMs/u.test(message) ? 'invalid-grace'
+        : /subprocess descriptor execution parent is not trusted/u.test(message) ? 'descriptor-parent'
+          : /subprocess executable descriptor changed while reading/u.test(message) ? 'descriptor-read'
+            : /cwd|working directory|directory/u.test(message) ? 'working-directory'
+              : /environment|stdio|stdin|stdout|stderr/u.test(message) ? 'environment-or-stdio'
+                : /descriptor|executable|subprocess|spawn/u.test(message) ? 'subprocess' : 'other';
+  workbenchPolicyStage('nils-spawn-threw:' + action + ':' + errorName + ':' + errorCode
+    + ':' + errorCategory);
   throw error;
 }`);
 assert.equal(instrumentedNilsClient.split('function workbenchPolicyStage(stage)').length, 2,
