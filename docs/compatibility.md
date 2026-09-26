@@ -75,9 +75,13 @@ candidate status or alter any of the three component pins.
 
 Workbench `v0.1.0-rc.5` pins runtime-kit's merged patched-peer commit and
 stages the combined profile at `$DSH_HOME/profiles/workbench` from the owner
-receipt. The Linux x64 graph has passed strict frozen installation,
+receipt. Linux x64 and macOS arm64 have passed strict frozen installation,
 digest-bound runtime-kit setup, healthy doctor, and a composed DSH/TUI config
-smoke. Both-platform CI and full launch checks remain candidate acceptance.
+smoke. The same two-platform CI separately exercised the pinned TUI profile
+in a real PTY: approval allow/reject, tool results, 72-turn history,
+exact-ID resume, and rename survived exit and restart. This proves TUI
+behavior on both targets but does not yet exercise a real TTY on the combined
+`workbench` profile or complete the Web/TUI handoff gate.
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the

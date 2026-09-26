@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,9 +7,9 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
 import headless from '@xterm/headless';
+import * as pty from 'node-pty';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 import { readEvents } from './session-events.ts';
-import { stopTerminal } from './terminal-process.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const { Terminal } = headless;
@@ -86,15 +86,16 @@ async function waitForTitle(path: string, title: string): Promise<void> {
 }
 
 function startTerminal(binary: string, fixture: string, baseURL: string, apiKey: string, appArgs: string[] = []): {
-  child: ChildProcess;
+  write: (data: string) => void;
+  stop: () => Promise<void>;
+  readonly exitCode: number | null;
   waitFor: (marker: string | RegExp) => Promise<void>;
   waitForAfter: (first: string, second: string) => Promise<void>;
 } {
   const home = join(fixture, 'home');
-  const child = spawn('script', ['-q', '-e', '-c',
-    `${quote(binary)} --profile dsh-tui ${appArgs.map(quote).join(' ')}`, '/dev/null'], {
+  const child = pty.spawn(binary, ['--profile', 'dsh-tui', ...appArgs], {
+    name: 'xterm-256color', cols: 80, rows: 24,
     cwd: join(fixture, 'workspace'),
-    detached: true,
     env: {
       PATH: `${dirname(binary)}:${process.env.PATH ?? ''}`,
       HOME: home,
@@ -107,25 +108,61 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       LANG: 'en_US.UTF-8',
       TERM: 'xterm-256color',
     },
-    stdio: ['pipe', 'pipe', 'pipe'],
   });
   const screen = new Terminal({ cols: 80, rows: 24, scrollback: 1_000, allowProposedApi: true });
   const listeners = new Set<() => void>();
-  child.stdout.on('data', chunk => {
+  const exitListeners = new Set<() => void>();
+  let exitCode: number | null = null;
+  let exitSignal: number | undefined;
+  let startupOutput = '';
+  child.onData(chunk => {
+    startupOutput = (startupOutput + chunk).slice(-8_192);
     screen.write(chunk, () => { for (const listener of listeners) listener(); });
   });
-  child.stderr.resume();
+  child.onExit(result => {
+    exitCode = result.exitCode;
+    exitSignal = result.signal;
+    for (const listener of exitListeners) listener();
+  });
+  const startupFailure = () => {
+    const categories = [
+      ['pty', /inappropriate ioctl|not a tty|tcgetattr|could not open.*pty/i],
+      ['module-load', /cannot find module|ERR_MODULE_NOT_FOUND|module not found/i],
+      ['profile-load', /profile.*(not found|invalid|failed)|failed.*profile/i],
+      ['missing-command', /command not found|no such file or directory/i],
+    ] as const;
+    const category = categories.find(([, pattern]) => pattern.test(startupOutput))?.[0] ?? 'unclassified';
+    return `TUI exited with ${exitCode ?? exitSignal}; startup category ${category}`;
+  };
   const visibleScreen = () => Array.from({ length: screen.rows }, (_, row) =>
     screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '').join('\n');
   return {
-    child,
+    write: data => child.write(data),
+    get exitCode() { return exitCode; },
+    stop: async () => {
+      if (exitCode !== null) return;
+      const waitForExit = (milliseconds: number) => new Promise<boolean>(resolveWait => {
+        const timer = setTimeout(() => { exitListeners.delete(onExit); resolveWait(false); }, milliseconds);
+        const onExit = () => { clearTimeout(timer); exitListeners.delete(onExit); resolveWait(true); };
+        exitListeners.add(onExit);
+        if (exitCode !== null) onExit();
+      });
+      child.write('\x03\x03');
+      if (await waitForExit(5_000)) return;
+      if (exitCode !== null) return;
+      child.kill('SIGTERM');
+      if (await waitForExit(5_000)) return;
+      if (exitCode !== null) return;
+      child.kill('SIGKILL');
+      if (!await waitForExit(5_000)) throw new Error('TUI PTY did not stop within 15 seconds');
+    },
     waitForAfter: (first, second) => new Promise<void>((resolveWait, reject) => {
-      if (child.exitCode !== null || child.signalCode !== null) {
-        reject(new Error(`TUI exited before ${second}: ${child.exitCode ?? child.signalCode}`));
+      if (exitCode !== null) {
+        reject(new Error(`TUI exited before ${second}: ${startupFailure()}`));
         return;
       }
       const timer = setTimeout(() => finish(new Error(`TUI did not show ${second} after ${first}`)), 60_000);
-      const onExit = () => finish(new Error(`TUI exited before ${second}: ${child.exitCode ?? child.signalCode}`));
+      const onExit = () => finish(new Error(`TUI exited before ${second}: ${startupFailure()}`));
       const check = () => {
         const frame = visibleScreen();
         if (frame.lastIndexOf(second) > frame.lastIndexOf(first) && frame.includes(first)) finish();
@@ -133,20 +170,20 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       function finish(error?: Error) {
         clearTimeout(timer);
         listeners.delete(check);
-        child.off('exit', onExit);
+        exitListeners.delete(onExit);
         if (error) reject(error); else resolveWait();
       }
       listeners.add(check);
-      child.once('exit', onExit);
+      exitListeners.add(onExit);
       check();
     }),
     waitFor: marker => new Promise<void>((resolveWait, reject) => {
-      if (child.exitCode !== null || child.signalCode !== null) {
-        reject(new Error(`TUI exited before ${marker}: ${child.exitCode ?? child.signalCode}`));
+      if (exitCode !== null) {
+        reject(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
         return;
       }
       const timer = setTimeout(() => finish(new Error(`TUI did not show ${marker}`)), 60_000);
-      const onExit = () => finish(new Error(`TUI exited before ${marker}: ${child.exitCode ?? child.signalCode}`));
+      const onExit = () => finish(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
       const check = () => {
         const frame = visibleScreen();
         if (typeof marker === 'string' ? frame.includes(marker) : marker.test(frame)) finish();
@@ -154,11 +191,11 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       function finish(error?: Error) {
         clearTimeout(timer);
         listeners.delete(check);
-        child.off('exit', onExit);
+        exitListeners.delete(onExit);
         if (error) reject(error); else resolveWait();
       }
       listeners.add(check);
-      child.once('exit', onExit);
+      exitListeners.add(onExit);
       check();
     }),
   };
@@ -177,26 +214,26 @@ async function runSessionScenario(binary: string, fixture: string): Promise<void
   try {
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey);
     await terminal.waitFor('Explore the uncharted!');
-    terminal.child.stdin?.write(`${prompts[0]}\r`);
+    terminal.write(`${prompts[0]}\r`);
     const logPath = await waitForTurn(logRoot, previous);
     for (let index = 1; index < prompts.length; index += 1) {
-      terminal.child.stdin?.write(`${prompts[index]}\r`);
+      terminal.write(`${prompts[index]}\r`);
       await waitForTurnCount(logPath, index + 1);
     }
     await waitForTitle(logPath, answer);
-    await stopTerminal(terminal.child);
-    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly before resume');
+    await terminal.stop();
+    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly before resume');
     const sessionId = basename(dirname(logPath));
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, ['--resume', sessionId]);
     await terminal.waitFor(answer);
-    terminal.child.stdin?.write('TUI_SESSION_RESUMED_TURN\r');
+    terminal.write('TUI_SESSION_RESUMED_TURN\r');
     await waitForTurnCount(logPath, prompts.length + 1);
     await terminal.waitForAfter('TUI_SESSION_RESUMED_TURN', answer);
-    terminal.child.stdin?.write('/resume\r');
+    terminal.write('/resume\r');
     await terminal.waitFor(new RegExp(`\\b${previous.size + 1} total\\b`));
     await terminal.waitFor(new RegExp(`Sessions[\\s\\S]*${answer}`));
-    await stopTerminal(terminal.child);
-    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly after resume');
+    await terminal.stop();
+    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after resume');
     assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [logPath],
       'Exact-ID resume created another session');
     const events = readEvents(logPath, { strict: true });
@@ -211,7 +248,7 @@ async function runSessionScenario(binary: string, fixture: string): Promise<void
     assert.equal(events.filter(event => event.type === 'session/title').at(-1)?.data?.title, answer);
     assert.ok(mock.requests.filter(request => request.behavior === 'success').length >= prompts.length + 1);
   } finally {
-    const cleanup = await Promise.allSettled([stopTerminal(terminal?.child), mock.close()]);
+    const cleanup = await Promise.allSettled([terminal?.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI session cleanup failed');
   }
 }
@@ -227,20 +264,20 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
   try {
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey);
     await terminal.waitFor('Explore the uncharted!');
-    terminal.child.stdin?.write('TUI_RENAME_FIRST\r');
+    terminal.write('TUI_RENAME_FIRST\r');
     const logPath = await waitForTurn(logRoot, previous);
-    terminal.child.stdin?.write(`/rename ${renamed}\r`);
+    terminal.write(`/rename ${renamed}\r`);
     await waitForTitle(logPath, renamed);
-    await stopTerminal(terminal.child);
-    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly after rename');
+    await terminal.stop();
+    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after rename');
     const sessionId = basename(dirname(logPath));
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, ['--resume', sessionId]);
     await terminal.waitFor(answer);
-    terminal.child.stdin?.write('TUI_RENAME_RESUMED\r');
+    terminal.write('TUI_RENAME_RESUMED\r');
     await waitForTurnCount(logPath, 2);
     await terminal.waitForAfter('TUI_RENAME_RESUMED', answer);
-    await stopTerminal(terminal.child);
-    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly after renamed resume');
+    await terminal.stop();
+    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after renamed resume');
     const offlineTitle = 'WB_OFFLINE_RENAME';
     const offlineWriter = pathToFileURL(join(fixture, 'home', 'profiles', 'dsh-tui', 'node_modules',
       contract.components.tui.package.name, 'lib/types/dsh-adapter/compat/sessionLog.js')).href;
@@ -252,11 +289,11 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
     });
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, ['--resume', sessionId]);
     await terminal.waitFor(answer);
-    terminal.child.stdin?.write('TUI_OFFLINE_RENAME_RESUMED\r');
+    terminal.write('TUI_OFFLINE_RENAME_RESUMED\r');
     await waitForTurnCount(logPath, 3);
     await terminal.waitForAfter('TUI_OFFLINE_RENAME_RESUMED', answer);
-    await stopTerminal(terminal.child);
-    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly after offline rename');
+    await terminal.stop();
+    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after offline rename');
     assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [logPath]);
     const events = readEvents(logPath, { strict: true });
     assert.equal(events.filter(event => event.type === 'turn/end').length, 3);
@@ -266,7 +303,7 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
       && event.data?.title === renamed
       && (event.data?.source as { kind?: string } | undefined)?.kind === 'user'));
   } finally {
-    const cleanup = await Promise.allSettled([stopTerminal(terminal?.child), mock.close()]);
+    const cleanup = await Promise.allSettled([terminal?.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI rename cleanup failed');
   }
 }
@@ -286,12 +323,12 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
   try {
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey);
     await terminal.waitFor('Explore the uncharted!');
-    terminal.child.stdin?.write(`Run the Bash command printf ${scenario.toolOutput} and report its output.\r`);
+    terminal.write(`Run the Bash command printf ${scenario.toolOutput} and report its output.\r`);
     await terminal.waitFor('Awaiting approval · bash');
-    terminal.child.stdin?.write(scenario.decision);
+    terminal.write(scenario.decision);
     const logPath = await waitForTurn(logRoot, previous);
-    await stopTerminal(terminal.child);
-    assert.equal(terminal.child.exitCode, 0, 'TUI did not exit cleanly');
+    await terminal.stop();
+    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly');
     const events = readEvents(logPath, { strict: true });
     const ended = events.find(event => event.type === 'turn/end');
     assert.equal((ended?.data?.reason as { kind?: string } | undefined)?.kind, 'completed');
@@ -314,17 +351,18 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     }
     assert.ok(mock.requests.some(request => request.behavior === 'tool_call_success'));
   } finally {
-    const cleanup = await Promise.allSettled([stopTerminal(terminal?.child), mock.close()]);
+    const cleanup = await Promise.allSettled([terminal?.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI acceptance cleanup failed');
   }
 }
 
 async function main(): Promise<void> {
-  if (process.platform !== 'linux') throw new Error('This real TTY acceptance currently requires Linux util-linux script');
+  if (process.platform !== 'linux' && process.platform !== 'darwin') {
+    throw new Error('This real TTY acceptance requires Linux or macOS');
+  }
   const dsh = binaryOption('--dsh-bin');
   assert.equal(command(dsh, ['--version'], repo), contract.components.dsh.package.version);
   assert.equal(command('pnpm', ['--version'], repo), contract.runtime.pnpm);
-  command('script', ['--version'], repo);
   command('zstdcat', ['--version'], repo);
   const fixture = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-'));
   try {

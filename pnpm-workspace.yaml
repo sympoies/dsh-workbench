@@ -2,6 +2,7 @@ packages:
   - web
 allowBuilds:
   esbuild: true
+  node-pty: false
 catalogs:
   dsh:
     '@deepseek-ai/dsh-client-ui-conversation': 0.1.7-rc.1
