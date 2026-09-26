@@ -289,15 +289,27 @@ async function stopHost(child: ChildProcess | undefined): Promise<void> {
 }
 
 async function openPage(browser: Browser, host: Awaited<ReturnType<typeof startHost>>): Promise<{ page: Page; errors: string[] }> {
+  const exchange = await fetch(host.url, { redirect: 'manual' });
+  assert.equal(exchange.status, 303, `DSH Web Host rejected its complete launch token: HTTP ${exchange.status}`);
+  assert.equal(exchange.headers.get('location'), '/', 'DSH Web Host did not redirect after launch token exchange');
+  assert.ok(exchange.headers.has('set-cookie'), 'DSH Web Host did not issue a browser cookie');
   const page = await browser.newPage({ locale: 'en-US' });
   const errors: string[] = [];
+  const responses: string[] = [];
   page.on('pageerror', error => errors.push(error.name));
+  page.on('response', response => {
+    const url = new URL(response.url());
+    if (url.origin === new URL(host.url).origin) {
+      responses.push(`${response.status()} ${url.pathname}${url.searchParams.has('token') ? '?token' : ''}`);
+    }
+  });
   let response;
   try {
     response = await page.goto(host.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   } catch (error) {
-    const status = await fetch(host.url).then(result => result.status, () => 'unavailable');
-    throw new Error(`Web navigation failed; HTTP ${status}; host diagnostic: ${host.diagnostic()}; browser: ${error instanceof Error ? error.message : String(error)}`);
+    const cookieCount = (await page.context().cookies(new URL(host.url).origin))
+      .filter(cookie => cookie.name.startsWith('dsh-auth-')).length;
+    throw new Error(`Web navigation failed; responses: ${responses.join(', ') || 'none'}; auth cookies: ${cookieCount}; host diagnostic: ${host.diagnostic()}; browser: ${error instanceof Error ? error.message : String(error)}`);
   }
   assert.equal(response?.status(), 200, 'DSH Web Host did not serve the UI');
   const continueButton = page.getByRole('button', { name: 'Continue' });
