@@ -113,6 +113,9 @@ jobs:
           test -x "$NILS_BIN_DIR/agent-hook"
           test -x "$NILS_BIN_DIR/agent-docs"
           echo "$NILS_BIN_DIR" >> "$GITHUB_PATH"
+      - name: Probe authoritative finish-line host
+        working-directory: dsh-workbench
+        run: node tests/finish-line-host-probe.ts
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: ${{ steps.pins.outputs.dsh_pnpm }}
