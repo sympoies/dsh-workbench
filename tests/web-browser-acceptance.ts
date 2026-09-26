@@ -291,6 +291,28 @@ async function stopHost(child: ChildProcess | undefined): Promise<void> {
   });
 }
 
+async function crashHost(child: ChildProcess): Promise<void> {
+  assert.equal(child.exitCode, null, 'Web Host exited before the crash-recovery check');
+  assert.equal(child.signalCode, null, 'Web Host already received a termination signal');
+  await new Promise<void>((resolveExit, reject) => {
+    const timer = setTimeout(() => {
+      child.off('exit', onExit);
+      reject(new Error('Web Host survived SIGKILL'));
+    }, 10_000);
+    const onExit = (_code: number | null, signal: NodeJS.Signals | null) => {
+      clearTimeout(timer);
+      if (signal === 'SIGKILL') resolveExit();
+      else reject(new Error(`Web Host exited through ${signal ?? 'another path'} instead of SIGKILL`));
+    };
+    child.once('exit', onExit);
+    if (!child.kill('SIGKILL')) {
+      clearTimeout(timer);
+      child.off('exit', onExit);
+      reject(new Error('Could not terminate the Web Host for crash recovery'));
+    }
+  });
+}
+
 async function openPage(browser: Browser, host: Awaited<ReturnType<typeof startHost>>): Promise<{ page: Page; errors: string[] }> {
   const exchange = await fetch(host.url, { redirect: 'manual' });
   assert.equal(exchange.status, 303, `DSH Web Host rejected its complete launch token: HTTP ${exchange.status}`);
@@ -560,9 +582,9 @@ async function main(): Promise<void> {
     await checkWebWriterContention(dsh, fixture, home, agents, workspace, firstId, mock.baseURL, apiKey);
     pageErrors += firstErrors.length;
     hostErrors += host.errorCount();
+    await crashHost(host.child);
     await browser.close();
     browser = undefined;
-    await stopHost(host.child);
     host = undefined;
 
     await continueWebSessionInTui(dsh, fixture, home, agents, workspace, firstId);
@@ -622,7 +644,7 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({ result: 'pass', sessions: 4, tuiToWebTitle: true,
       webToTuiContinuation: true, writerContention: true, toolApproval: true,
       toolRejection: true, runningTurn: true, errorResume: true,
-      toolResultsAfterRestart: true, restartResume: true,
+      toolResultsAfterRestart: true, restartResume: true, settledHostCrashHandoff: true,
       interactionRequests, errorRequests: mock.requests.length, pageErrors, hostErrors }));
   } finally {
     const cleanup = await Promise.allSettled([

@@ -50,8 +50,9 @@ stops TUI, then checks that session's exact ID, title, prompt, and answer in
 native Web before and after a
 Web Host restart. While Web still holds a session writer, including while a
 tool approval is pending, it checks that TUI refuses an exact-ID resume without
-rewriting the archive. After Web stops, TUI
-resumes that Web session, completes another turn, and Web reads the continuation
+rewriting the archive. The fixture then kills Web Host while it still owns a
+settled session. TUI resumes that Web session, completes another turn, and Web
+reads the continuation
 on restart. It also checks distinct Web IDs, isolated histories, a
 pending turn, tool approval and rejection, a provider error, and Web Host
 restart recovery. The fixture, profiles, and mock endpoints are removed
