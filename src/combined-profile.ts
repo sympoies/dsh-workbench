@@ -31,6 +31,9 @@ type KitManifest = {
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const contract = JSON.parse(readFileSync(join(root, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
+const webArtifact = JSON.parse(readFileSync(join(root, 'compatibility/web-artifact.json'), 'utf8')) as {
+  schemaVersion: string; releaseVersion: string; name: string; artifactSha256: string;
+};
 const packageName = /^@deepseek-ai\/[a-z0-9-]+$/;
 const sha256 = /^[a-f0-9]{64}$/;
 
@@ -52,8 +55,10 @@ export function stageCombinedProfile(input: {
   receipt: PeerReceipt;
   kitManifest: KitManifest;
   tuiArchive: string;
-}, expectedTuiIntegrity = contract.components.tui.package.integrity): void {
-  const { profile, receipt, kitManifest, tuiArchive } = input;
+  webArchive: string;
+}, expectedTuiIntegrity = contract.components.tui.package.integrity,
+expectedWebArtifactSha256 = webArtifact.artifactSha256): void {
+  const { profile, receipt, kitManifest, tuiArchive, webArchive } = input;
   if (!isAbsolute(profile)) throw new Error('profile target must be a new absolute path');
   if (!isAbsolute(tuiArchive) || !lstatSync(tuiArchive).isFile()) {
     throw new Error('TUI archive must be an absolute regular file');
@@ -61,6 +66,24 @@ export function stageCombinedProfile(input: {
   const tuiBytes = readFileSync(tuiArchive);
   const tuiIntegrity = `sha512-${createHash('sha512').update(tuiBytes).digest('base64')}`;
   if (tuiIntegrity !== expectedTuiIntegrity) throw new Error('TUI archive integrity mismatch');
+  if (!isAbsolute(webArchive) || !lstatSync(webArchive).isFile()) {
+    throw new Error('Web archive must be an absolute regular file');
+  }
+  const webBytes = readFileSync(webArchive);
+  const webPackage = inspectPeerArtifact(webBytes);
+  if (webArtifact.schemaVersion !== 'dsh-workbench.web-artifact.v1'
+    || webArtifact.releaseVersion !== contract.release.version
+    || webArtifact.name !== '@sympoies/dsh-workbench-web'
+    || !sha256.test(webArtifact.artifactSha256)) {
+    throw new Error('Web artifact record does not match Workbench contract');
+  }
+  if (webPackage.name !== '@sympoies/dsh-workbench-web'
+    || webPackage.version !== contract.release.version) {
+    throw new Error('Web archive identity does not match Workbench contract');
+  }
+  if (webPackage.artifactSha256 !== expectedWebArtifactSha256) {
+    throw new Error('Web archive digest does not match reviewed artifact');
+  }
   const dsh = contract.components.dsh;
   if (kitManifest.schema_version !== 'dsh-runtime-kit.dsh-compatibility.v1'
     || kitManifest.repository !== dsh.source.url
@@ -127,7 +150,9 @@ export function stageCombinedProfile(input: {
     return [name, `file:artifacts/${artifactFile(name, row.version)}`];
   }));
   const tuiFile = `${contract.components.tui.package.name.slice(1).replace('/', '-')}-${contract.components.tui.package.version}.tgz`;
+  const webFile = `sympoies-dsh-workbench-web-${contract.release.version}.tgz`;
   dependencies[contract.components.tui.package.name] = `file:artifacts/${tuiFile}`;
+  dependencies[webPackage.name] = `file:artifacts/${webFile}`;
   const overrides = sorted.map(([name, entry]) =>
     `  '${name}': 'file:artifacts/${artifactFile(name, entry.version)}'`).join('\n');
   const workspace = rendered.stdout.replace('overrides:\n', `overrides:\n${overrides}\n`);
@@ -140,7 +165,8 @@ export function stageCombinedProfile(input: {
     name: 'dsh-profile-workbench',
     private: true,
     dependencies,
-    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', contract.components.tui.package.name] } },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app',
+      contract.components.tui.package.name] } },
   };
   let createdProfile: { dev: number; ino: number } | undefined;
   try {
@@ -154,11 +180,13 @@ export function stageCombinedProfile(input: {
         verifiedBytes.get(name)!, { flag: 'wx' });
     }
     writeFileSync(join(profile, 'artifacts', tuiFile), tuiBytes, { flag: 'wx' });
+    writeFileSync(join(profile, 'artifacts', webFile), webBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'patches/tui-rename.patch'), patchBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     writeFileSync(join(profile, 'pnpm-workspace.yaml'), workspace);
     writeFileSync(join(profile, 'cordis.yml'), '[]\n');
-    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n');
+    writeFileSync(join(profile, 'cordis.patch.yml'),
+      "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n");
   } catch (error) {
     if (createdProfile !== undefined) {
       const current = lstatSync(profile, { throwIfNoEntry: false });
@@ -177,6 +205,7 @@ export function stageCombinedProfileFromPinnedKit(input: {
   receipt: PeerReceipt;
   kitRepo: string;
   tuiArchive: string;
+  webArchive: string;
 }, gitExecutable = '/usr/bin/git'): void {
   if (!isAbsolute(input.dshHome)
     || !lstatSync(join(input.dshHome, 'profiles'), { throwIfNoEntry: false })?.isDirectory()) {
@@ -184,5 +213,5 @@ export function stageCombinedProfileFromPinnedKit(input: {
   }
   const kitManifest = readPinnedKitJson(input.kitRepo, 'compatibility/dsh.json', gitExecutable) as KitManifest;
   stageCombinedProfile({ profile: join(input.dshHome, 'profiles', 'workbench'), receipt: input.receipt, kitManifest,
-    tuiArchive: input.tuiArchive });
+    tuiArchive: input.tuiArchive, webArchive: input.webArchive });
 }

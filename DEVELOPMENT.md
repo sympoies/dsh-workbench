@@ -27,7 +27,14 @@ For the Web plugin, run `pnpm web:metadata:check` and `pnpm web:build` before
 ensures the Web package version, DSH catalog, and generated Client identity
 match the contract. The package build runs this check before bundling. See the
 [Web port notes](docs/web-port.md) for the current acceptance boundary.
-On Linux with util-linux `script` and `zstdcat`, run the native browser
+The combined profile also checks the packed Web plugin's canonical artifact
+SHA-256 against [`compatibility/web-artifact.json`](compatibility/web-artifact.json).
+After an intentional Web source or contract change, build and pack the plugin,
+inspect it with `inspectPeerArtifact` from `src/package-artifact.ts`, and review
+the new digest in that record before staging. The artifact record contains no
+component version pin; Web package identity still comes from the Workbench
+contract.
+On Linux or macOS with `zstdcat`, run the native browser
 acceptance with a Chromium executable and an installed DSH executable at the
 exact contract version:
 
@@ -37,23 +44,31 @@ pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chrom
 
 The script builds and packs the Web plugin, installs Web and patched TUI
 profiles in a disposable DSH home, and runs four sessions against authenticated
-local mock LLM servers. It creates and renames a TUI session, stops TUI, then
-checks its exact ID, title, prompt, and answer in native Web before and after a
+local mock LLM servers. Through a native pseudoterminal provided by the pinned
+development-only `node-pty` package, it creates and renames a TUI session,
+stops TUI, then checks that session's exact ID, title, prompt, and answer in
+native Web before and after a
 Web Host restart. While Web still holds a session writer, it checks that TUI
 refuses an exact-ID resume without changing the archive. After Web stops, TUI
 resumes that Web session, completes another turn, and Web reads the continuation
 on restart. It also checks distinct Web IDs, isolated histories, a
 pending turn, tool approval and rejection, a provider error, and Web Host
 restart recovery. The fixture, profiles, and mock endpoints are removed
-afterward. Package installation is isolated from caller credentials, and
-Chromium sandboxing remains enabled. This does not establish the full
+afterward. Package installation is isolated from caller credentials. Local
+Chromium sandboxing remains enabled; the Linux GitHub-hosted CI runner uses an
+explicit test-only exception because its browser sandbox cannot initialize.
+This does not establish the full
 cross-interface handoff, image composition, or release acceptance gates.
+The combined-profile CI installs the browser revision selected by the pinned
+`playwright-core` package and runs this acceptance on both first-release
+platforms after the exact DSH build.
 
 Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`
 when changing the [compatibility contract](compatibility/workbench.json). A
-change to any component source or package identity requires a new Workbench
-release version; CI compares the contract with `main`. See the
+change to any component source or package identity, or to the reviewed Web
+artifact digest, requires a new Workbench release version. CI compares the
+contract and artifact record with `main`. See the
 [contract guide](docs/compatibility.md) for acceptance and release rules.
 Run `node --test tests/tui-graph.test.ts` with the pinned pnpm version when
 changing the TUI compatibility patch or peer correction. It reproduces the
@@ -66,17 +81,20 @@ acceptance with an installed executable of the exact DSH contract version:
 pnpm test:tui:terminal --dsh-bin /path/to/pinned/dsh
 ```
 
-The combined-profile CI runs this acceptance twice on Linux x64 and macOS
-arm64 after its authenticated graph setup and doctor check: first with a
-frozen TUI-only profile, then with the installed `workbench` profile. The
-terminal test uses a native pseudoterminal through the development-only
-`node-pty` package. To repeat the combined profile check against an isolated
-installation, use the runtime-kit launcher wrapper and pass
+The combined-profile CI runs this acceptance on Linux x64 and macOS arm64
+after its authenticated graph setup and doctor check. It also starts the
+activated `workbench` Web Host through runtime-kit's owner launcher and checks
+a real browser turn and embedded identity in that installed profile. The
+terminal test first installs the frozen TUI-only profile in a separate
+disposable home, then attempts the same scenarios in the installed `workbench`
+profile. The latter remains an acceptance gate for governed Bash. To repeat
+the combined profile check against an isolated installation, use the
+runtime-kit launcher wrapper and pass
 `--installed-dsh-home /absolute/path/to/dsh-home` plus
 `--runtime-env-file /absolute/path/to/terminal-environment.json`; the runtime
 verification script marks only its disposable DSH home and emits the matching
-environment file for this use.
-The acceptance drives Allow once and
+environment file for this use. Both paths use a native pseudoterminal through
+the development-only `node-pty` package. The acceptance drives Allow once and
 Reject through two real TTY sessions against an authenticated local mock, and
 checks the final Session V4 archive, approval, tool result, completed turn,
 and whether the allowed or rejected command actually ran. It also creates a

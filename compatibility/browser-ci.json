@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "dsh-workbench.browser-ci.v1",
+  "playwrightCoreVersion": "1.63.0",
+  "chromium": {
+    "revision": "1243",
+    "version": "153.0.8010.12"
+  },
+  "platforms": {
+    "linux-x64": {
+      "url": "https://cdn.playwright.dev/builds/cft/153.0.8010.12/linux64/chrome-linux64.zip",
+      "sha256": "8aac35011c18f6e2d10696154af89a5728ac2ddd6dc6fad24ffdf243c3fcfd5a",
+      "executable": "chrome-linux64/chrome"
+    },
+    "darwin-arm64": {
+      "url": "https://cdn.playwright.dev/builds/cft/153.0.8010.12/mac-arm64/chrome-mac-arm64.zip",
+      "sha256": "930e2a2c15addbaca1fe9b07bfa520667bced556d7988707186819cb4279ef3b",
+      "executable": "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+    }
+  }
+}

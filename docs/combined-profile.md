@@ -2,7 +2,7 @@
 
 The first Workbench candidate uses a separate `workbench` DSH profile. It
 combines the pinned DSH source, the Workbench-patched TUI, and runtime-kit.
-The TUI and patched DSH peers must be installed **before** runtime-kit setup:
+The Web plugin, TUI, and patched DSH peers must be installed **before** runtime-kit setup:
 runtime-kit snapshots the managed profile manifest and treats later bundle
 edits as drift.
 
@@ -55,7 +55,11 @@ of the patched closure.
    stager currently uses Linux descriptor paths and cannot run on macOS. The
    receipt
    contains local paths and is not a release artifact.
-4. Download the exact TUI registry archive without running package scripts,
+4. Build the Workbench Web plugin with `pnpm web:build`, then pack it into a
+   local archive with `pnpm --dir web pack --pack-destination
+   <private-artifact-dir>`. The build checks the generated identity against
+   this repository's contract. Download the exact TUI registry archive without
+   running package scripts,
    for example with `npm pack <contract-tui-package>@<contract-tui-version>
    --ignore-scripts --pack-destination <private-artifact-dir>`. Stage a
    **new** profile under a fresh DSH home. Create its `profiles` directory,
@@ -63,7 +67,7 @@ of the patched closure.
 
    ```sh
    install -d -m 0700 <absolute-dsh-home>/profiles
-   node scripts/combined-profile.mjs <kit-git-repo> <separate-peer-receipt.json> <tui-archive.tgz> <absolute-dsh-home>
+   node scripts/combined-profile.mjs <kit-git-repo> <separate-peer-receipt.json> <tui-archive.tgz> <web-archive.tgz> <absolute-dsh-home>
    export DSH_HOME=<absolute-dsh-home>
    ```
 
@@ -72,8 +76,13 @@ of the patched closure.
    contract-pinned Git object. It also checks the TUI archive's SHA-512
    integrity against the Workbench contract before writing any profile files.
    It creates exactly `$DSH_HOME/profiles/workbench`, copies the verified bytes
-   into the profile, and writes only relative `file:artifacts/...` references. The profile starts
-   with the base and patched TUI bundles; runtime-kit is not yet installed.
+   into the profile, and writes only relative `file:artifacts/...` references.
+   It rejects a Web archive whose package name, Workbench version, or canonical
+   artifact digest differs from the reviewed
+   [`web-artifact.json`](../compatibility/web-artifact.json) record. That
+   digest is outside the Web plugin's embedded contract identity, avoiding a
+   build-hash cycle. The profile starts with the base, native Web, and
+   patched TUI bundles and the Workbench Web plugin; runtime-kit is not yet installed.
 5. In that profile, run pnpm `install --strict-peer-dependencies --ignore-scripts`
    and then `install --frozen-lockfile --strict-peer-dependencies --ignore-scripts`.
    Use runtime-kit's documented owner launcher to preview and apply `setup
@@ -81,12 +90,21 @@ of the patched closure.
    --profile workbench` to report `healthy` with no advisories. The combined
    profile CI verifies this sequence against the isolated `$DSH_HOME` above,
    an exact package packed from the pinned runtime-kit source, and the
-   runtime-kit's authenticated nils-cli binaries.
+   runtime-kit's authenticated nils-cli binaries. Before setup, the matrix
+   verifies that runtime-kit refuses an existing unmanaged
+   `$DSH_HOME/AGENTS.md` without changing its bytes; the disposable fixture
+   then removes that test file and continues with a clean home.
 6. Launch the pinned DSH binary **through the same runtime-kit owner launcher**
    with `--profile workbench`. The compatible nils-cli set required by the
    pinned kit includes authenticated `agent-hook`, `agent-docs`, and adjacent
    `agent-session` binaries. The kit declaration governs their exact version
    and hashes.
+
+The combined-profile CI also starts the activated `workbench` Web Host through
+that launcher, opens its native UI in an authenticated Chromium, completes a
+mock turn, and checks the loaded plugin's exact contract identity. This is a
+single-profile Web startup proof; the full Web/TUI handoff acceptance still
+uses separate profiles and governed Bash remains a distinct release gate.
 
 Do not change `package.json`, its bundle order, or `pnpm-lock.yaml` after
 runtime-kit setup. An update must stage a new graph and re-run the managed

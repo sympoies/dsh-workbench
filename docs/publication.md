@@ -27,7 +27,7 @@ revisions. All three upstream source licenses are MIT:
 | --- | --- | --- |
 | DeepSeek Harness | [dsh-v0.1.7-rc.1](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1) | [MIT license at the tag](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/LICENSE) |
 | dsh-TUI | [v0.11.0](https://github.com/ccch1mneyyy/dsh-TUI/releases/tag/v0.11.0) | [MIT license at the tag](https://github.com/ccch1mneyyy/dsh-TUI/blob/v0.11.0/LICENSE) |
-| dsh-runtime-kit | [candidate commit](https://github.com/sympoies/dsh-runtime-kit/commit/23677895e516b76f2147bbc7e98071c279b1510e) | [MIT license at the commit](https://github.com/sympoies/dsh-runtime-kit/blob/23677895e516b76f2147bbc7e98071c279b1510e/LICENSE) |
+| dsh-runtime-kit | [candidate commit](https://github.com/sympoies/dsh-runtime-kit/commit/dd53024fb892831bd55fc2466259e9f5f4062cf1) | [MIT license at the commit](https://github.com/sympoies/dsh-runtime-kit/blob/dd53024fb892831bd55fc2466259e9f5f4062cf1/LICENSE) |
 
 These are candidate identities, not accepted pins or a complete dependency
 license inventory. Before a release, inventory the exact packaged dependency

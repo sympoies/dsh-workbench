@@ -51,7 +51,8 @@ jobs:
               dsh_pnpm:c.components.dsh.toolchain.pnpm,
               workbench_pnpm:c.runtime.pnpm,
               tui_spec:`${t.name}@${t.version}`,
-              tui_file:`${t.name.slice(1).replace("/","-")}-${t.version}.tgz`
+              tui_file:`${t.name.slice(1).replace("/","-")}-${t.version}.tgz`,
+              web_file:`sympoies-dsh-workbench-web-${c.release.version}.tgz`
             };
             fs.appendFileSync(process.env.GITHUB_OUTPUT,
               Object.entries(outputs).map(([key,value])=>`${key}=${value}\n`).join(""));
@@ -137,6 +138,8 @@ jobs:
           ./node_modules/.bin/tsdown --env.DSH_BUILD_FACE host
           node ./node_modules/typescript/bin/tsc -b tsconfig.client.json
           ./node_modules/.bin/tsdown --env.DSH_BUILD_FACE client
+          pnpm run build:web
+          test -s apps/web/dist/index.html
       - name: Produce runtime-kit authenticated patched peer receipt
         working-directory: dsh-runtime-kit
         run: |
@@ -159,12 +162,18 @@ jobs:
             > "$VERIFICATION_ROOT/kit-peer-stage.json"
           node -e 'const r=require(process.argv[1]);if(!r.ok||r.data.packages.length!==64||r.data.patch_state!=="patched")process.exit(1)' \
             "$VERIFICATION_ROOT/kit-peer-stage.json"
-      - name: Download exact TUI archive and stage combined profile
+      - name: Build Web plugin and stage combined Web/TUI profile
         working-directory: dsh-workbench
         env:
           TUI_SPEC: ${{ steps.pins.outputs.tui_spec }}
           TUI_FILE: ${{ steps.pins.outputs.tui_file }}
+          WEB_FILE: ${{ steps.pins.outputs.web_file }}
+          WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm web:build
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm --dir web pack --pack-destination "$VERIFICATION_ROOT"
+          test -s "$VERIFICATION_ROOT/$WEB_FILE"
           npm pack "$TUI_SPEC" --ignore-scripts --silent \
             --pack-destination "$VERIFICATION_ROOT" >/dev/null
           install -d -m 0700 "$VERIFICATION_ROOT/dsh-home/profiles"
@@ -172,8 +181,9 @@ jobs:
             "$GITHUB_WORKSPACE/dsh-runtime-kit" \
             "$VERIFICATION_ROOT/dsh-patched-peer-pack.json" \
             "$VERIFICATION_ROOT/$TUI_FILE" \
+            "$VERIFICATION_ROOT/$WEB_FILE" \
             "$VERIFICATION_ROOT/dsh-home"
-      - name: Install exact DSH/TUI graph with strict frozen peers
+      - name: Install exact DSH/Web/TUI graph with strict frozen peers
         env:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |
@@ -197,6 +207,13 @@ jobs:
           tar -xzf "$VERIFICATION_ROOT/$(cat "$VERIFICATION_ROOT/runtime-kit-tarball-name")" \
             -C "$VERIFICATION_ROOT/runtime-kit-package"
           test -f "$VERIFICATION_ROOT/runtime-kit-package/package/dist/bin/dsh-runtime-kit.js"
+      - name: Install exact browser for activated Web acceptance
+        working-directory: dsh-workbench
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            pnpm exec playwright-core install-deps chromium
+          fi
+          node scripts/install-verified-browser.ts --out "$VERIFICATION_ROOT/browser"
       - name: Verify digest-bound runtime-kit setup and healthy doctor
         working-directory: dsh-workbench
         env:
@@ -209,7 +226,8 @@ jobs:
             "$GITHUB_WORKSPACE/deepseek-harness" \
             "$VERIFICATION_ROOT/dsh-home" \
             "$VERIFICATION_ROOT/dsh-runtime" \
-            "$NILS_BIN_DIR"
+            "$NILS_BIN_DIR" \
+            "$WORKBENCH_BROWSER_BIN"
       - name: Prepare real TTY acceptance dependencies
         working-directory: dsh-workbench
         run: |
@@ -234,6 +252,15 @@ jobs:
       - name: Exercise TUI in a real terminal
         working-directory: dsh-workbench
         run: pnpm test:tui:terminal --dsh-bin "$VERIFICATION_ROOT/dsh-bin"
+      - name: Exercise native Web and TUI handoff in a browser
+        working-directory: dsh-workbench
+        run: |
+          browser_args=()
+          if [ "$RUNNER_OS" = Linux ]; then browser_args+=(--ci-no-browser-sandbox); fi
+          pnpm test:web:browser \
+            --dsh-bin "$VERIFICATION_ROOT/dsh-bin" \
+            --browser-bin "$WORKBENCH_BROWSER_BIN" \
+            "${browser_args[@]}"
       - name: Exercise activated Workbench profile in a real terminal
         working-directory: dsh-workbench
         run: |

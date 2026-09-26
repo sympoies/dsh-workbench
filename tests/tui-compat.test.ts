@@ -51,6 +51,8 @@ test('the renderer resolves contract files under a path containing spaces', () =
     }
     copyFileSync(join(root, 'compatibility', 'workbench.json'),
       join(stage, 'compatibility', 'workbench.json'));
+    copyFileSync(join(root, 'compatibility', 'web-artifact.json'),
+      join(stage, 'compatibility', 'web-artifact.json'));
     copyFileSync(join(root, contract.components.tui.compatibilityPatch!.path),
       join(stage, contract.components.tui.compatibilityPatch!.path));
     const result = spawnSync(process.execPath, [join(stage, 'scripts', 'tui-compat.mjs')],
