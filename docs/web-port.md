@@ -34,15 +34,21 @@ No predecessor source file or history was copied. This candidate has strict
 dependency installation, a TypeScript build that emits the DSH Client module
 loader format, and artifact-level registration and clipboard interaction tests.
 The packaged plugin loaded without page errors in a disposable native Web
-profile on the pinned DSH runtime. The [browser acceptance script](../tests/web-browser-acceptance.ts)
-uses a local mock LLM to create four distinct sessions, checks their separate
+profile on the pinned DSH runtime. CI builds the pinned DSH Web frontend with
+`pnpm run build:web` and checks `apps/web/dist/index.html` before Chromium.
+The [browser acceptance script](../tests/web-browser-acceptance.ts) uses a local
+mock LLM to create four distinct sessions, checks their separate
 histories and copied IDs, exercises a pending turn, a tool approval and
 rejection, and a provider error. It restarts the Web Host and reopens all
 four, including the settled tool results and failed turn. It also verifies a
 TUI-created session's manual title and history in Web, writer contention while
 Web owns a session, and exact-ID TUI continuation after Web stops. It
 requires explicit paths to the pinned DSH executable and a Chromium executable;
-see [development instructions](../DEVELOPMENT.md). Image composition, installed
-graph mismatch rejection, and cross-platform evidence remain acceptance work under
+see [development instructions](../DEVELOPMENT.md). CI runs this native browser
+test on Linux x64 and macOS arm64. Its Chromium archives are pinned by URL and
+SHA-256 in [the browser CI contract](../compatibility/browser-ci.json); the
+installer verifies the Playwright package and Chromium revision, then checks
+the archive digest before extracting and executing it. Image composition and
+installed graph mismatch rejection remain acceptance work under
 [#5](https://github.com/sympoies/dsh-workbench/issues/5); cross-interface
 handoff remains under [#7](https://github.com/sympoies/dsh-workbench/issues/7).

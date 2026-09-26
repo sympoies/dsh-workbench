@@ -134,6 +134,8 @@ jobs:
           ./node_modules/.bin/tsdown --env.DSH_BUILD_FACE host
           node ./node_modules/typescript/bin/tsc -b tsconfig.client.json
           ./node_modules/.bin/tsdown --env.DSH_BUILD_FACE client
+          pnpm run build:web
+          test -s apps/web/dist/index.html
       - name: Produce runtime-kit authenticated patched peer receipt
         working-directory: dsh-runtime-kit
         run: |
@@ -220,3 +222,19 @@ jobs:
       - name: Exercise TUI in a real terminal
         working-directory: dsh-workbench
         run: pnpm test:tui:terminal --dsh-bin "$VERIFICATION_ROOT/dsh-bin"
+      - name: Install exact browser for native Web acceptance
+        working-directory: dsh-workbench
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            pnpm exec playwright-core install-deps chromium
+          fi
+          node scripts/install-verified-browser.ts --out "$VERIFICATION_ROOT/browser"
+      - name: Exercise native Web and TUI handoff in a browser
+        working-directory: dsh-workbench
+        run: |
+          browser_args=()
+          if [ "$RUNNER_OS" = Linux ]; then browser_args+=(--ci-no-browser-sandbox); fi
+          pnpm test:web:browser \
+            --dsh-bin "$VERIFICATION_ROOT/dsh-bin" \
+            --browser-bin "$WORKBENCH_BROWSER_BIN" \
+            "${browser_args[@]}"
