@@ -34,8 +34,10 @@ No predecessor source file or history was copied. This candidate has strict
 dependency installation, a TypeScript build that emits the DSH Client module
 loader format, and artifact-level registration and clipboard interaction tests.
 The packaged plugin loaded without page errors in a disposable native Web
-profile on the pinned DSH runtime. The [browser acceptance script](../tests/web-browser-acceptance.ts)
-uses a local mock LLM to create four distinct sessions, checks their separate
+profile on the pinned DSH runtime. CI builds the pinned DSH Web frontend with
+`pnpm run build:web` and checks `apps/web/dist/index.html` before Chromium.
+The [browser acceptance script](../tests/web-browser-acceptance.ts) uses a local
+mock LLM to create four distinct sessions, checks their separate
 histories and copied IDs, exercises a pending turn, a tool approval and
 rejection, and a provider error. It restarts the Web Host and reopens all
 four, including the settled tool results and failed turn. It also verifies a

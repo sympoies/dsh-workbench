@@ -134,6 +134,8 @@ jobs:
           ./node_modules/.bin/tsdown --env.DSH_BUILD_FACE host
           node ./node_modules/typescript/bin/tsc -b tsconfig.client.json
           ./node_modules/.bin/tsdown --env.DSH_BUILD_FACE client
+          pnpm run build:web
+          test -s apps/web/dist/index.html
       - name: Produce runtime-kit authenticated patched peer receipt
         working-directory: dsh-runtime-kit
         run: |
