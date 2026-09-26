@@ -264,6 +264,7 @@ jobs:
       - name: Exercise activated Workbench profile in a real terminal
         working-directory: dsh-workbench
         run: |
+          node tests/finish-line-host-probe.ts
           pnpm test:tui:terminal \
             --dsh-bin "$VERIFICATION_ROOT/dsh-workbench-bin" \
             --installed-dsh-home "$VERIFICATION_ROOT/dsh-home" \

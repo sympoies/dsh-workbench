@@ -171,6 +171,19 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
     if (installedHome) value = value.replaceAll(installedHome, '[installed home]');
     return value.trim().slice(-1_500);
   };
+  const descendantCommands = () => {
+    const result = spawnSync('ps', ['-e', '-o', 'pid=,ppid=,comm='],
+      { encoding: 'utf8', timeout: 2_000 });
+    if (result.status !== 0) return 'unavailable';
+    const entries = result.stdout.split('\n').map(line => line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/))
+      .filter((entry): entry is RegExpMatchArray => entry !== null)
+      .map(entry => ({ pid: Number(entry[1]), parent: Number(entry[2]), command: basename(entry[3]) }));
+    const selected = new Set([child.pid]);
+    for (let index = 0; index < entries.length; index += 1) {
+      for (const entry of entries) if (selected.has(entry.parent)) selected.add(entry.pid);
+    }
+    return entries.filter(entry => selected.has(entry.pid)).map(entry => entry.command).join(',') || 'none';
+  };
   return {
     write: data => child.write(data),
     get exitCode() { return exitCode; },
@@ -217,7 +230,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
         reject(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
         return;
       }
-      const timer = setTimeout(() => finish(new Error(`TUI did not show ${marker}; screen: ${diagnosticScreen()}`)), 60_000);
+      const timer = setTimeout(() => finish(new Error(`TUI did not show ${marker}; descendants: ${descendantCommands()}; screen: ${diagnosticScreen()}`)), 60_000);
       const onExit = () => finish(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
       const check = () => {
         const frame = visibleScreen();
