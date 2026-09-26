@@ -31,11 +31,14 @@ instrument('dist/src/policy/index.js', [
   ['decision = await transport.evaluate(exec, correlation.context, prerequisiteProof);', 'policy'],
   ['acceptanceReservation = await acceptance.admit(exec, correlation.context);', 'acceptance'],
   ['const finishReservation = await finishLine.begin(exec, correlation.context);', 'finish-begin'],
+  ['const routed = await finishLine.execute(exec);', 'policy-execute'],
 ]);
 instrument('dist/src/workspace-lease/index.js', [
   ['const downstream = await next();', 'lease-downstream'],
   ['const targets = await this.#resolutionFor(exec, provider, slot, identity, admissionSignal.signal);',
     'lease-targets'],
+  ['if (targets.length === 0) {', 'lease-empty-targets'],
+  ['const authorization = this.#authorizations.get(exec);', 'lease-guard'],
   ['await owner.draining;', 'lease-owner-drain'],
   ['const anchor = owner.anchor ?? this.#startAnchor(owner);', 'lease-anchor-start'],
   ['await anchor.catch(() => { });', 'lease-anchor-wait'],
@@ -44,5 +47,10 @@ instrument('dist/src/workspace-lease/index.js', [
   ['return await acquisition;', 'lease-acquisition'],
   ['const granted = await this.#begin(binding, target, slot.session.header.cwd, identity, admissionSignal.signal);',
     'lease-begin'],
+]);
+instrument('dist/src/finish-line/index.js', [
+  ['const registration = editRegistrations.get(exec);', 'finish-execute-entry'],
+  ['const prepared = pending.prepared;', 'finish-validation-ready'],
+  ['let operationId = pending.operationId;', 'finish-validation-probe'],
 ]);
 console.log('Installed disposable profile has stage-only diagnostic instrumentation');
