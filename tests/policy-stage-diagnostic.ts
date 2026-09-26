@@ -14,7 +14,8 @@ function workbenchPolicyStage(stage) {
 }
 `;
 
-function instrument(file: string, stages: ReadonlyArray<readonly [string, string, 'before' | 'around'?]>): void {
+function instrument(file: string,
+  stages: ReadonlyArray<readonly [string, string, ('before' | 'around')?]>): void {
   const path = join(packageRoot, file);
   let source = readFileSync(path, 'utf8');
   for (const [statement, stage, placement] of stages) {
