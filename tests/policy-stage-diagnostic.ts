@@ -89,7 +89,7 @@ const nilsClientPath = join(packageRoot, 'dist/src/finish-line/nils-client.js');
 let nilsClient = readFileSync(nilsClientPath, 'utf8');
 const spawnCall = nilsClient.match(/operation\.handle = executionLease\.spawn\(\{[\s\S]*?\n\s{16}\}\);/gu) ?? [];
 assert.equal(spawnCall.length, 1, 'finish-line operation spawn must occur exactly once');
-nilsClient = nilsClient.replace(spawnCall[0], `try {
+const instrumentedNilsClient = nilsClient.replace(spawnCall[0], `try {
 ${spawnCall[0]}
   workbenchPolicyStage('nils-spawn-created:' + action);
 } catch (error) {
@@ -101,7 +101,9 @@ ${spawnCall[0]}
   workbenchPolicyStage('nils-spawn-threw:' + action + ':' + errorName + ':' + errorCode);
   throw error;
 }`);
-writeFileSync(nilsClientPath, marker + nilsClient);
+assert.equal(instrumentedNilsClient.split('function workbenchPolicyStage(stage)').length, 2,
+  'finish-line diagnostics must retain exactly one stage writer');
+writeFileSync(nilsClientPath, instrumentedNilsClient);
 const tuiPluginPath = join(tuiRoot, 'dsh-adapter/plugin.js');
 let tuiPlugin = readFileSync(tuiPluginPath, 'utf8');
 const tuiApprovalStoreCreation = 'const approvalStore = new ApprovalStore(adapterRuntimeFor(ctx));';
