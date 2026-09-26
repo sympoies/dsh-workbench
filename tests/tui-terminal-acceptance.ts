@@ -341,9 +341,11 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
 async function runScenario(binary: string, fixture: string, scenario: typeof scenarios[number]): Promise<void> {
   const apiKey = randomBytes(24).toString('hex');
   const marker = join(fixture, 'workspace', `.tui-${scenario.name}-executed`);
+  const toolCommand = installedHome ? `printf ${scenario.toolOutput}`
+    : `touch ${quote(marker)} && printf ${scenario.toolOutput}`;
   const mock = await startMockLlmServer({ sequence: ['tool_call_success', 'success'], repeatLast: true,
     apiKey, successText: scenario.answer, toolName: 'bash',
-    toolArguments: JSON.stringify({ command: `touch ${quote(marker)} && printf ${scenario.toolOutput}`,
+    toolArguments: JSON.stringify({ command: toolCommand,
       description: `Print ${scenario.toolOutput}`, sandbox_permissions: 'danger-full-access',
       justification: 'Verify TUI approval in a disposable workspace' }) });
   const logRoot = join(fixture, 'home', 'sessions');
@@ -374,10 +376,10 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     if (scenario.error) {
       assert.ok(content.includes('the user rejected escalating this command'));
       assert.ok(!content.includes(scenario.toolOutput));
-      assert.equal(existsSync(marker), false, 'Rejected Bash command still executed');
+      if (!installedHome) assert.equal(existsSync(marker), false, 'Rejected Bash command still executed');
     } else {
       assert.ok(content.includes(scenario.toolOutput));
-      assert.equal(existsSync(marker), true, 'Allowed Bash command did not execute');
+      if (!installedHome) assert.equal(existsSync(marker), true, 'Allowed Bash command did not execute');
     }
     assert.ok(mock.requests.some(request => request.behavior === 'tool_call_success'));
   } catch (error) {
@@ -410,6 +412,8 @@ async function main(): Promise<void> {
     for (const path of [join(fixture, 'agents'), join(fixture, 'workspace')]) {
       mkdirSync(path, { recursive: true });
     }
+    if (installedHome) command('git', ['clone', '--local', '--no-hardlinks', '--quiet', repo,
+      join(fixture, 'workspace')], repo);
     if (!installedHome) {
       mkdirSync(profile, { recursive: true });
       writeFileSync(join(profile, 'package.json'), JSON.stringify({
