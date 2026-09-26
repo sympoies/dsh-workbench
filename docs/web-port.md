@@ -44,7 +44,8 @@ four, including the settled tool results and failed turn. It also verifies a
 TUI-created session's manual title and history in Web, writer contention while
 Web owns a session, and exact-ID TUI continuation after Web stops. It
 requires explicit paths to the pinned DSH executable and a Chromium executable;
-see [development instructions](../DEVELOPMENT.md). Image composition, installed
-graph mismatch rejection, and cross-platform evidence remain acceptance work under
+see [development instructions](../DEVELOPMENT.md). CI runs this native browser
+test on Linux x64 and macOS arm64. Image composition and installed graph
+mismatch rejection remain acceptance work under
 [#5](https://github.com/sympoies/dsh-workbench/issues/5); cross-interface
 handoff remains under [#7](https://github.com/sympoies/dsh-workbench/issues/7).
