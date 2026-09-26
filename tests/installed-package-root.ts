@@ -24,9 +24,17 @@ export function installedPackageRoot(profile: string, packageName: string): stri
   return [...roots][0]!;
 }
 
-export function installedDependencyRoot(profile: string, importerName: string,
-  dependencyName: string): string {
-  const importer = installedPackageRoot(profile, importerName);
+export function installedPackageRootFrom(anchor: string, packageName: string): string {
+  const searchPaths = createRequire(anchor).resolve.paths(packageName) ?? [];
+  const candidates = searchPaths.map(searchPath => join(searchPath, ...packageName.split('/')));
+  const match = candidates.find(candidate => existsSync(join(candidate, 'package.json'))
+    && JSON.parse(readFileSync(join(candidate, 'package.json'), 'utf8')).name === packageName);
+  assert.ok(match, `${packageName} must resolve from ${anchor}`);
+  return realpathSync(match);
+}
+
+export function installedDependencyRoot(importerRoot: string, dependencyName: string): string {
+  const importer = realpathSync(importerRoot);
   const resolved = createRequire(join(importer, 'package.json')).resolve(dependencyName);
   let candidate = dirname(resolved);
   while (candidate !== dirname(candidate)) {
@@ -37,5 +45,5 @@ export function installedDependencyRoot(profile: string, importerName: string,
     }
     candidate = dirname(candidate);
   }
-  throw new Error(`${dependencyName} did not resolve to an installed package root from ${importerName}`);
+  throw new Error(`${dependencyName} did not resolve to an installed package root from ${importer}`);
 }

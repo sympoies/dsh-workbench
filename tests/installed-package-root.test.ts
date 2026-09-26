@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
-import { installedDependencyRoot, installedPackageRoot } from './installed-package-root.ts';
+import { installedDependencyRoot, installedPackageRoot, installedPackageRootFrom } from './installed-package-root.ts';
 
 test('deduplicates a direct pnpm symlink and its virtual store package', () => {
   const profile = mkdtempSync(join(tmpdir(), 'workbench-package-root-'));
@@ -47,8 +47,11 @@ test('resolves a peer dependency from its exact pnpm importer when variants coex
     symlinkSync(selectedDependency, join(peerScope, 'dsh-user-approval'), 'dir');
     mkdirSync(join(profile, 'node_modules/@deepseek-ai'), { recursive: true });
     symlinkSync(importerRoot, join(profile, 'node_modules/@deepseek-ai/dsh-base'), 'dir');
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ name: 'dsh-fixture', private: true }));
 
-    assert.equal(installedDependencyRoot(profile, importerName, dependencyName), selectedDependency);
+    const resolvedImporter = installedPackageRootFrom(join(profile, 'package.json'), importerName);
+    assert.equal(resolvedImporter, importerRoot);
+    assert.equal(installedDependencyRoot(resolvedImporter, dependencyName), selectedDependency);
   } finally {
     rmSync(profile, { recursive: true, force: true });
   }

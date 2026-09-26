@@ -237,7 +237,9 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.diagnose_policy
         working-directory: dsh-workbench
         run: |
-          node tests/policy-stage-diagnostic.ts "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
+          node tests/policy-stage-diagnostic.ts \
+            "$VERIFICATION_ROOT/dsh-home/profiles/workbench" \
+            "$GITHUB_WORKSPACE/deepseek-harness"
           echo "WORKBENCH_POLICY_TRACE=$VERIFICATION_ROOT/policy-stage.log" >> "$GITHUB_ENV"
       - name: Prepare real TTY acceptance dependencies
         working-directory: dsh-workbench

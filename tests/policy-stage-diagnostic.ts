@@ -4,7 +4,9 @@ import { isAbsolute, join } from 'node:path';
 import { installedDependencyRoot } from './installed-package-root.ts';
 
 const profile = process.argv[2];
+const dshSource = process.argv[3];
 assert.ok(profile && isAbsolute(profile), 'A disposable absolute profile path is required');
+assert.ok(dshSource && isAbsolute(dshSource), 'The exact DSH source installation path is required');
 const packageRoot = realpathSync(join(profile, 'node_modules', '@sympoies', 'dsh-runtime-kit'));
 const tuiRoot = realpathSync(join(profile, 'node_modules',
   '@deepseek-harness-tui', 'dsh-tui', 'lib', 'types'));
@@ -114,12 +116,18 @@ writeFileSync(tuiPluginPath, marker + tuiPlugin);
 instrument(tuiRoot, 'dsh-adapter/approvals.js', [
   ['this.queue.push(pending);\n            this.startNext();', 'tui-approval-park'],
 ]);
-const approvalRoot = installedDependencyRoot(profile, '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-user-approval');
+// DSH resolves in-box bundles from its installation, which is this exact
+// source checkout in the acceptance harness. The CLI declares dsh-base as a
+// workspace dependency, but dsh-base owns the approval/Cordis importer graph.
+const dshBaseRoot = join(dshSource, 'packages/bundle/base');
+assert.equal(JSON.parse(readFileSync(join(dshBaseRoot, 'package.json'), 'utf8')).name,
+  '@deepseek-ai/dsh-base', 'The exact DSH source must contain its in-box base bundle');
+const approvalRoot = installedDependencyRoot(dshBaseRoot, '@deepseek-ai/dsh-user-approval');
 instrument(approvalRoot, 'lib/index.js', [
   ['const answer = Promise.resolve().then(() => this.ctx.waterfall(scopeTarget(req.agent, req.agent), "approval/request", req, () => Promise.resolve("unavailable"))).then((outcome) => OUTCOMES.includes(outcome) ? outcome : "unavailable", () => "unavailable");',
     'approval-service-waterfall'],
 ]);
-const cordisRoot = installedDependencyRoot(profile, '@deepseek-ai/dsh-base', '@deepseek-ai/cordis');
+const cordisRoot = installedDependencyRoot(dshBaseRoot, '@deepseek-ai/cordis');
 const cordisEventsPath = join(cordisRoot, 'lib/index.js');
 let cordisEvents = readFileSync(cordisEventsPath, 'utf8');
 const cordisDispatch = 'if (!name.startsWith("internal/")) this.emit("internal/dispatch", type, name, args, thisArg);';
