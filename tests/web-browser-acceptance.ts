@@ -230,8 +230,12 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     'durable interrupted-turn closure');
     await waitForTui(tui, () => visibleScreen(tui.screen).includes(recoveredAnswer),
       'completed interrupted-session recap');
+    await waitForTui(tui, () => readEvents(logPath).some(event =>
+      event.type === 'assistant/message' && JSON.stringify(event.data?.message).includes(recoveredAnswer)),
+    'persisted interrupted-session recap');
     const answerCountBeforeContinuation = readEvents(logPath).filter(event =>
       event.type === 'assistant/message' && JSON.stringify(event.data?.message).includes(recoveredAnswer)).length;
+    assert.ok(answerCountBeforeContinuation > 0, 'the interrupted-session recap was not persisted');
     tui.write(`${recoveredPrompt}\r`);
     await waitForTui(tui, () => JSON.stringify(readEvents(logPath)
       .filter(event => event.type === 'user/message')).includes(recoveredPrompt),
