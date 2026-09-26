@@ -253,7 +253,15 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     assert.ok(continuationPromptIndex >= 0 && events.slice(continuationPromptIndex + 1).some(event =>
       event.type === 'assistant/message'
         && (JSON.stringify(event.data?.message) ?? '').includes(recoveredAnswer)),
-    'the completed post-crash TUI continuation did not persist an answer after its prompt');
+    `the completed post-crash TUI continuation did not persist an answer after its prompt: ${JSON.stringify(
+      events.map(event => ({
+        type: event.type,
+        reason: event.type === 'turn/end' ? event.data?.reason : undefined,
+        prompt: event.type === 'user/message' && JSON.stringify(event).includes(recoveredPrompt),
+        answer: event.type === 'assistant/message' && JSON.stringify(event).includes(recoveredAnswer),
+        dataKeys: event.data === null || typeof event.data !== 'object' ? [] : Object.keys(event.data),
+      })),
+    )}`);
     assert.ok(mock.requests.length >= 2,
       'TUI did not request both its resume recap and the post-crash continuation');
   } finally {
