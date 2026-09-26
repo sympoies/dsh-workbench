@@ -10,14 +10,16 @@ dependency resolution for the recorded identities.
 
 The current graph is **candidate**. Its DSH and TUI package integrity values
 come from the npm registry at the pinned package versions. Git commit and tree
-values identify the upstream source revisions. The runtime-kit source now pins
-the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runtime-kit/pull/272)
-and the authenticated patched peer closure from
-[PR #274](https://github.com/sympoies/dsh-runtime-kit/pull/274);
+values identify the upstream source revisions. The runtime-kit source pins
+the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runtime-kit/pull/272),
+the authenticated patched peer closure from
+[PR #274](https://github.com/sympoies/dsh-runtime-kit/pull/274), and the typed
+finish-line denial diagnostics from
+[PR #277](https://github.com/sympoies/dsh-runtime-kit/pull/277);
 runtime-kit has no published npm release at this revision, so its Git tree is
 its source integrity identity. The contract records the upstream package
 version `0.0.0` for runtime-kit; that is not a Workbench release version.
-These identities were checked on 2026-09-25. Runtime-kit compatibility and
+These identities were checked on 2026-09-26. Runtime-kit compatibility and
 managed-worktree recovery passed its owner CI; Web/TUI composition and
 cross-interface session handoff remain candidate gates.
 
@@ -90,6 +92,10 @@ graph must still pass hosted CI.
 The publication comparison treats the reviewed Web artifact digest as part of
 the release identity, including the first addition of the record. A changed
 digest requires a higher Workbench release version.
+Workbench `v0.1.0-rc.7` pins runtime-kit's typed nils host-denial diagnostics
+and records the resulting Web plugin identity and artifact digest. This
+diagnostic change does not provide the missing macOS finish-line backend or
+accept the candidate graph.
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the
