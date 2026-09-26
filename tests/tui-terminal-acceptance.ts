@@ -113,21 +113,34 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
   });
   const screen = new Terminal({ cols: 80, rows: 24, scrollback: 1_000, allowProposedApi: true });
   const listeners = new Set<() => void>();
+  let startupOutput = '';
   child.stdout.on('data', chunk => {
+    startupOutput = (startupOutput + String(chunk)).slice(-8_192);
     screen.write(chunk, () => { for (const listener of listeners) listener(); });
   });
-  child.stderr.resume();
+  child.stderr.on('data', chunk => { startupOutput = (startupOutput + String(chunk)).slice(-8_192); });
+  const startupFailure = () => {
+    const categories = [
+      ['pty', /inappropriate ioctl|not a tty|tcgetattr|could not open.*pty/i],
+      ['script-usage', /usage:\s*script|illegal option.*script/i],
+      ['module-load', /cannot find module|ERR_MODULE_NOT_FOUND|module not found/i],
+      ['profile-load', /profile.*(not found|invalid|failed)|failed.*profile/i],
+      ['missing-command', /command not found|no such file or directory/i],
+    ] as const;
+    const category = categories.find(([, pattern]) => pattern.test(startupOutput))?.[0] ?? 'unclassified';
+    return `TUI exited with ${child.exitCode ?? child.signalCode}; startup category ${category}`;
+  };
   const visibleScreen = () => Array.from({ length: screen.rows }, (_, row) =>
     screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '').join('\n');
   return {
     child,
     waitForAfter: (first, second) => new Promise<void>((resolveWait, reject) => {
       if (child.exitCode !== null || child.signalCode !== null) {
-        reject(new Error(`TUI exited before ${second}: ${child.exitCode ?? child.signalCode}`));
+        reject(new Error(`TUI exited before ${second}: ${startupFailure()}`));
         return;
       }
       const timer = setTimeout(() => finish(new Error(`TUI did not show ${second} after ${first}`)), 60_000);
-      const onExit = () => finish(new Error(`TUI exited before ${second}: ${child.exitCode ?? child.signalCode}`));
+      const onExit = () => finish(new Error(`TUI exited before ${second}: ${startupFailure()}`));
       const check = () => {
         const frame = visibleScreen();
         if (frame.lastIndexOf(second) > frame.lastIndexOf(first) && frame.includes(first)) finish();
@@ -144,11 +157,11 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
     }),
     waitFor: marker => new Promise<void>((resolveWait, reject) => {
       if (child.exitCode !== null || child.signalCode !== null) {
-        reject(new Error(`TUI exited before ${marker}: ${child.exitCode ?? child.signalCode}`));
+        reject(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
         return;
       }
       const timer = setTimeout(() => finish(new Error(`TUI did not show ${marker}`)), 60_000);
-      const onExit = () => finish(new Error(`TUI exited before ${marker}: ${child.exitCode ?? child.signalCode}`));
+      const onExit = () => finish(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
       const check = () => {
         const frame = visibleScreen();
         if (typeof marker === 'string' ? frame.includes(marker) : marker.test(frame)) finish();
