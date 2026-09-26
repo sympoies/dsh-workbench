@@ -51,7 +51,8 @@ jobs:
               dsh_pnpm:c.components.dsh.toolchain.pnpm,
               workbench_pnpm:c.runtime.pnpm,
               tui_spec:`${t.name}@${t.version}`,
-              tui_file:`${t.name.slice(1).replace("/","-")}-${t.version}.tgz`
+              tui_file:`${t.name.slice(1).replace("/","-")}-${t.version}.tgz`,
+              web_file:`sympoies-dsh-workbench-web-${c.release.version}.tgz`
             };
             fs.appendFileSync(process.env.GITHUB_OUTPUT,
               Object.entries(outputs).map(([key,value])=>`${key}=${value}\n`).join(""));
@@ -158,12 +159,18 @@ jobs:
             > "$VERIFICATION_ROOT/kit-peer-stage.json"
           node -e 'const r=require(process.argv[1]);if(!r.ok||r.data.packages.length!==64||r.data.patch_state!=="patched")process.exit(1)' \
             "$VERIFICATION_ROOT/kit-peer-stage.json"
-      - name: Download exact TUI archive and stage combined profile
+      - name: Build Web plugin and stage combined Web/TUI profile
         working-directory: dsh-workbench
         env:
           TUI_SPEC: ${{ steps.pins.outputs.tui_spec }}
           TUI_FILE: ${{ steps.pins.outputs.tui_file }}
+          WEB_FILE: ${{ steps.pins.outputs.web_file }}
+          WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm web:build
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm --dir web pack --pack-destination "$VERIFICATION_ROOT"
+          test -s "$VERIFICATION_ROOT/$WEB_FILE"
           npm pack "$TUI_SPEC" --ignore-scripts --silent \
             --pack-destination "$VERIFICATION_ROOT" >/dev/null
           install -d -m 0700 "$VERIFICATION_ROOT/dsh-home/profiles"
@@ -171,8 +178,9 @@ jobs:
             "$GITHUB_WORKSPACE/dsh-runtime-kit" \
             "$VERIFICATION_ROOT/dsh-patched-peer-pack.json" \
             "$VERIFICATION_ROOT/$TUI_FILE" \
+            "$VERIFICATION_ROOT/$WEB_FILE" \
             "$VERIFICATION_ROOT/dsh-home"
-      - name: Install exact DSH/TUI graph with strict frozen peers
+      - name: Install exact DSH/Web/TUI graph with strict frozen peers
         env:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |

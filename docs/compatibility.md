@@ -81,7 +81,15 @@ smoke. The same two-platform CI separately exercised the pinned TUI profile
 in a real PTY: approval allow/reject, tool results, 72-turn history,
 exact-ID resume, and rename survived exit and restart. This proves TUI
 behavior on both targets but does not yet exercise a real TTY on the combined
-`workbench` profile or complete the Web/TUI handoff gate.
+`workbench` profile or complete the Web/TUI handoff gate. Workbench
+`v0.1.0-rc.6` adds the Workbench-built native Web plugin archive and checks its
+package name, version, and canonical artifact SHA-256 against the reviewed
+[`web-artifact.json`](../compatibility/web-artifact.json) record before adding
+the official Web bundle and plugin to the same profile. The combined Web/TUI
+graph must still pass hosted CI.
+The publication comparison treats the reviewed Web artifact digest as part of
+the release identity, including the first addition of the record. A changed
+digest requires a higher Workbench release version.
 
 [`compatibility/tui-profile/pnpm-lock.yaml`](../compatibility/tui-profile/pnpm-lock.yaml)
 is a reviewed, generated lockfile for the disposable TUI profile used by the

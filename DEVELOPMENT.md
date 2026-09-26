@@ -27,6 +27,13 @@ For the Web plugin, run `pnpm web:metadata:check` and `pnpm web:build` before
 ensures the Web package version, DSH catalog, and generated Client identity
 match the contract. The package build runs this check before bundling. See the
 [Web port notes](docs/web-port.md) for the current acceptance boundary.
+The combined profile also checks the packed Web plugin's canonical artifact
+SHA-256 against [`compatibility/web-artifact.json`](compatibility/web-artifact.json).
+After an intentional Web source or contract change, build and pack the plugin,
+inspect it with `inspectPeerArtifact` from `src/package-artifact.ts`, and review
+the new digest in that record before staging. The artifact record contains no
+component version pin; Web package identity still comes from the Workbench
+contract.
 On Linux or macOS with `zstdcat`, run the native browser
 acceptance with a Chromium executable and an installed DSH executable at the
 exact contract version:
@@ -59,8 +66,9 @@ platforms after the exact DSH build.
 Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`
 when changing the [compatibility contract](compatibility/workbench.json). A
-change to any component source or package identity requires a new Workbench
-release version; CI compares the contract with `main`. See the
+change to any component source or package identity, or to the reviewed Web
+artifact digest, requires a new Workbench release version. CI compares the
+contract and artifact record with `main`. See the
 [contract guide](docs/compatibility.md) for acceptance and release rules.
 Run `node --test tests/tui-graph.test.ts` with the pinned pnpm version when
 changing the TUI compatibility patch or peer correction. It reproduces the

@@ -2,11 +2,11 @@
 export const workbenchIdentity = {
   "schemaVersion": 1,
   "release": {
-    "version": "0.1.0-rc.5",
-    "tag": "v0.1.0-rc.5"
+    "version": "0.1.0-rc.6",
+    "tag": "v0.1.0-rc.6"
   },
   "status": "candidate",
-  "contractDigest": "sha256:6cfee4377abe3e605ac7b688e445b625bea0e098d35e1e4420ce3cdf958342fa",
+  "contractDigest": "sha256:78c83988a769a2ea04a4bc8690bbb0b32445628e713e618a6c08926aa5027160",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",

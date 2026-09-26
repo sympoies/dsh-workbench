@@ -10,6 +10,7 @@ import type { WorkbenchContract } from '../src/contract-types.ts';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const script = join(root, 'scripts/contract.mjs');
 const source = join(root, 'compatibility/workbench.json');
+const webArtifactSource = join(root, 'compatibility/web-artifact.json');
 
 function fixture(change?: (contract: WorkbenchContract) => void) {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-workbench-contract-'));
@@ -19,6 +20,9 @@ function fixture(change?: (contract: WorkbenchContract) => void) {
   const contract = JSON.parse(readFileSync(source, 'utf8')) as WorkbenchContract;
   change?.(contract);
   writeFileSync(path, JSON.stringify(contract));
+  const webArtifact = JSON.parse(readFileSync(webArtifactSource, 'utf8')) as { releaseVersion: string };
+  webArtifact.releaseVersion = contract.release.version;
+  writeFileSync(join(compatibility, 'web-artifact.json'), JSON.stringify(webArtifact));
   copyFileSync(join(root, 'compatibility/patches/tui-rename.patch'), join(compatibility, 'patches/tui-rename.patch'));
   return { dir, path };
 }
@@ -83,6 +87,35 @@ test('release identity changes whenever the component tuple changes', () => {
     assert.match(result.stderr, /component tuple changed without a new Workbench release\.version/i);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('changed Web artifact digest requires a new Workbench release version', () => {
+  const previous = fixture();
+  const current = fixture();
+  try {
+    const recordPath = join(current.dir, 'compatibility/web-artifact.json');
+    const record = JSON.parse(readFileSync(recordPath, 'utf8')) as { artifactSha256: string };
+    record.artifactSha256 = 'a'.repeat(64);
+    writeFileSync(recordPath, JSON.stringify(record));
+    assert.match(run('compare', current.path, ['--previous', previous.path]).stderr,
+      /component tuple changed without a new Workbench release\.version/i);
+  } finally {
+    rmSync(previous.dir, { recursive: true, force: true });
+    rmSync(current.dir, { recursive: true, force: true });
+  }
+});
+
+test('adding a Web artifact record to a previous release requires a version bump', () => {
+  const previous = fixture();
+  const current = fixture();
+  try {
+    rmSync(join(previous.dir, 'compatibility/web-artifact.json'));
+    assert.match(run('compare', current.path, ['--previous', previous.path]).stderr,
+      /component tuple changed without a new Workbench release\.version/i);
+  } finally {
+    rmSync(previous.dir, { recursive: true, force: true });
+    rmSync(current.dir, { recursive: true, force: true });
   }
 });
 
