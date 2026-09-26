@@ -191,7 +191,14 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
     await page.getByRole('button', { name: 'New Session' }).first().click();
     const editor = page.getByRole('textbox',
       { name: 'Describe what you want to build, / commands, @ files or sessions' });
-    await editor.waitFor({ timeout: 30_000 });
+    try {
+      await editor.waitFor({ timeout: 30_000 });
+    } catch {
+      const selectedRows = await page.locator('[data-row-key^="session:"][aria-selected="true"]').count();
+      const visibleText = (await page.locator('body').innerText()).slice(0, 1_000);
+      throw new Error(`Activated Web composer absent; selectedRows=${selectedRows}; ` +
+        `pageErrors=${pageErrors.join(',') || 'none'}; visibleUI=${visibleText}`);
+    }
     await editor.fill('Verify the activated Workbench Web profile.');
     await editor.press('Enter');
     await page.locator('[data-conversation-content]').getByText(answer, { exact: false })
