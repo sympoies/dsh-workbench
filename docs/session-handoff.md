@@ -168,10 +168,14 @@ checks also reject TUI exact-ID resume while Web awaits tool approval: the
 pending archive's existing bytes remain intact and Web can still approve its
 own turn. The browser fixture also terminates Web Host with SIGKILL while it
 owns a settled session, then requires TUI continuation and native Web recovery
-under the same ID. These checks do not establish transfer after cancellation
-of an executing turn or pending approval, attachments, live cross-interface
-title updates, complete projection-cache behavior, recovery from a crash during
-an active turn, or existing-session migration.
+under the same ID. A separate browser scenario terminates Web Host with
+SIGKILL while a Bash approval is pending. It verifies that the unapproved
+command did not execute, TUI resumes the same ID and closes the interrupted
+turn, TUI completes a new turn, and Web reads that continuation after restart.
+This proves recovery for the approval-wait state only; it does not establish
+cancellation of an executing command or turn, recovery from crashes at other
+active-turn phases, attachments, live cross-interface title updates, complete
+projection-cache behavior, or existing-session migration.
 Those are release acceptance work under
 [#7](https://github.com/sympoies/dsh-workbench/issues/7), with TUI-specific
 checks under [#4](https://github.com/sympoies/dsh-workbench/issues/4).
