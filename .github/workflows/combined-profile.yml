@@ -195,14 +195,21 @@ jobs:
         env:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |
+          stage=manifest
+          trap 'printf "license inventory stage failed: %s\n" "$stage" >&2' ERR
           cd "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
           node -e 'const p=require("./package.json");if(Object.keys(p.devDependencies||{}).length!==0)process.exit(1)'
+          stage=pnpm
+          unset PNPM_HOME
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm licenses list --json \
             > "$VERIFICATION_ROOT/pnpm-production-licenses.json"
+          stage=normalize
           cd "$GITHUB_WORKSPACE/dsh-workbench"
           node scripts/license-inventory.ts "$VERIFICATION_ROOT/pnpm-production-licenses.json" \
             > "$VERIFICATION_ROOT/production-license-inventory.json"
+          stage=publication
           bash scripts/check-publication.sh --artifact "$VERIFICATION_ROOT/production-license-inventory.json"
+          stage=summary
           {
             printf '### Production dependency licenses (%s %s)\n\n' \
               "${{ matrix.platform }}" "${{ matrix.arch }}"
