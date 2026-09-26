@@ -106,7 +106,10 @@ while checking the durable user-title event. It then exercises the patched
 stopped-session title writer and resumes the same ID again. The default test
 uses a disposable DSH home; the installed-home option must point to a
 disposable installation because the scenarios create sessions there. No
-provider credential is needed. This gate does not claim cross-interface handoff.
+provider credential is needed. Combined-profile CI also runs the test against
+the activated `workbench` profile in a disposable home. Its pseudoterminal
+preserves the host's systemd user manager connection for runtime-kit's
+finish-line containment. This gate does not claim cross-interface handoff.
 
 For durable design or compatibility outcomes, update the current owner first,
 then use `devlog new` to append one evidence-backed entry. Run `devlog check`

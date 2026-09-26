@@ -20,6 +20,10 @@ if (Boolean(installedHome) !== Boolean(runtimeEnvFile)) {
   throw new Error('Installed DSH home and runtime environment file must be provided together');
 }
 const runtimeEnvironment = runtimeEnvFile ? JSON.parse(readFileSync(runtimeEnvFile, 'utf8')) as NodeJS.ProcessEnv : {};
+const managerEnvironment: Record<string, string> = {};
+for (const name of ['DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR']) {
+  if (typeof process.env[name] === 'string') managerEnvironment[name] = process.env[name];
+}
 const profileName = installedHome ? 'workbench' : 'dsh-tui';
 const scenarios = [
   { name: 'allow', decision: '\r', outcome: 'allowed-once', toolOutput: 'TUI_ALLOW_TOOL_OK',
@@ -116,6 +120,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       DSH_HOME: home,
       DSH_AGENTS_HOME: join(fixture, 'agents'),
       XDG_CONFIG_HOME: join(fixture, 'config'),
+      ...managerEnvironment,
       ...runtimeEnvironment,
       DSH_TELEMETRY_DISABLED: '1',
       DEEPSEEK_BASE_URL: `${baseURL}/v1`,
