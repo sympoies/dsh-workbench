@@ -249,10 +249,10 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(interruptedPrompt));
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(recoveredPrompt));
     const continuationPromptIndex = events.findIndex(event => event.type === 'user/message'
-      && (JSON.stringify(event.data?.message) ?? '').includes(recoveredPrompt));
+      && JSON.stringify(event).includes(recoveredPrompt));
     assert.ok(continuationPromptIndex >= 0 && events.slice(continuationPromptIndex + 1).some(event =>
       event.type === 'assistant/message'
-        && (JSON.stringify(event.data?.message) ?? '').includes(recoveredAnswer)),
+        && JSON.stringify(event).includes(recoveredAnswer)),
     `the completed post-crash TUI continuation did not persist an answer after its prompt: ${JSON.stringify((() => {
       const start = Math.max(0, continuationPromptIndex - 3);
       return {
