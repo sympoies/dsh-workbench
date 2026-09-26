@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      diagnose_policy:
+        description: Record stage names in the disposable installed profile
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -114,6 +119,9 @@ jobs:
           test -x "$NILS_BIN_DIR/agent-hook"
           test -x "$NILS_BIN_DIR/agent-docs"
           echo "$NILS_BIN_DIR" >> "$GITHUB_PATH"
+      - name: Probe authoritative finish-line host
+        working-directory: dsh-workbench
+        run: node tests/finish-line-host-probe.ts
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: ${{ steps.pins.outputs.dsh_pnpm }}
@@ -225,6 +233,12 @@ jobs:
             "$VERIFICATION_ROOT/dsh-runtime" \
             "$NILS_BIN_DIR" \
             "$WORKBENCH_BROWSER_BIN"
+      - name: Instrument disposable policy stages for manual diagnosis
+        if: github.event_name == 'workflow_dispatch' && inputs.diagnose_policy
+        working-directory: dsh-workbench
+        run: |
+          node tests/policy-stage-diagnostic.ts "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
+          echo "WORKBENCH_POLICY_TRACE=$VERIFICATION_ROOT/policy-stage.log" >> "$GITHUB_ENV"
       - name: Prepare real TTY acceptance dependencies
         working-directory: dsh-workbench
         run: |
@@ -234,6 +248,17 @@ jobs:
           const fs = require('node:fs');
           const [target, source] = process.argv.slice(2);
           fs.writeFileSync(target, `#!/bin/sh\nexec "${process.execPath}" "${source}" "$@"\n`, { mode: 0o700 });
+          NODE
+          node - "$VERIFICATION_ROOT/dsh-workbench-bin" \
+            "$GITHUB_WORKSPACE/dsh-runtime-kit/dist/bin/dsh-runtime-kit-launch.js" \
+            "$VERIFICATION_ROOT/dsh-runtime" \
+            "$GITHUB_WORKSPACE/deepseek-harness/apps/cli/lib/bin.js" <<'NODE'
+          const fs = require('node:fs');
+          const [target, launcher, runtimeRoot, source] = process.argv.slice(2);
+          const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+          const args = [process.execPath, launcher, '--runtime-root', runtimeRoot,
+            '--', process.execPath, source].map(quote).join(' ');
+          fs.writeFileSync(target, `#!/bin/sh\nexec ${args} "$@"\n`, { mode: 0o700 });
           NODE
       - name: Exercise TUI in a real terminal
         working-directory: dsh-workbench
@@ -247,3 +272,17 @@ jobs:
             --dsh-bin "$VERIFICATION_ROOT/dsh-bin" \
             --browser-bin "$WORKBENCH_BROWSER_BIN" \
             "${browser_args[@]}"
+      - name: Exercise activated Workbench profile in a real terminal
+        working-directory: dsh-workbench
+        run: |
+          node tests/finish-line-host-probe.ts
+          pnpm test:tui:terminal \
+            --dsh-bin "$VERIFICATION_ROOT/dsh-workbench-bin" \
+            --installed-dsh-home "$VERIFICATION_ROOT/dsh-home" \
+            --runtime-env-file "$VERIFICATION_ROOT/workbench-verification/terminal-environment.json"
+      - name: Report stage-only manual diagnostic
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.diagnose_policy
+        run: |
+          if test -f "$VERIFICATION_ROOT/policy-stage.log"; then
+            tail -80 "$VERIFICATION_ROOT/policy-stage.log"
+          fi

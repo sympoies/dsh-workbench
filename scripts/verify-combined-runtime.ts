@@ -59,8 +59,7 @@ process.exitCode = result.status ?? 1;
 `, { mode: 0o755 });
 chmodSync(wrapper, 0o755);
 
-const environment = {
-  ...process.env,
+const runtimeEnvironment = {
   DSH_HOME: dshHome,
   CODEX_HOME: join(root, 'codex'),
   CLAUDE_CONFIG_DIR: join(root, 'claude'),
@@ -76,6 +75,8 @@ const environment = {
   DSH_RUNTIME_KIT_AGENT_DOCS_STATE_HOME: join(stateHome, 'agent-docs-dsh'),
   DSH_RUNTIME_KIT_PRIVATE_SKILLS_DIR: join(root, 'private-skills'),
 };
+const environment = { ...process.env, ...runtimeEnvironment };
+writeFileSync(join(root, 'terminal-environment.json'), JSON.stringify(runtimeEnvironment), { mode: 0o600 });
 const launcher = join(kitPackage, 'dist', 'bin', 'dsh-runtime-kit-launch.js');
 const cli = join(kitPackage, 'dist', 'bin', 'dsh-runtime-kit.js');
 function invoke(command: string, args: string[]): { [key: string]: unknown } {
@@ -131,6 +132,7 @@ const doctor = invoke('doctor', []);
 assert.equal(doctor.profile, 'workbench');
 assert.equal(doctor.status, 'healthy');
 assert.deepEqual(doctor.advisories, []);
+writeFileSync(join(dshHome, '.workbench-terminal-acceptance'), 'disposable CI profile\n', { mode: 0o600 });
 const composition = spawnSync(process.execPath,
   [launcher, '--runtime-root', runtimeRoot, '--', wrapper,
     '--profile', 'workbench', '--dump-config'],

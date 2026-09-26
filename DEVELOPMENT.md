@@ -87,9 +87,16 @@ The combined-profile CI runs this acceptance on Linux x64 and macOS arm64
 after its authenticated graph setup and doctor check. It also starts the
 activated `workbench` Web Host through runtime-kit's owner launcher and checks
 a real browser turn and embedded identity in that installed profile. The
-terminal test itself
-installs the frozen TUI-only profile in a separate disposable home and uses a
-native pseudoterminal through the development-only `node-pty` package. It drives Allow once and
+terminal test first installs the frozen TUI-only profile in a separate
+disposable home, then attempts the same scenarios in the installed `workbench`
+profile. The latter remains an acceptance gate for governed Bash. To repeat
+the combined profile check against an isolated installation, use the
+runtime-kit launcher wrapper and pass
+`--installed-dsh-home /absolute/path/to/dsh-home` plus
+`--runtime-env-file /absolute/path/to/terminal-environment.json`; the runtime
+verification script marks only its disposable DSH home and emits the matching
+environment file for this use. Both paths use a native pseudoterminal through
+the development-only `node-pty` package. The acceptance drives Allow once and
 Reject through two real TTY sessions against an authenticated local mock, and
 checks the final Session V4 archive, approval, tool result, completed turn,
 and whether the allowed or rejected command actually ran. It also creates a
@@ -98,9 +105,13 @@ resumes its exact ID, submits another turn, and checks its unique title and
 the exact `/resume` session count through a headless terminal screen. It also
 renames a session, exits, resumes that exact ID, and completes another turn
 while checking the durable user-title event. It then exercises the patched
-stopped-session title writer and resumes the same ID again. It never
-reads an existing DSH home or provider credential. This gate does not claim
-cross-interface handoff or real-TTY operation of the combined profile.
+stopped-session title writer and resumes the same ID again. The default test
+uses a disposable DSH home; the installed-home option must point to a
+disposable installation because the scenarios create sessions there. No
+provider credential is needed. Combined-profile CI also runs the test against
+the activated `workbench` profile in a disposable home. Its pseudoterminal
+preserves the host's systemd user manager connection for runtime-kit's
+finish-line containment. This gate does not claim cross-interface handoff.
 
 For durable design or compatibility outcomes, update the current owner first,
 then use `devlog new` to append one evidence-backed entry. Run `devlog check`
