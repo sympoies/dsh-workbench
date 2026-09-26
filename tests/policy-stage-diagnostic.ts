@@ -36,6 +36,12 @@ instrument('dist/src/workspace-lease/index.js', [
   ['const downstream = await next();', 'lease-downstream'],
   ['const targets = await this.#resolutionFor(exec, provider, slot, identity, admissionSignal.signal);',
     'lease-targets'],
+  ['await owner.draining;', 'lease-owner-drain'],
+  ['const anchor = owner.anchor ?? this.#startAnchor(owner);', 'lease-anchor-start'],
+  ['await anchor.catch(() => { });', 'lease-anchor-wait'],
+  ['const existing = owner.bindings.get(key);', 'lease-existing'],
+  ['const inflight = owner.acquisitions.get(key);', 'lease-inflight'],
+  ['return await acquisition;', 'lease-acquisition'],
   ['const granted = await this.#begin(binding, target, slot.session.header.cwd, identity, admissionSignal.signal);',
     'lease-begin'],
 ]);
