@@ -82,10 +82,26 @@ instrument(packageRoot, 'dist/src/finish-line/nils-client.js', [
   ['executionLease = authenticatedExecution.acquire(operation.controller.signal);', 'nils-acquire'],
   ['const argv = await resolveSubprocessArgv(ctx, agentHook.argv([\'finish-line\', action, \'--format\', \'json\']), executionSignal);',
     'nils-argv'],
-  ['operation.handle = executionLease.spawn({', 'nils-spawn', 'before'],
   ['const handle = operation.handle;', 'nils-spawn-after', 'before'],
   ['const first = await Promise.race([', 'nils-wait', 'before'],
 ]);
+const nilsClientPath = join(packageRoot, 'dist/src/finish-line/nils-client.js');
+let nilsClient = readFileSync(nilsClientPath, 'utf8');
+const spawnCall = nilsClient.match(/operation\.handle = executionLease\.spawn\(\{[\s\S]*?\n\s{16}\}\);/gu) ?? [];
+assert.equal(spawnCall.length, 1, 'finish-line operation spawn must occur exactly once');
+nilsClient = nilsClient.replace(spawnCall[0], `try {
+${spawnCall[0]}
+  workbenchPolicyStage('nils-spawn-created:' + action);
+} catch (error) {
+  const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,31}$/u.test(error.name)
+    ? error.name : 'Unknown';
+  const rawCode = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined;
+  const errorCode = typeof rawCode === 'string' && /^[A-Z0-9_-]{1,40}$/u.test(rawCode)
+    ? rawCode : 'none';
+  workbenchPolicyStage('nils-spawn-threw:' + action + ':' + errorName + ':' + errorCode);
+  throw error;
+}`);
+writeFileSync(nilsClientPath, marker + nilsClient);
 const tuiPluginPath = join(tuiRoot, 'dsh-adapter/plugin.js');
 let tuiPlugin = readFileSync(tuiPluginPath, 'utf8');
 const tuiApprovalStoreCreation = 'const approvalStore = new ApprovalStore(adapterRuntimeFor(ctx));';
