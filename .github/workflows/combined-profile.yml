@@ -217,6 +217,17 @@ jobs:
           const [target, source] = process.argv.slice(2);
           fs.writeFileSync(target, `#!/bin/sh\nexec "${process.execPath}" "${source}" "$@"\n`, { mode: 0o700 });
           NODE
+          node - "$VERIFICATION_ROOT/dsh-workbench-bin" \
+            "$GITHUB_WORKSPACE/dsh-runtime-kit/dist/bin/dsh-runtime-kit-launch.js" \
+            "$VERIFICATION_ROOT/dsh-runtime" \
+            "$GITHUB_WORKSPACE/deepseek-harness/apps/cli/lib/bin.js" <<'NODE'
+          const fs = require('node:fs');
+          const [target, launcher, runtimeRoot, source] = process.argv.slice(2);
+          const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+          const args = [process.execPath, launcher, '--runtime-root', runtimeRoot,
+            '--', process.execPath, source].map(quote).join(' ');
+          fs.writeFileSync(target, `#!/bin/sh\nexec ${args} "$@"\n`, { mode: 0o700 });
+          NODE
       - name: Exercise TUI in a real terminal
         working-directory: dsh-workbench
         run: pnpm test:tui:terminal --dsh-bin "$VERIFICATION_ROOT/dsh-bin"
@@ -224,5 +235,6 @@ jobs:
         working-directory: dsh-workbench
         run: |
           pnpm test:tui:terminal \
-            --dsh-bin "$VERIFICATION_ROOT/dsh-bin" \
-            --installed-dsh-home "$VERIFICATION_ROOT/dsh-home"
+            --dsh-bin "$VERIFICATION_ROOT/dsh-workbench-bin" \
+            --installed-dsh-home "$VERIFICATION_ROOT/dsh-home" \
+            --runtime-env-file "$VERIFICATION_ROOT/workbench-verification/terminal-environment.json"

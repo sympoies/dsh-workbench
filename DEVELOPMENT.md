@@ -71,8 +71,11 @@ arm64 after its authenticated graph setup and doctor check: first with a
 frozen TUI-only profile, then with the installed `workbench` profile. The
 terminal test uses a native pseudoterminal through the development-only
 `node-pty` package. To repeat the combined profile check against an isolated
-installation, pass `--installed-dsh-home /absolute/path/to/dsh-home`; the
-runtime verification script marks only its disposable DSH home for this use.
+installation, use the runtime-kit launcher wrapper and pass
+`--installed-dsh-home /absolute/path/to/dsh-home` plus
+`--runtime-env-file /absolute/path/to/terminal-environment.json`; the runtime
+verification script marks only its disposable DSH home and emits the matching
+environment file for this use.
 The acceptance drives Allow once and
 Reject through two real TTY sessions against an authenticated local mock, and
 checks the final Session V4 archive, approval, tool result, completed turn,

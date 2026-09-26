@@ -15,6 +15,11 @@ const repo = fileURLToPath(new URL('..', import.meta.url));
 const { Terminal } = headless;
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
 const installedHome = option('--installed-dsh-home');
+const runtimeEnvFile = option('--runtime-env-file');
+if (Boolean(installedHome) !== Boolean(runtimeEnvFile)) {
+  throw new Error('Installed DSH home and runtime environment file must be provided together');
+}
+const runtimeEnvironment = runtimeEnvFile ? JSON.parse(readFileSync(runtimeEnvFile, 'utf8')) as NodeJS.ProcessEnv : {};
 const profileName = installedHome ? 'workbench' : 'dsh-tui';
 const scenarios = [
   { name: 'allow', decision: '\r', outcome: 'allowed-once', toolOutput: 'TUI_ALLOW_TOOL_OK',
@@ -111,6 +116,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       DSH_HOME: home,
       DSH_AGENTS_HOME: join(fixture, 'agents'),
       XDG_CONFIG_HOME: join(fixture, 'config'),
+      ...runtimeEnvironment,
       DSH_TELEMETRY_DISABLED: '1',
       DEEPSEEK_BASE_URL: `${baseURL}/v1`,
       DEEPSEEK_API_KEY: apiKey,
@@ -141,14 +147,15 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       ['missing-command', /command not found|no such file or directory/i],
     ] as const;
     const category = categories.find(([, pattern]) => pattern.test(startupOutput))?.[0] ?? 'unclassified';
-    const diagnostic = startupOutput
+    let diagnostic = startupOutput
       .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
       .replaceAll(apiKey, '[redacted key]')
       .replaceAll(baseURL, '[mock endpoint]')
       .replaceAll(fixture, '[fixture]')
       .replaceAll(home, '[home]')
-      .replace(/[\x00-\x1f\x7f]/g, ' ')
-      .slice(-1_500);
+      .replace(/[\x00-\x1f\x7f]/g, ' ');
+    if (installedHome) diagnostic = diagnostic.replaceAll(installedHome, '[installed home]');
+    diagnostic = diagnostic.slice(-1_500);
     return `TUI exited with ${exitCode ?? exitSignal}; startup category ${category}; output: ${diagnostic}`;
   };
   const visibleScreen = () => Array.from({ length: screen.rows }, (_, row) =>
@@ -378,7 +385,8 @@ async function main(): Promise<void> {
     throw new Error('This real TTY acceptance requires Linux or macOS');
   }
   const dsh = binaryOption('--dsh-bin');
-  assert.equal(command(dsh, ['--version'], repo), contract.components.dsh.package.version);
+  assert.equal(command(dsh, ['--version'], repo, { ...process.env, ...runtimeEnvironment }),
+    contract.components.dsh.package.version);
   assert.equal(command('pnpm', ['--version'], repo), contract.runtime.pnpm);
   command('zstdcat', ['--version'], repo);
   const fixture = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-'));
