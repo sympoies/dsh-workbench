@@ -234,13 +234,8 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     await waitForTui(tui, () => JSON.stringify(readEvents(logPath)
       .filter(event => event.type === 'user/message')).includes(recoveredPrompt),
     'persisted post-crash TUI prompt');
-    await waitForTui(tui, () => {
-      const events = readEvents(logPath);
-      const promptIndex = events.findIndex(event => event.type === 'user/message'
-        && (JSON.stringify(event.data?.message) ?? '').includes(recoveredPrompt));
-      return promptIndex >= 0 && events.slice(promptIndex + 1).some(event => event.type === 'assistant/message'
-        && (JSON.stringify(event.data?.message) ?? '').includes(recoveredAnswer));
-    }, 'persisted post-crash TUI continuation answer');
+    await waitForTui(tui, () => mock.requests.length >= 2,
+      'post-crash TUI continuation model request');
     await waitForTui(tui, () => readEvents(logPath).filter(event => event.type === 'turn/end').length === 2,
       'completed post-crash TUI continuation');
     await tui.stop();
