@@ -253,7 +253,7 @@ async function startHost(binary: string, home: string, agents: string, workspace
       const timer = setTimeout(() => reject(new Error('DSH Web Host startup timed out')), 60_000);
       child.stdout.on('data', chunk => {
         output = `${output}${String(chunk)}`.slice(-4096);
-        const match = /dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=[^\s]+)/.exec(output);
+        const match = /dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]{43})\r?\n/.exec(output);
         if (match) {
           clearTimeout(timer);
           resolveReady(match[1]);
