@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,7 +51,7 @@ function seedLegacyV2Copy(fixture: string, home: string, workspace: string, exis
   const directory = join(project, id);
   const source = join(directory, 'session.v2.jsonl.zstd');
   const current = join(directory, 'session.v4.jsonl.zstd');
-  const header = { type: 'session', version: 2, id, createdAt: Date.now(), cwd: workspace,
+  const header = { type: 'session', version: 2, id, createdAt: Date.now(), cwd: realpathSync(workspace),
     isSeeded: false, delegationDepth: 0 };
   const events = [
     { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
@@ -491,14 +491,18 @@ async function startHost(binary: string, home: string, agents: string, workspace
         reject(new Error(`DSH Web Host exited before readiness: ${code}`));
       });
     });
-    const diagnostic = () => stderr
+    const safeDiagnostic = () => stderr
       .replaceAll(apiKey, '[redacted key]')
       .replaceAll(baseURL, '[mock endpoint]')
       .replaceAll(home, '[home]')
       .replaceAll(agents, '[agents]')
       .replaceAll(workspace, '[workspace]')
-      .replace(/([?&]token=)[^\s"']+/gi, '$1[redacted]')
-      .slice(-1_500);
+      .replace(/([?&]token=)[^\s"']+/gi, '$1[redacted]');
+    const diagnostic = () => {
+      const safe = safeDiagnostic();
+      const firstError = safe.split('\n').find(line => /(?:Error:|corrupt session log)/.test(line)) ?? '';
+      return `${firstError.slice(0, 500)}\n${safe.slice(-1_000)}`;
+    };
     return { child, url, errorCount: () => errorLines, diagnostic };
   } catch (error) {
     await stopHost(child);
