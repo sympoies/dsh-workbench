@@ -860,7 +860,13 @@ async function main(): Promise<void> {
       await new Promise(resolveWait => setTimeout(resolveWait, 50));
     }
     assert.equal(await sendImage.isEnabled(), true, 'image upload did not reach a sendable state');
+    await recoveredOpened.page.getByRole('alert').first()
+      .waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
     await sendImage.click();
+    const imageAlert = await recoveredOpened.page.getByRole('alert').first()
+      .waitFor({ timeout: 4_000 })
+      .then(() => recoveredOpened.page.getByRole('alert').first().innerText())
+      .catch(() => null);
     const imageConversation = recoveredOpened.page.locator('[data-conversation-content]');
     const imageId = await copiedSessionId(recoveredOpened.page);
     const imageLog = sessionLog(join(home, 'sessions'), imageId);
@@ -875,6 +881,12 @@ async function main(): Promise<void> {
         lastTurnKind: (events.filter(event => event.type === 'turn/end').at(-1)?.data?.reason as
           { kind?: string } | undefined)?.kind ?? 'none',
         webFailureVisible: await imageConversation.getByText('This turn failed', { exact: false }).count() > 0,
+        draftRetained: (await imageEditor.innerText()).includes(imagePrompt),
+        attachmentRetained: await recoveredOpened.page.getByRole('group',
+          { name: 'Pending attachments' }).getByRole('img', { name: imageName }).count() > 0,
+        alert: imageAlert?.replaceAll(apiKey, '[redacted]').replaceAll(home, '[home]')
+          .replaceAll(agents, '[agents]').replaceAll(workspace, '[workspace]')
+          .replaceAll(mock.baseURL, '[mock endpoint]').slice(0, 300) ?? null,
         pageErrors: recoveredOpened.errors.length, hostErrors: host.errorCount(),
         hostDiagnostic: host.diagnostic() }));
       throw error;
