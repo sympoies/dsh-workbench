@@ -385,9 +385,13 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     const ended = events.find(event => event.type === 'turn/end');
     const decided = events.find(event => event.type === 'approval/decided');
     const result = events.find(event => event.type === 'tool/result');
-    assert.equal((ended?.data?.reason as { kind?: string } | undefined)?.kind, 'completed',
+    const endReason = ended?.data?.reason as { kind?: string; error?: { code?: string } } | undefined;
+    const runtimeSteers = events.filter(event => event.type === 'user/message'
+      && (event.data?.source as { kind?: string } | undefined)?.kind === 'dsh-runtime-kit').length;
+    assert.equal(endReason?.kind, 'completed',
       `${scenario.name} turn; approval=${String(decided?.data?.outcome ?? 'missing')}; `
-      + `toolResult=${result === undefined ? 'missing' : 'present'}`);
+      + `toolResult=${result === undefined ? 'missing' : 'present'}; `
+      + `endErrorCode=${endReason?.error?.code ?? 'none'}; runtimeSteers=${runtimeSteers}`);
     const finalMessage = events.filter(event => event.type === 'assistant/message').at(-1)?.data?.message as
       { content?: Array<{ type?: string; text?: string }> } | undefined;
     assert.ok(finalMessage?.content?.some(block => block.type === 'text' && block.text === scenario.answer),
