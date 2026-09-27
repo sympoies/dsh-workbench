@@ -386,12 +386,20 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     const decided = events.find(event => event.type === 'approval/decided');
     const result = events.find(event => event.type === 'tool/result');
     const endReason = ended?.data?.reason as { kind?: string; error?: { code?: string } } | undefined;
-    const runtimeSteers = events.filter(event => event.type === 'user/message'
-      && (event.data?.source as { kind?: string } | undefined)?.kind === 'dsh-runtime-kit').length;
+    const runtimeMessages = events.filter(event => event.type === 'user/message'
+      && (event.data?.source as { kind?: string } | undefined)?.kind === 'dsh-runtime-kit');
+    const steerClasses = runtimeMessages.map(event => {
+      const message = event.data?.message as { content?: Array<{ text?: string }> } | undefined;
+      const text = message?.content?.find(block => typeof block.text === 'string')?.text ?? '';
+      if (text.startsWith('Finish-line')) return 'finish-line';
+      if (text.startsWith('Authoritative acceptance')) return 'acceptance';
+      if (text.startsWith('The lifecycle policy')) return 'lifecycle-policy';
+      return 'other';
+    });
     assert.equal(endReason?.kind, 'completed',
       `${scenario.name} turn; approval=${String(decided?.data?.outcome ?? 'missing')}; `
       + `toolResult=${result === undefined ? 'missing' : 'present'}; `
-      + `endErrorCode=${endReason?.error?.code ?? 'none'}; runtimeSteers=${runtimeSteers}`);
+      + `endErrorCode=${endReason?.error?.code ?? 'none'}; runtimeSteers=${steerClasses.join(',')}`);
     const finalMessage = events.filter(event => event.type === 'assistant/message').at(-1)?.data?.message as
       { content?: Array<{ type?: string; text?: string }> } | undefined;
     assert.ok(finalMessage?.content?.some(block => block.type === 'text' && block.text === scenario.answer),
