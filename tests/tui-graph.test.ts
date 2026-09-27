@@ -4,7 +4,8 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -75,7 +76,7 @@ test('pinned pnpm rejects the stale TUI graph and installs the reviewed correcti
   }
 });
 
-test('reviewed TUI profile lock installs without resolving a new graph', { timeout: 600_000 }, () => {
+test('reviewed TUI profile lock installs without resolving a new graph', { timeout: 600_000 }, async () => {
   const stage = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-profile-'));
   try {
     mkdirSync(join(stage, 'patches'));
@@ -99,6 +100,124 @@ test('reviewed TUI profile lock installs without resolving a new graph', { timeo
     const frozen = run('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies',
       '--ignore-scripts', '--reporter', 'append-only'], stage);
     assert.equal(frozen.status, 0, errorCode(frozen));
+    const tuiRoot = join(stage, 'node_modules', contract.components.tui.package.name);
+    const patchedPlugin = readFileSync(join(tuiRoot, 'lib/types/dsh-adapter/plugin.js'), 'utf8');
+    const headlessHostGuard = patchedPlugin.indexOf("if (hostMode === 'headless-host') {");
+    const headlessHostReturn = patchedPlugin.indexOf('return;', headlessHostGuard);
+    const approvalHandler = patchedPlugin.indexOf("ctx.on('approval/request'");
+    assert.ok(headlessHostGuard >= 0 && headlessHostReturn > headlessHostGuard
+      && approvalHandler > headlessHostReturn,
+    'headless Web hosts must return before registering the global TUI approval handler');
+    assert.match(patchedPlugin,
+      /ctx\.on\('approval\/request', \(req, next\) => approvalStore\.park\(req\)\.catch\(\(\) => next\(\)\), \{ global: true, prepend: true \}\);/,
+      'installed TUI approval handler must receive agent-scoped dispatch before other global listeners');
+    const { ApprovalStore } = await import(pathToFileURL(join(tuiRoot, 'lib/types/dsh-adapter/approvals.js')).href);
+    const approvalStore = new ApprovalStore({ mode: 'legacy', slices: [] });
+    const sharedCallId = 'shared-low-entropy-call-id';
+    const request = (agentId: string) => ({
+      agent: {
+        id: agentId,
+        session: { events: [{ type: 'tool/call', data: { callId: sharedCallId, arguments: '{"command":"true"}' } }] },
+      },
+      callId: sharedCallId,
+      toolName: 'bash',
+      signal: new AbortController().signal,
+    });
+    const firstResult = approvalStore.park(request('agent-first'));
+    const secondResult = approvalStore.park(request('agent-second'));
+    assert.deepEqual(approvalStore.pendingAgentIds(), ['agent-first', 'agent-second']);
+    assert.equal(approvalStore.getSnapshot()?.agentId, 'agent-first');
+    approvalStore.decide('allowed-once');
+    assert.equal(await firstResult, 'allowed-once');
+    assert.equal(approvalStore.getSnapshot()?.agentId, 'agent-second');
+    approvalStore.decide('rejected');
+    assert.equal(await secondResult, 'rejected');
+    assert.deepEqual(approvalStore.pendingAgentIds(), []);
+    const metadata = ts.createSourceFile('session-metadata.js', readFileSync(join(tuiRoot,
+      'lib/types/dsh-adapter/channel/session-metadata.js'), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    const renameDeclarations = new Map<string, ts.Expression>();
+    const findRename = (node: ts.Node): void => {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
+        && ['current', 'renameSession'].includes(node.name.text) && node.initializer) {
+        renameDeclarations.set(node.name.text, node.initializer);
+      }
+      ts.forEachChild(node, findRename);
+    };
+    findRename(metadata);
+    assert.equal(renameDeclarations.size, 2, 'Published TUI rename action owners missing');
+    // Execute only the actual rename carrier and binding guard; unrelated
+    // metadata actions require services outside this TUI-only frozen profile.
+    const createSessionMetadataActions = new Function('ctx', 'deps',
+      `const current = ${renameDeclarations.get('current')!.getText(metadata)};\n`
+      + `const renameSession = ${renameDeclarations.get('renameSession')!.getText(metadata)};\n`
+      + 'return { renameSession };');
+    const chat = ts.createSourceFile('Chat.js', readFileSync(join(tuiRoot,
+      'lib/types/screens/Chat.js'), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    let renameCommand: ts.CaseClause | undefined;
+    let recapApply: ts.ArrowFunction | undefined;
+    const visit = (node: ts.Node): void => {
+      if (ts.isCaseClause(node) && ts.isStringLiteral(node.expression)
+        && node.expression.text === 'rename') renameCommand = node;
+      if (ts.isPropertyAssignment(node) && node.name.getText(chat) === 'onApplyTitle'
+        && ts.isArrowFunction(node.initializer)) recapApply = node.initializer;
+      ts.forEachChild(node, visit);
+    };
+    visit(chat);
+    assert.ok(renameCommand && recapApply, 'Published TUI rename acknowledgement owners missing');
+    // Execute the actual installed UI callback bodies without mounting React.
+    // This protects their completion and rejection behavior, not just source spelling.
+    const commandRename = new Function('channel', 't', 'setHelpOpen', 'rawInput',
+      renameCommand.statements.map(statement => statement.getText(chat)).join('\n'));
+    const applyRecap = new Function('channel', 't', 'recap', 'setRecap', recapApply.body.getText(chat));
+    for (const owner of ['command', 'recap'] as const) {
+      for (const outcome of ['pass', 'reject', 'detach'] as const) {
+        const session = { id: 'durable-rename-session' };
+        const capture = { agent: { session } };
+        const visibleTitles: string[] = [];
+        const writes: unknown[] = [];
+        const notifications: Array<{ key: string; color?: string }> = [];
+        let complete!: () => void;
+        let rejectWrite!: (error: Error) => void;
+        const write = new Promise<void>((resolveWrite, rejectPending) => {
+          complete = resolveWrite; rejectWrite = rejectPending;
+        });
+        let attached = true;
+        const actions = createSessionMetadataActions({ get: (name: string) => {
+          if (name === 'sessionTitle') return { rename: (_session: unknown, title: string) => ({ title }) };
+          if (name === 'sessionProjectionCache') return { write: (value: unknown) => { writes.push(value); return write; } };
+        } }, { owner: { current: () => attached },
+          binding: { capture: () => capture, isCurrent: () => true },
+          setSessionTitle: (title: string) => visibleTitles.push(title), emit: () => {} });
+        let titleApplied = false;
+        const channel = { renameSession: actions.renameSession,
+          notify: (message: { key: string }, options?: { color?: string }) =>
+            notifications.push({ key: message.key, color: options?.color }) };
+        const translate = (key: string) => ({ key });
+        if (owner === 'command') commandRename(channel, translate, () => {}, 'Durable manual title');
+        else applyRecap(channel, translate, { title: 'Durable manual title', titleApplied: false },
+          (update: (previous: { title: string; titleApplied: boolean }) => { titleApplied: boolean }) => {
+            titleApplied = update({ title: 'Durable manual title', titleApplied }).titleApplied;
+          });
+        await Promise.resolve();
+        assert.deepEqual(visibleTitles, [], `${owner} acknowledged before projection durability`);
+        assert.equal(notifications.length, 0, `${owner} notified success before projection durability`);
+        assert.equal(titleApplied, false);
+        assert.deepEqual(writes, [session]);
+        if (outcome === 'detach') attached = false;
+        if (outcome === 'reject') rejectWrite(new Error('controlled projection write failure')); else complete();
+        await new Promise<void>(resolveTick => setImmediate(resolveTick));
+        if (outcome !== 'pass') {
+          assert.deepEqual(visibleTitles, []);
+          assert.equal(titleApplied, false);
+          assert.equal(notifications.length, 1);
+          assert.equal(notifications[0].color, 'error');
+        } else {
+          assert.deepEqual(visibleTitles, ['Durable manual title']);
+          assert.equal(titleApplied, owner === 'recap');
+          assert.equal(notifications[0]?.key, owner === 'command' ? 'rename-done' : 'recap-title-applied-notify');
+        }
+      }
+    }
     const lock = readFileSync(join(stage, 'pnpm-lock.yaml'), 'utf8');
     assert.ok(lock.includes(contract.components.tui.package.integrity), 'TUI integrity missing');
     assert.ok(lock.includes(contract.components.tui.compatibilityPatch!.sha256), 'TUI patch digest missing');

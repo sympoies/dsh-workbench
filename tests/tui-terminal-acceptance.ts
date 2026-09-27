@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
+import { startApprovalMockLlmServer } from './approval-mock.ts';
 import headless from '@xterm/headless';
 import * as pty from 'node-pty';
 import type { WorkbenchContract } from '../src/contract-types.ts';
@@ -14,18 +15,42 @@ import { readEvents } from './session-events.ts';
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const { Terminal } = headless;
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
+const installedHome = option('--installed-dsh-home');
+const runtimeEnvFile = option('--runtime-env-file');
+if (Boolean(installedHome) !== Boolean(runtimeEnvFile)) {
+  throw new Error('Installed DSH home and runtime environment file must be provided together');
+}
+const runtimeEnvironment = runtimeEnvFile ? JSON.parse(readFileSync(runtimeEnvFile, 'utf8')) as NodeJS.ProcessEnv : {};
+if (installedHome) {
+  assert.equal(readFileSync(join(installedHome, '.workbench-terminal-acceptance'), 'utf8'),
+    'disposable CI profile\n', 'Installed acceptance requires an owner-marked disposable home');
+  assert.equal(realpathSync(runtimeEnvironment.DSH_HOME!), realpathSync(installedHome),
+    'Runtime environment and installed home must identify the same disposable installation');
+}
+const managerEnvironment: Record<string, string> = {};
+for (const name of ['DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR']) {
+  if (typeof process.env[name] === 'string') managerEnvironment[name] = process.env[name];
+}
+const profileName = installedHome ? 'workbench' : 'dsh-tui';
 const scenarios = [
-  { name: 'allow', decision: '\r', outcome: 'allowed-once', toolOutput: 'TUI_ALLOW_TOOL_OK',
+  { name: 'allow', decision: '1', outcome: 'allowed-once', toolOutput: 'TUI_ALLOW_TOOL_OK',
     answer: 'TUI_ALLOW_FINISHED', error: false },
   { name: 'reject', decision: '\x1b', outcome: 'rejected', toolOutput: 'TUI_REJECT_TOOL_OUTPUT',
     answer: 'TUI_REJECT_FINISHED', error: true },
 ] as const;
 
-function binaryOption(name: string): string {
+function option(name: string): string | undefined {
   const index = process.argv.indexOf(name);
+  if (index < 0) return undefined;
   const value = process.argv[index + 1];
-  if (index < 0 || !value || value.startsWith('--')) throw new Error(`Required option: ${name} <absolute path>`);
+  if (!value || !isAbsolute(value)) throw new Error(`Required absolute path after ${name}`);
   return resolve(value);
+}
+
+function binaryOption(name: string): string {
+  const value = option(name);
+  if (!value) throw new Error(`Required option: ${name} <absolute path>`);
+  return value;
 }
 
 function command(binary: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = process.env): string {
@@ -93,15 +118,17 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
   waitForAfter: (first: string, second: string) => Promise<void>;
 } {
   const home = join(fixture, 'home');
-  const child = pty.spawn(binary, ['--profile', 'dsh-tui', ...appArgs], {
+  const child = pty.spawn(binary, ['--profile', profileName, ...appArgs], {
     name: 'xterm-256color', cols: 80, rows: 24,
     cwd: join(fixture, 'workspace'),
     env: {
       PATH: `${dirname(binary)}:${process.env.PATH ?? ''}`,
       HOME: home,
-      DSH_HOME: home,
       DSH_AGENTS_HOME: join(fixture, 'agents'),
       XDG_CONFIG_HOME: join(fixture, 'config'),
+      ...managerEnvironment,
+      ...runtimeEnvironment,
+      DSH_HOME: home,
       DSH_TELEMETRY_DISABLED: '1',
       DEEPSEEK_BASE_URL: `${baseURL}/v1`,
       DEEPSEEK_API_KEY: apiKey,
@@ -132,10 +159,38 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       ['missing-command', /command not found|no such file or directory/i],
     ] as const;
     const category = categories.find(([, pattern]) => pattern.test(startupOutput))?.[0] ?? 'unclassified';
-    return `TUI exited with ${exitCode ?? exitSignal}; startup category ${category}`;
+    let diagnostic = startupOutput
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+      .replaceAll(apiKey, '[redacted key]')
+      .replaceAll(baseURL, '[mock endpoint]')
+      .replaceAll(fixture, '[fixture]')
+      .replaceAll(home, '[home]')
+      .replace(/[\x00-\x1f\x7f]/g, ' ');
+    if (installedHome) diagnostic = diagnostic.replaceAll(installedHome, '[installed home]');
+    diagnostic = diagnostic.slice(-1_500);
+    return `TUI exited with ${exitCode ?? exitSignal}; startup category ${category}; output: ${diagnostic}`;
   };
   const visibleScreen = () => Array.from({ length: screen.rows }, (_, row) =>
     screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '').join('\n');
+  const diagnosticScreen = () => {
+    let value = visibleScreen().replaceAll(apiKey, '[redacted key]')
+      .replaceAll(baseURL, '[mock endpoint]').replaceAll(fixture, '[fixture]');
+    if (installedHome) value = value.replaceAll(installedHome, '[installed home]');
+    return value.trim().slice(-1_500);
+  };
+  const descendantCommands = () => {
+    const result = spawnSync('ps', ['-e', '-o', 'pid=,ppid=,comm='],
+      { encoding: 'utf8', timeout: 2_000 });
+    if (result.status !== 0) return 'unavailable';
+    const entries = result.stdout.split('\n').map(line => line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/))
+      .filter((entry): entry is RegExpMatchArray => entry !== null)
+      .map(entry => ({ pid: Number(entry[1]), parent: Number(entry[2]), command: basename(entry[3]) }));
+    const selected = new Set([child.pid]);
+    for (let index = 0; index < entries.length; index += 1) {
+      for (const entry of entries) if (selected.has(entry.parent)) selected.add(entry.pid);
+    }
+    return entries.filter(entry => selected.has(entry.pid)).map(entry => entry.command).join(',') || 'none';
+  };
   return {
     write: data => child.write(data),
     get exitCode() { return exitCode; },
@@ -182,7 +237,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
         reject(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
         return;
       }
-      const timer = setTimeout(() => finish(new Error(`TUI did not show ${marker}`)), 60_000);
+      const timer = setTimeout(() => finish(new Error(`TUI did not show ${marker}; descendants: ${descendantCommands()}; screen: ${diagnosticScreen()}`)), 60_000);
       const onExit = () => finish(new Error(`TUI exited before ${marker}: ${startupFailure()}`));
       const check = () => {
         const frame = visibleScreen();
@@ -207,6 +262,21 @@ async function runSessionScenario(binary: string, fixture: string): Promise<void
   const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true, apiKey, successText: answer });
   const logRoot = join(fixture, 'home', 'sessions');
   const previous = new Set(sessionLogs(logRoot));
+  const workspace = join(fixture, 'workspace');
+  const normalizeWorkspace = (value: string): string => {
+    const normalized = value.replaceAll('\\', '/').replace(/\/$/, '');
+    return /^[A-Za-z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+  };
+  const sessionWorkspace = (path: string): string => {
+    const header = readEvents(path, { strict: true })[0];
+    assert.equal(header?.type, 'session', 'Session V4 archive must start with its header');
+    assert.equal(typeof header.cwd, 'string', 'Session V4 header must identify its workspace');
+    return normalizeWorkspace(header.cwd!);
+  };
+  // The pinned picker counts its current workspace rail, not every archive
+  // in the shared home. Web owner fixtures can belong to another workspace.
+  const previousWorkspaceCount = [...previous].filter(path =>
+    sessionWorkspace(path) === normalizeWorkspace(workspace)).length;
   // Two visible transcript rows per turn exceed the pinned TUI's 120-row
   // initial rendering cap, exercising its long-session projection on resume.
   const prompts = Array.from({ length: 72 }, (_, index) => `TUI_SESSION_TURN_${index + 1}`);
@@ -216,6 +286,7 @@ async function runSessionScenario(binary: string, fixture: string): Promise<void
     await terminal.waitFor('Explore the uncharted!');
     terminal.write(`${prompts[0]}\r`);
     const logPath = await waitForTurn(logRoot, previous);
+    assert.equal(sessionWorkspace(logPath), normalizeWorkspace(workspace));
     for (let index = 1; index < prompts.length; index += 1) {
       terminal.write(`${prompts[index]}\r`);
       await waitForTurnCount(logPath, index + 1);
@@ -230,7 +301,7 @@ async function runSessionScenario(binary: string, fixture: string): Promise<void
     await waitForTurnCount(logPath, prompts.length + 1);
     await terminal.waitForAfter('TUI_SESSION_RESUMED_TURN', answer);
     terminal.write('/resume\r');
-    await terminal.waitFor(new RegExp(`\\b${previous.size + 1} total\\b`));
+    await terminal.waitFor(new RegExp(`\\b${previousWorkspaceCount + 1} total\\b`));
     await terminal.waitFor(new RegExp(`Sessions[\\s\\S]*${answer}`));
     await terminal.stop();
     assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after resume');
@@ -268,6 +339,7 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
     const logPath = await waitForTurn(logRoot, previous);
     terminal.write(`/rename ${renamed}\r`);
     await waitForTitle(logPath, renamed);
+    await terminal.waitFor(`Renamed to "${renamed}"`);
     await terminal.stop();
     assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after rename');
     const sessionId = basename(dirname(logPath));
@@ -279,7 +351,7 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
     await terminal.stop();
     assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after renamed resume');
     const offlineTitle = 'WB_OFFLINE_RENAME';
-    const offlineWriter = pathToFileURL(join(fixture, 'home', 'profiles', 'dsh-tui', 'node_modules',
+    const offlineWriter = pathToFileURL(join(fixture, 'home', 'profiles', profileName, 'node_modules',
       contract.components.tui.package.name, 'lib/types/dsh-adapter/compat/sessionLog.js')).href;
     command(process.execPath, ['--input-type=module', '-e',
       `import { appendSessionTitle } from ${JSON.stringify(offlineWriter)};
@@ -310,10 +382,11 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
 
 async function runScenario(binary: string, fixture: string, scenario: typeof scenarios[number]): Promise<void> {
   const apiKey = randomBytes(24).toString('hex');
-  const marker = join(fixture, 'workspace', `.tui-${scenario.name}-executed`);
-  const mock = await startMockLlmServer({ sequence: ['tool_call_success', 'success'], repeatLast: true,
+  const marker = join(fixture, `.tui-${scenario.name}-executed`);
+  const toolCommand = `touch ${quote(marker)} && printf ${scenario.toolOutput}`;
+  const mock = await startApprovalMockLlmServer({ sequence: ['tool_call_success', 'success'], repeatLast: true,
     apiKey, successText: scenario.answer, toolName: 'bash',
-    toolArguments: JSON.stringify({ command: `touch ${quote(marker)} && printf ${scenario.toolOutput}`,
+    toolArguments: JSON.stringify({ command: toolCommand,
       description: `Print ${scenario.toolOutput}`, sandbox_permissions: 'danger-full-access',
       justification: 'Verify TUI approval in a disposable workspace' }) });
   const logRoot = join(fixture, 'home', 'sessions');
@@ -325,19 +398,38 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     await terminal.waitFor('Explore the uncharted!');
     terminal.write(`Run the Bash command printf ${scenario.toolOutput} and report its output.\r`);
     await terminal.waitFor('Awaiting approval · bash');
+    await terminal.waitFor('Yes, allow once');
     terminal.write(scenario.decision);
     const logPath = await waitForTurn(logRoot, previous);
     await terminal.stop();
     assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly');
     const events = readEvents(logPath, { strict: true });
     const ended = events.find(event => event.type === 'turn/end');
-    assert.equal((ended?.data?.reason as { kind?: string } | undefined)?.kind, 'completed');
+    const decided = events.find(event => event.type === 'approval/decided');
+    const result = events.find(event => event.type === 'tool/result');
+    const endReason = ended?.data?.reason as { kind?: string; error?: { code?: string } } | undefined;
+    const runtimeMessages = events.filter(event => event.type === 'user/message'
+      && (event.data?.source as { kind?: string } | undefined)?.kind === 'dsh-runtime-kit');
+    const steerClasses = runtimeMessages.map(event => {
+      const content = event.data?.content as Array<{ text?: string }> | undefined;
+      const text = content?.find(block => typeof block.text === 'string')?.text ?? '';
+      if (text.startsWith('Finish-line state is unavailable')) return 'finish-line-state';
+      if (text.startsWith('Finish-line response identity changed')) return 'finish-line-identity';
+      if (text.startsWith('Finish-line release is unavailable')) return 'finish-line-release';
+      if (text.startsWith('Finish-line blocked:')) return 'finish-line-blocked';
+      if (text.startsWith('Finish-line')) return 'finish-line-other';
+      if (text.startsWith('Authoritative acceptance')) return 'acceptance';
+      if (text.startsWith('The lifecycle policy')) return 'lifecycle-policy';
+      return 'other';
+    });
+    assert.equal(endReason?.kind, 'completed',
+      `${scenario.name} turn; approval=${String(decided?.data?.outcome ?? 'missing')}; `
+      + `toolResult=${result === undefined ? 'missing' : 'present'}; `
+      + `endErrorCode=${endReason?.error?.code ?? 'none'}; runtimeSteers=${steerClasses.join(',')}`);
     const finalMessage = events.filter(event => event.type === 'assistant/message').at(-1)?.data?.message as
       { content?: Array<{ type?: string; text?: string }> } | undefined;
     assert.ok(finalMessage?.content?.some(block => block.type === 'text' && block.text === scenario.answer),
       'TUI did not persist the expected final answer');
-    const decided = events.find(event => event.type === 'approval/decided');
-    const result = events.find(event => event.type === 'tool/result');
     assert.equal(decided?.data?.outcome, scenario.outcome);
     assert.equal((result?.data?.message as { isError?: boolean } | undefined)?.isError, scenario.error);
     const content = JSON.stringify((result?.data?.message as { content?: unknown } | undefined)?.content);
@@ -350,6 +442,9 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
       assert.equal(existsSync(marker), true, 'Allowed Bash command did not execute');
     }
     assert.ok(mock.requests.some(request => request.behavior === 'tool_call_success'));
+  } catch (error) {
+    const behaviors = mock.requests.map(request => request.behavior).join(',') || 'none';
+    throw new Error(`${error instanceof Error ? error.message : String(error)}; mock behaviors: ${behaviors}`);
   } finally {
     const cleanup = await Promise.allSettled([terminal?.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI acceptance cleanup failed');
@@ -361,36 +456,52 @@ async function main(): Promise<void> {
     throw new Error('This real TTY acceptance requires Linux or macOS');
   }
   const dsh = binaryOption('--dsh-bin');
-  assert.equal(command(dsh, ['--version'], repo), contract.components.dsh.package.version);
+  assert.equal(command(dsh, ['--version'], repo, { ...process.env, ...runtimeEnvironment }),
+    contract.components.dsh.package.version);
   assert.equal(command('pnpm', ['--version'], repo), contract.runtime.pnpm);
   command('zstdcat', ['--version'], repo);
   const fixture = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-'));
   try {
     const home = join(fixture, 'home');
-    const profile = join(home, 'profiles', 'dsh-tui');
-    for (const path of [profile, join(fixture, 'agents'), join(fixture, 'workspace')]) {
+    if (installedHome) {
+      assert.ok(existsSync(join(installedHome, '.workbench-terminal-acceptance')),
+        'Installed DSH home is not marked as a disposable terminal acceptance fixture');
+      symlinkSync(installedHome, home, 'dir');
+    }
+    const profile = join(home, 'profiles', profileName);
+    for (const path of [join(fixture, 'agents'), join(fixture, 'workspace')]) {
       mkdirSync(path, { recursive: true });
     }
-    writeFileSync(join(profile, 'package.json'), JSON.stringify({
-      name: 'dsh-profile-dsh-tui', private: true,
-      dependencies: { [contract.components.tui.package.name]: contract.components.tui.package.version },
-      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', contract.components.tui.package.name] } },
-    }, null, 2));
-    writeFileSync(join(profile, 'cordis.yml'), '[]\n');
-    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n');
-    writeFileSync(join(profile, 'pnpm-workspace.yaml'), command(process.execPath,
-      [join(repo, 'scripts/tui-compat.mjs')], repo) + '\n');
-    copyFileSync(join(repo, 'compatibility/tui-profile/pnpm-lock.yaml'), join(profile, 'pnpm-lock.yaml'));
-    mkdirSync(join(profile, 'patches'));
-    copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path), join(profile, 'patches/tui-rename.patch'));
-    const userConfig = join(fixture, 'user.npmrc');
-    const globalConfig = join(fixture, 'global.npmrc');
-    writeFileSync(userConfig, '');
-    writeFileSync(globalConfig, '');
-    command('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies', '--ignore-scripts'], profile, {
-      PATH: process.env.PATH ?? '', HOME: home, XDG_CONFIG_HOME: join(fixture, 'config'),
-      npm_config_userconfig: userConfig, npm_config_globalconfig: globalConfig,
-    });
+    if (installedHome) command('git', ['clone', '--local', '--no-hardlinks', '--quiet', repo,
+      join(fixture, 'workspace')], repo);
+    if (!installedHome) {
+      mkdirSync(profile, { recursive: true });
+      writeFileSync(join(profile, 'package.json'), JSON.stringify({
+        name: 'dsh-profile-dsh-tui', private: true,
+        dependencies: { [contract.components.tui.package.name]: contract.components.tui.package.version },
+        dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', contract.components.tui.package.name] } },
+      }, null, 2));
+      writeFileSync(join(profile, 'cordis.yml'), '[]\n');
+      writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n');
+      writeFileSync(join(profile, 'pnpm-workspace.yaml'), command(process.execPath,
+        [join(repo, 'scripts/tui-compat.mjs')], repo) + '\n');
+      copyFileSync(join(repo, 'compatibility/tui-profile/pnpm-lock.yaml'), join(profile, 'pnpm-lock.yaml'));
+      mkdirSync(join(profile, 'patches'));
+      copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path), join(profile, 'patches/tui-rename.patch'));
+      const userConfig = join(fixture, 'user.npmrc');
+      const globalConfig = join(fixture, 'global.npmrc');
+      writeFileSync(userConfig, '');
+      writeFileSync(globalConfig, '');
+      command('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies', '--ignore-scripts'], profile, {
+        PATH: process.env.PATH ?? '', HOME: home, XDG_CONFIG_HOME: join(fixture, 'config'),
+        npm_config_userconfig: userConfig, npm_config_globalconfig: globalConfig,
+      });
+    }
+    const profileManifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
+      name: string; dsh: { profile: { bundles: string[] } };
+    };
+    assert.equal(profileManifest.name, `dsh-profile-${profileName}`);
+    assert.ok(profileManifest.dsh.profile.bundles.includes(contract.components.tui.package.name));
     const installedTui = JSON.parse(readFileSync(join(profile, 'node_modules',
       contract.components.tui.package.name, 'package.json'), 'utf8')) as { version: string };
     assert.equal(installedTui.version, contract.components.tui.package.version);

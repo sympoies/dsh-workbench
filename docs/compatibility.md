@@ -8,6 +8,16 @@ installers must read this file and reject mismatches before activation. They
 must not substitute a branch head, registry `latest`, or relaxed peer
 dependency resolution for the recorded identities.
 
+The first distributable Workbench release targets Linux x64. macOS arm64
+has two later lanes: native reduced capabilities under
+[#48](https://github.com/sympoies/dsh-workbench/issues/48), and full authority
+under [#47](https://github.com/sympoies/dsh-workbench/issues/47) with
+[nils-cli #1800](https://github.com/sympoies/nils-cli/issues/1800). Neither lane
+is implemented or accepted by this Linux candidate. The full-authority lane's
+unavailable authoritative finish-line backend does not block Linux acceptance.
+Earlier two-platform results below remain historical component and handoff
+evidence, not a claim that the combined macOS profile is releasable.
+
 The current graph is **candidate**. Its DSH and TUI package integrity values
 come from the npm registry at the pinned package versions. Git commit and tree
 values identify the upstream source revisions. The runtime-kit source pins
@@ -15,11 +25,16 @@ the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runt
 the authenticated patched peer closure from
 [PR #274](https://github.com/sympoies/dsh-runtime-kit/pull/274), and the typed
 finish-line denial diagnostics from
-[PR #277](https://github.com/sympoies/dsh-runtime-kit/pull/277);
+[PR #277](https://github.com/sympoies/dsh-runtime-kit/pull/277), concurrent
+teardown repair from [PR #280](https://github.com/sympoies/dsh-runtime-kit/pull/280),
+exact committed approval-rejection cleanup from
+[PR #283](https://github.com/sympoies/dsh-runtime-kit/pull/283), and owner-bound
+crash recovery with canonical managed-session authentication from
+[PR #288](https://github.com/sympoies/dsh-runtime-kit/pull/288);
 runtime-kit has no published npm release at this revision, so its Git tree is
 its source integrity identity. The contract records the upstream package
 version `0.0.0` for runtime-kit; that is not a Workbench release version.
-These identities were checked on 2026-09-26. Runtime-kit compatibility and
+These identities were checked on 2026-09-27. Runtime-kit compatibility and
 managed-worktree recovery passed its owner CI. The candidate's native Web/TUI
 browser fixture passed settled text and PNG handoff on Linux x64 and macOS
 arm64 in [PR #44](https://github.com/sympoies/dsh-workbench/pull/44). The exact
@@ -76,7 +91,15 @@ Workbench `v0.1.0-rc.3` adds an exact
 now calls DSH's session-title service, which records the normalized title
 with `messageSeqs: []` and `source.kind: user` and supersedes automatic
 title generation. The persisted-session picker writes the same user-title
-payload. The patch path and SHA-256 digest are part of the single contract;
+payload. In the current candidate, live rename also awaits DSH's public
+`sessionProjectionCache.write(session)` durability barrier before updating the
+TUI title or acknowledging success. Both `/rename` and recap-title application
+handle rejection; a changed channel binding cannot acknowledge the old operation
+as a rename of the current session. This preserves the upstream cache's
+write-behind policy while making a completed TUI rename visible in an unopened
+Web sidebar. The generic TUI port allows `void | Promise<void>` for other
+adapters; the patched DSH carrier returns `Promise<void>`.
+The patch path and SHA-256 digest are part of the single contract;
 the frozen profile lock records pnpm's patch hash. A real-terminal regression
 proved manual rename, exact-ID restart, and another completed turn against
 the patched profile. It also exercised the stopped-session title writer and
@@ -113,6 +136,25 @@ Workbench `v0.1.0-rc.7` pins runtime-kit's typed nils host-denial diagnostics
 and records the resulting Web plugin identity and artifact digest. This
 diagnostic change does not provide the missing macOS finish-line backend or
 accept the candidate graph.
+Workbench `v0.1.0-rc.9` extends the exact TUI 0.11.0 compatibility patch so
+its approval listener receives requests dispatched in a DSH agent scope and
+runs before DSH's global `Include` listener, which otherwise ends the
+waterfall before TUI can display an approval. The pinned TUI returns from its
+headless-host path before registering this listener; the combined browser
+acceptance therefore loads the same patched TUI bundle while proving Web
+approval still works. The TUI approval store still validates that each request
+belongs to a live tool call before presenting it. The patch digest, frozen TUI
+profile lock, Web identity, and reviewed Web artifact digest are updated
+together. Combined-profile allow/reject acceptance remains required before
+this candidate can be accepted.
+Workbench `v0.1.0-rc.10` pins the merged runtime-kit finish-line lifecycle
+repair at commit `407da96d891a6457b20b375406e2460cfd576b6b` and its exact
+Git tree. The combined-profile acceptance now checks browser approval allow
+and reject in the installed `workbench` profile, including command execution,
+Session V4 approval decisions, and durable tool results. The Linux TUI
+finish-line gate must pass against this pin. The macOS arm64 candidate remains
+pending an OS-enforced descendant-cleanup backend under
+[`nils-cli#1800`](https://github.com/sympoies/nils-cli/issues/1800).
 The pin also includes runtime-kit's managed DSH home instructions at
 `<dshHome>/AGENTS.md`. Setup, update, and rollback preview refuse an existing
 file without a recorded runtime-kit digest with exit 65 and
@@ -132,6 +174,19 @@ candidate profile update must regenerate and review this lockfile against the
 single component contract before the handoff proof is repeated.
 
 ## Gate
+
+The rc.13 candidate pins runtime-kit commit
+`00f91aadae872ee98622192b347f13a6d8b1508f` and its authenticated nils-cli
+1.29.0 release. Finish-line open binds authority to the actual DSH process.
+A live owner still prevents takeover. After a crash, nils must prove that the
+owner has died, perform authoritative cleanup, rotate authority, and invalidate
+the old validation evidence before returning a recovered capability. A resumed
+turn does not inherit permission to execute an unapproved command. Sessions
+without a committed recoverable owner binding still fail closed; this protocol
+does not permit stealing another live owner's authority. The installed Linux
+gate must prove pending-approval SIGKILL recovery through TUI and reopening in
+Web, alongside ordinary allow/reject and handoff. Runtime-kit's green owner CI
+is dependency evidence, not acceptance of this Workbench tuple.
 
 `node scripts/contract.mjs check` validates structure and immutable pin shape.
 `node scripts/contract.mjs require-accepted` is the activation gate: it fails
@@ -172,8 +227,13 @@ tuple or artifact change gets a new release, preserving prior artifacts.
 
 Consumers may use `node scripts/contract.mjs print` to read the validated
 contract as JSON. The Web plugin now embeds a generated identity with a
-SHA-256 digest of the parsed contract and reports the release and three
-component pins. Its package build checks that identity against the contract.
+SHA-256 digest of the immutable graph (release, runtime, component sources,
+packages, toolchains, peer overrides and patches) and reports the release and
+three component pins. Schema V2 excludes candidate/accepted status and
+acceptance evidence so promoting the same tested bytes cannot change the
+artifact. The external contract owns acceptance; the Web package does not
+advertise an acceptance verdict. Its package build checks that identity against
+the contract.
 This identifies a candidate build; it does not prove the actual installed
 runtime-kit or TUI package matches. Future Web images, TUI packages, install
 receipts, and release metadata must verify the installed graph and derive

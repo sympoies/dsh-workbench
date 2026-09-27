@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { WorkbenchContract } from './contract-types.ts';
 import { readPinnedKitJson } from './pinned-kit.ts';
 import { inspectPeerArtifact } from './package-artifact.ts';
+import { materializeTuiEntry } from './launch-workbench.ts';
 
 type Artifact = { name: string; version: string; path: string; tarball_sha256: string; artifact_sha256: string };
 type PeerReceipt = {
@@ -27,6 +28,7 @@ type KitManifest = {
   public_packages: Record<string, unknown>;
   workspace_artifacts: Record<string, { version: string; artifact_sha256: string }>;
   patched_workspace_artifacts: Record<string, string>;
+  registry_workspace_artifacts?: Record<string, { integrity: string; platform?: string }>;
 };
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -56,9 +58,11 @@ export function stageCombinedProfile(input: {
   kitManifest: KitManifest;
   tuiArchive: string;
   webArchive: string;
+  cliArchive: string;
 }, expectedTuiIntegrity = contract.components.tui.package.integrity,
-expectedWebArtifactSha256 = webArtifact.artifactSha256): void {
-  const { profile, receipt, kitManifest, tuiArchive, webArchive } = input;
+expectedWebArtifactSha256 = webArtifact.artifactSha256,
+expectedCliIntegrity = contract.components.dsh.package.integrity): void {
+  const { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive } = input;
   if (!isAbsolute(profile)) throw new Error('profile target must be a new absolute path');
   if (!isAbsolute(tuiArchive) || !lstatSync(tuiArchive).isFile()) {
     throw new Error('TUI archive must be an absolute regular file');
@@ -83,6 +87,18 @@ expectedWebArtifactSha256 = webArtifact.artifactSha256): void {
   }
   if (webPackage.artifactSha256 !== expectedWebArtifactSha256) {
     throw new Error('Web archive digest does not match reviewed artifact');
+  }
+  if (!isAbsolute(cliArchive) || !lstatSync(cliArchive).isFile()) {
+    throw new Error('Official CLI archive must be an absolute regular file');
+  }
+  const cliBytes = readFileSync(cliArchive);
+  if (`sha512-${createHash('sha512').update(cliBytes).digest('base64')}` !== expectedCliIntegrity) {
+    throw new Error('Official CLI archive integrity mismatch');
+  }
+  const cliPackage = inspectPeerArtifact(cliBytes);
+  if (cliPackage.name !== contract.components.dsh.package.name
+    || cliPackage.version !== contract.components.dsh.package.version) {
+    throw new Error('Official CLI archive identity mismatch');
   }
   const dsh = contract.components.dsh;
   if (kitManifest.schema_version !== 'dsh-runtime-kit.dsh-compatibility.v1'
@@ -127,6 +143,10 @@ expectedWebArtifactSha256 = webArtifact.artifactSha256): void {
     const bytes = readFileSync(row.path);
     const digest = createHash('sha256').update(bytes).digest('hex');
     const canonical = inspectPeerArtifact(bytes);
+    const registry = kitManifest.registry_workspace_artifacts?.[name];
+    if (registry && `sha512-${createHash('sha512').update(bytes).digest('base64')}` !== registry.integrity) {
+      throw new Error('registry artifact integrity mismatch');
+    }
     const expected = kitManifest.patched_workspace_artifacts[name] ?? entry.artifact_sha256;
     if (!sha256.test(expected) || digest !== row.tarball_sha256
       || canonical.name !== name || canonical.version !== row.version
@@ -145,15 +165,23 @@ expectedWebArtifactSha256 = webArtifact.artifactSha256): void {
   if (rendered.status !== 0 || !rendered.stdout.includes('overrides:\n')) {
     throw new Error('TUI compatibility settings could not be rendered');
   }
-  const dependencies = Object.fromEntries(Object.keys(publicPackages).sort().map(name => {
-    const row = byName.get(name)!;
-    return [name, `file:artifacts/${artifactFile(name, row.version)}`];
+  const selected = sorted.filter(([name]) => {
+    const platform = kitManifest.registry_workspace_artifacts?.[name]?.platform;
+    return platform === undefined || platform === `${process.platform}-${process.arch}`;
+  });
+  // Root the official CLI and all compatible plugin owners in one profile.
+  // Root the complete compatible closure so scope owners and consumers share
+  // the same module instance instead of mixing profile and host registries.
+  const dependencies = Object.fromEntries(selected.map(([name, entry]) => {
+    return [name, `file:artifacts/${artifactFile(name, entry.version)}`];
   }));
   const tuiFile = `${contract.components.tui.package.name.slice(1).replace('/', '-')}-${contract.components.tui.package.version}.tgz`;
   const webFile = `sympoies-dsh-workbench-web-${contract.release.version}.tgz`;
+  const cliFile = `${cliPackage.name.slice(1).replace('/', '-')}-${cliPackage.version}.tgz`;
+  dependencies[cliPackage.name] = `file:artifacts/${cliFile}`;
   dependencies[contract.components.tui.package.name] = `file:artifacts/${tuiFile}`;
   dependencies[webPackage.name] = `file:artifacts/${webFile}`;
-  const overrides = sorted.map(([name, entry]) =>
+  const overrides = selected.map(([name, entry]) =>
     `  '${name}': 'file:artifacts/${artifactFile(name, entry.version)}'`).join('\n');
   const workspace = rendered.stdout.replace('overrides:\n', `overrides:\n${overrides}\n`);
   const patch = contract.components.tui.compatibilityPatch!;
@@ -173,6 +201,7 @@ expectedWebArtifactSha256 = webArtifact.artifactSha256): void {
     mkdirSync(profile);
     const created = lstatSync(profile);
     createdProfile = { dev: created.dev, ino: created.ino };
+    materializeTuiEntry(join(profile, 'workbench-tui'), contract.release.version);
     mkdirSync(join(profile, 'artifacts'));
     mkdirSync(join(profile, 'patches'));
     writeFileSync(join(profile, 'LICENSE'), readFileSync(join(root, 'LICENSE')), { flag: 'wx' });
@@ -184,6 +213,7 @@ expectedWebArtifactSha256 = webArtifact.artifactSha256): void {
     }
     writeFileSync(join(profile, 'artifacts', tuiFile), tuiBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'artifacts', webFile), webBytes, { flag: 'wx' });
+    writeFileSync(join(profile, 'artifacts', cliFile), cliBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'patches/tui-rename.patch'), patchBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     writeFileSync(join(profile, 'pnpm-workspace.yaml'), workspace);
@@ -209,6 +239,7 @@ export function stageCombinedProfileFromPinnedKit(input: {
   kitRepo: string;
   tuiArchive: string;
   webArchive: string;
+  cliArchive: string;
 }, gitExecutable = '/usr/bin/git'): void {
   if (!isAbsolute(input.dshHome)
     || !lstatSync(join(input.dshHome, 'profiles'), { throwIfNoEntry: false })?.isDirectory()) {
@@ -216,5 +247,5 @@ export function stageCombinedProfileFromPinnedKit(input: {
   }
   const kitManifest = readPinnedKitJson(input.kitRepo, 'compatibility/dsh.json', gitExecutable) as KitManifest;
   stageCombinedProfile({ profile: join(input.dshHome, 'profiles', 'workbench'), receipt: input.receipt, kitManifest,
-    tuiArchive: input.tuiArchive, webArchive: input.webArchive });
+    tuiArchive: input.tuiArchive, webArchive: input.webArchive, cliArchive: input.cliArchive });
 }

@@ -27,7 +27,7 @@ revisions. All three upstream source licenses are MIT:
 | --- | --- | --- |
 | DeepSeek Harness | [`dsh-v0.1.7-rc.1` at `46a7f68b0922371ce7144b668b90e377d8e799f4`](https://github.com/deepseek-ai/deepseek-harness/tree/46a7f68b0922371ce7144b668b90e377d8e799f4) | DeepSeek | [MIT license at the pinned commit](https://github.com/deepseek-ai/deepseek-harness/blob/46a7f68b0922371ce7144b668b90e377d8e799f4/LICENSE) |
 | dsh-TUI | [`v0.11.0` at `19c76a1d877b69ee3f399147bf84f2bae3b10e58`](https://github.com/ccch1mneyyy/dsh-TUI/tree/19c76a1d877b69ee3f399147bf84f2bae3b10e58) | chimney (`ccch1mneyyy`) | [MIT license at the pinned commit](https://github.com/ccch1mneyyy/dsh-TUI/blob/19c76a1d877b69ee3f399147bf84f2bae3b10e58/LICENSE) |
-| dsh-runtime-kit | [candidate commit `dd53024fb892831bd55fc2466259e9f5f4062cf1`](https://github.com/sympoies/dsh-runtime-kit/tree/dd53024fb892831bd55fc2466259e9f5f4062cf1) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/dd53024fb892831bd55fc2466259e9f5f4062cf1/LICENSE) |
+| dsh-runtime-kit | [candidate commit `00f91aadae872ee98622192b347f13a6d8b1508f`](https://github.com/sympoies/dsh-runtime-kit/tree/00f91aadae872ee98622192b347f13a6d8b1508f) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/00f91aadae872ee98622192b347f13a6d8b1508f/LICENSE) |
 
 The upstream copyright lines and license texts for these pinned source trees
 are preserved in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). These are
@@ -57,13 +57,15 @@ tree, then inspect the archive and manifest before publishing.
 
 For the combined candidate profile, CI verifies that the staged manifest has no
 development dependencies, then runs the pinned package manager's
-`licenses list --json` against the installed profile. That profile contains
-only runtime dependencies, so the inventory covers its complete production
-graph. The
+`licenses list --json` against both the activated profile and the separately
+installed official CLI provenance host. The activated profile also contains
+the runtime CLI; the separate host is never an acceptance runtime entry.
+Neither manifest contains development dependencies;
+the two inventories cover their respective production graphs. The
 `scripts/license-inventory.ts` adapter emits only package names, versions, and
 declared license identifiers; it drops install paths and package-author
 metadata, then the publication scanner checks the sanitized report. Each
-platform's path-free inventory is included in the workflow summary. This is a
+platform's two path-free inventories are included in the workflow summary. This is a
 metadata inventory, not a legal conclusion or a substitute for the package
 license files. Before distribution, review the exact inventory and preserve
 the required notices from the included packages in the release output.

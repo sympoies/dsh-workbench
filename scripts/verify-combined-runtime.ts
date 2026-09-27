@@ -2,17 +2,37 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join } from 'node:path';
-import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { startApprovalMockLlmServer } from '../tests/approval-mock.ts';
 import { chromium } from 'playwright-core';
 import { publicBrowserFailure } from '../src/browser-diagnostic.ts';
+import { readEvents } from '../tests/session-events.ts';
 import { workbenchIdentity } from '../web/src/identity.ts';
 
-const [kitPackage, dshSource, dshHome, runtimeRoot, nilsBin, browserBin] = process.argv.slice(2);
+const [kitPackage, dshSource, dshHome, runtimeRoot, nilsBin, browserBin, installedDshCli] = process.argv.slice(2);
+if (installedDshCli !== undefined) {
+  let valid = false;
+  try {
+    const expectedPackage = workbenchIdentity.components.dsh.package;
+    const packageRoot = join(dshHome, 'profiles', 'workbench', 'node_modules', expectedPackage.name);
+    const expectedCli = join(packageRoot, 'lib', 'bin.js');
+    if (isAbsolute(dshHome) && isAbsolute(installedDshCli)
+      && resolve(installedDshCli) === resolve(expectedCli) && statSync(expectedCli).isFile()) {
+      const installedPackage = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+      valid = installedPackage.name === expectedPackage.name
+        && installedPackage.version === expectedPackage.version;
+    }
+  } catch { /* invalid target */ }
+  if (!valid) {
+    process.stderr.write('WORKBENCH_INSTALLED_CLI_INVALID: provide the exact profile CLI entry at the contract version\n');
+    process.exit(64);
+  }
+}
 if ([kitPackage, dshSource, dshHome, runtimeRoot, nilsBin, browserBin]
-  .some(value => !value || !isAbsolute(value)) || process.argv.length !== 8) {
-  process.stderr.write('Usage: node scripts/verify-combined-runtime.ts <packed-kit-dir> <patched-dsh-source> <dsh-home> <runtime-root> <nils-bin-dir> <browser-bin>\n');
+  .some(value => !value || !isAbsolute(value)) || ![8, 9].includes(process.argv.length)) {
+  process.stderr.write('Usage: node scripts/verify-combined-runtime.ts <packed-kit-dir> <dsh-root> <dsh-home> <runtime-root> <nils-bin-dir> <browser-bin> [absolute-installed-dsh-cli]\n');
   process.exit(64);
 }
 
@@ -30,12 +50,16 @@ const policyPath = join(kitPackage, 'policy', 'dsh-runtime-kit-v1.toml');
 const hookConfig = join(configHome, 'agent-hook', 'config.toml');
 const wrapper = join(root, 'dsh-wrapper.mjs');
 const wrapperFailure = join(root, 'dsh-wrapper-failure.log');
-const dshCli = join(dshSource, 'apps', 'cli', 'lib', 'bin.js');
+const dshCli = installedDshCli ?? join(dshSource, 'apps', 'cli', 'lib', 'bin.js');
 for (const directory of [runtimeRoot, root, workspace, configHome, stateHome, docsHome,
   join(configHome, 'agent-hook'), join(root, 'codex'), join(root, 'claude'),
   join(root, 'private-skills')]) {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
 }
+const sourceRepo = fileURLToPath(new URL('..', import.meta.url));
+const cloned = spawnSync('git', ['clone', '--local', '--no-hardlinks', '--quiet', sourceRepo, workspace],
+  { encoding: 'utf8', timeout: 60_000 });
+assert.equal(cloned.status, 0, 'Could not create a disposable Git workspace');
 for (const name of ['AGENT_DOCS.toml', 'PROJECT_DEV_EDIT.md']) {
   copyFileSync(join(kitPackage, 'agent-docs', name), join(docsHome, name));
 }
@@ -59,8 +83,7 @@ process.exitCode = result.status ?? 1;
 `, { mode: 0o755 });
 chmodSync(wrapper, 0o755);
 
-const environment = {
-  ...process.env,
+const runtimeEnvironment = {
   DSH_HOME: dshHome,
   CODEX_HOME: join(root, 'codex'),
   CLAUDE_CONFIG_DIR: join(root, 'claude'),
@@ -76,6 +99,11 @@ const environment = {
   DSH_RUNTIME_KIT_AGENT_DOCS_STATE_HOME: join(stateHome, 'agent-docs-dsh'),
   DSH_RUNTIME_KIT_PRIVATE_SKILLS_DIR: join(root, 'private-skills'),
 };
+// This disposable installation owns its DSH sessions. An outer agent's managed
+// principal belongs to another checkout and must not claim these test sessions.
+const environment = Object.fromEntries(Object.entries({ ...process.env, ...runtimeEnvironment })
+  .filter(([name]) => !name.toUpperCase().startsWith('AGENT_SESSION_')));
+writeFileSync(join(root, 'terminal-environment.json'), JSON.stringify(runtimeEnvironment), { mode: 0o600 });
 const launcher = join(kitPackage, 'dist', 'bin', 'dsh-runtime-kit-launch.js');
 const cli = join(kitPackage, 'dist', 'bin', 'dsh-runtime-kit.js');
 function invoke(command: string, args: string[]): { [key: string]: unknown } {
@@ -131,6 +159,7 @@ const doctor = invoke('doctor', []);
 assert.equal(doctor.profile, 'workbench');
 assert.equal(doctor.status, 'healthy');
 assert.deepEqual(doctor.advisories, []);
+writeFileSync(join(dshHome, '.workbench-terminal-acceptance'), 'disposable CI profile\n', { mode: 0o600 });
 const composition = spawnSync(process.execPath,
   [launcher, '--runtime-root', runtimeRoot, '--', wrapper,
     '--profile', 'workbench', '--dump-config'],
@@ -144,10 +173,38 @@ assert.match(composition.stdout, /@deepseek-harness-tui\/dsh-tui/);
 assert.match(composition.stdout, /@sympoies\/dsh-runtime-kit/);
 assert.match(composition.stdout, /@sympoies\/dsh-workbench-web/);
 
-async function verifyActivatedWeb(apiKey: string): Promise<void> {
-  const answer = 'ACTIVATED_WORKBENCH_WEB_OK';
-  const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
-    successText: answer, apiKey });
+const webScenarios = [
+  { name: 'allow', answer: 'ACTIVATED_WEB_ALLOW_FINISHED', output: 'ACTIVATED_WEB_ALLOW_TOOL_OK',
+    outcome: 'allowed-once', error: false, button: 'Allow once' },
+  { name: 'reject', answer: 'ACTIVATED_WEB_REJECT_FINISHED', output: 'ACTIVATED_WEB_REJECT_TOOL_OK',
+    outcome: 'rejected', error: true, button: 'Reject' },
+] as const;
+
+function sessionLog(id: string): string {
+  const pending = [join(dshHome, 'sessions')];
+  const matches: string[] = [];
+  while (pending.length > 0) {
+    const directory = pending.pop()!;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) pending.push(path);
+      else if (entry.isFile() && entry.name === 'session.v4.jsonl.zstd'
+        && basename(dirname(path)) === id) matches.push(path);
+    }
+  }
+  assert.equal(matches.length, 1, 'Activated Web session has no unique Session V4 archive');
+  return matches[0];
+}
+
+async function verifyActivatedWeb(apiKey: string, scenario: typeof webScenarios[number]): Promise<void> {
+  const marker = join(root, `activated-web-${scenario.name}-executed`);
+  if (existsSync(marker)) unlinkSync(marker);
+  const command = `touch '${marker.replaceAll("'", "'\\''")}' && printf ${scenario.output}`;
+  const mock = await startApprovalMockLlmServer({ sequence: ['tool_call_success', 'success'], repeatLast: true,
+    successText: scenario.answer, apiKey, toolName: 'bash',
+    toolArguments: JSON.stringify({ command, description: `Print ${scenario.output}`,
+      sandbox_permissions: 'danger-full-access',
+      justification: 'Verify Web approval in a disposable workspace' }) });
   const host = spawn(process.execPath, [launcher, '--runtime-root', runtimeRoot, '--',
     process.execPath, dshCli, '--profile', 'workbench', '--host', '127.0.0.1',
     '--no-open', '--port', '0'], {
@@ -164,6 +221,7 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
     hostErrorLines += String(chunk).split('\n').filter(line => /\berror\b/i.test(line)).length;
   });
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  let sessionId: string | undefined;
   try {
     const url = await new Promise<string>((resolveReady, reject) => {
       const timer = setTimeout(() => finish(new Error('Activated Web Host did not become ready')), 60_000);
@@ -201,7 +259,13 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
     assert.equal(response?.status(), 200, 'Activated Web Host did not serve the UI');
     const continueButton = page.getByRole('button', { name: 'Continue' });
     await continueButton.waitFor({ timeout: 5_000 }).catch(() => {});
-    if (await continueButton.isVisible()) await continueButton.click();
+    if (await continueButton.isVisible()) {
+      await continueButton.click();
+      await page.getByRole('dialog', { name: 'Internal Testing Notice' })
+        .waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {
+          throw new Error('WORKBENCH_WEB_WELCOME_ACK_FAILED: acknowledgement did not persist');
+        });
+    }
     await page.getByRole('button', { name: 'New Session' }).first().click();
     const chooseWorkspace = page.getByRole('textbox', { name: 'Choose workspace' });
     const editor = page.getByRole('textbox',
@@ -228,23 +292,41 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
       throw new Error(`Activated Web composer absent; selectedRows=${selectedRows}; ` +
         `pageErrors=${pageErrors.join(',') || 'none'}; visibleUI=${visibleText}`);
     }
-    await editor.fill('Verify the activated Workbench Web profile.');
+    await editor.fill(`Run the Bash command printf ${scenario.output} and report its output.`);
     await editor.press('Enter');
-    await page.locator('[data-conversation-content]').getByText(answer, { exact: false })
+    const approval = page.locator('[data-approval-key]');
+    await approval.waitFor({ timeout: 60_000 }).catch(() => {
+      throw new Error(`WORKBENCH_WEB_APPROVAL_NOT_REQUESTED: ${scenario.name}`);
+    });
+    assert.ok((await approval.innerText()).includes(scenario.output),
+      'Activated Web approval did not display the selected Bash command');
+    await approval.getByRole('button', { name: scenario.button }).click();
+    await page.locator('[data-conversation-content]').getByText(scenario.answer, { exact: false })
       .first().waitFor({ timeout: 60_000 });
+    const row = await page.locator('[data-row-key^="session:"][aria-selected="true"]')
+      .getAttribute('data-row-key');
+    assert.match(row ?? '', /^session:(?:session-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
+    sessionId = row!.slice('session:'.length);
     const handoff = page.getByRole('button', { name: 'Copy Session ID for TUI' });
     await handoff.waitFor({ timeout: 30_000 });
     const title = await handoff.getAttribute('title');
     assert.ok(title, 'Activated Web plugin did not report its contract identity');
     assert.ok(title.includes(`Workbench ${workbenchIdentity.release.version}`));
-    assert.ok(title.includes(workbenchIdentity.contractDigest));
+    assert.ok(title.includes(workbenchIdentity.graphDigest));
     assert.ok(title.includes(workbenchIdentity.components.runtimeKit.source.commit));
     assert.ok(title.includes(`TUI ${workbenchIdentity.components.tui.package.version}`));
     assert.equal(pageErrors.length, 0, 'Activated Web UI reported JavaScript errors');
-    assert.ok(mock.requests.length >= 1, 'Activated Web UI did not reach the authenticated mock');
+    assert.ok(mock.requests.some(request => request.behavior === 'tool_call_success'),
+      'Activated Web UI did not receive the Bash tool call');
     assert.equal(hostStartError, false, 'Activated Web Host reported a process startup error');
     assert.equal(hostExited, false, 'Activated Web Host exited during the browser turn');
     assert.equal(hostErrorLines, 0, 'Activated Web Host reported errors');
+    const deadline = Date.now() + 60_000;
+    while (!readEvents(sessionLog(sessionId)).some(event => event.type === 'turn/end')) {
+      assert.ok(Date.now() < deadline, 'Activated Web did not durably finish its approval turn');
+      assert.equal(hostExited, false, 'Activated Web exited before durable turn completion');
+      await new Promise(resolveWait => setTimeout(resolveWait, 100));
+    }
   } finally {
     const stopHost = async () => {
       if (!host.pid) return;
@@ -264,11 +346,30 @@ async function verifyActivatedWeb(apiKey: string): Promise<void> {
       throw new Error('Activated Web acceptance resource cleanup failed');
     }
   }
+  assert.ok(sessionId, 'Activated Web approval did not create a session');
+  const events = readEvents(sessionLog(sessionId), { strict: true });
+  const ended = events.find(event => event.type === 'turn/end');
+  assert.equal((ended?.data?.reason as { kind?: string } | undefined)?.kind, 'completed',
+    `WORKBENCH_WEB_TURN_NOT_COMPLETED: ${scenario.name}`);
+  assert.equal(events.find(event => event.type === 'approval/decided')?.data?.outcome,
+    scenario.outcome);
+  const result = events.find(event => event.type === 'tool/result')?.data?.message as
+    { isError?: boolean; content?: unknown } | undefined;
+  assert.equal(result?.isError, scenario.error, 'Activated Web archived the wrong tool result');
+  const content = JSON.stringify(result?.content);
+  if (scenario.error) {
+    assert.equal(existsSync(marker), false, 'Rejected activated Web command still executed');
+    assert.ok(content.includes('the user rejected escalating this command'));
+    assert.ok(!content.includes(scenario.output));
+  } else {
+    assert.equal(existsSync(marker), true, 'Allowed activated Web command did not execute');
+    assert.ok(content.includes(scenario.output));
+  }
 }
 
 const apiKey = randomBytes(24).toString('hex');
 try {
-  await verifyActivatedWeb(apiKey);
+  for (const scenario of webScenarios) await verifyActivatedWeb(apiKey, scenario);
   process.stdout.write(JSON.stringify({
     schema_version: 'dsh-workbench.combined-runtime-verification.v1',
     ok: true, profile: 'workbench', status: 'healthy', composition: 'passed', activatedWeb: 'passed',

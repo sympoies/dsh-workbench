@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
+import { startApprovalMockLlmServer } from './approval-mock.ts';
 import headless from '@xterm/headless';
 import * as pty from 'node-pty';
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core';
@@ -15,6 +16,21 @@ import { readEvents } from './session-events.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
+const installedHome = process.argv.includes('--installed-dsh-home') ? option('--installed-dsh-home') : undefined;
+const runtimeEnvFile = process.argv.includes('--runtime-env-file') ? option('--runtime-env-file') : undefined;
+assert.equal(Boolean(installedHome), Boolean(runtimeEnvFile),
+  'Installed home and runtime environment file must be provided together');
+if (installedHome) assert.equal(readFileSync(join(installedHome, '.workbench-terminal-acceptance'), 'utf8'),
+  'disposable CI profile\n', 'Installed acceptance requires an owner-marked disposable home');
+const runtimeEnvironment = runtimeEnvFile ? JSON.parse(readFileSync(runtimeEnvFile, 'utf8')) as NodeJS.ProcessEnv : {};
+if (installedHome) assert.equal(realpathSync(runtimeEnvironment.DSH_HOME!), realpathSync(installedHome),
+  'Runtime environment and installed home must identify the same disposable installation');
+const managerEnvironment: NodeJS.ProcessEnv = {};
+for (const name of ['DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR']) {
+  if (process.env[name]) managerEnvironment[name] = process.env[name];
+}
+const tuiProfile = installedHome ? 'workbench' : 'dsh-tui';
+const webProfile = installedHome ? 'workbench' : 'web';
 const answer = 'WORKBENCH_SMOKE_OK';
 const prompts = ['FIRST_FIXTURE_PROMPT', 'SECOND_FIXTURE_PROMPT'] as const;
 const errorPrompt = 'ERROR_FIXTURE_PROMPT';
@@ -159,10 +175,10 @@ function visibleScreen(screen: InstanceType<typeof headless.Terminal>): string {
 
 function startTui(dsh: string, fixture: string, home: string, agents: string, workspace: string,
   baseURL: string, apiKey: string, args: string[] = []) {
-  const child = pty.spawn(dsh, ['--profile', 'dsh-tui', ...args], {
+  const child = pty.spawn(dsh, ['--profile', tuiProfile, ...args], {
     name: 'xterm-256color', cols: 80, rows: 24, cwd: workspace,
-    env: { PATH: `${dirname(dsh)}:${process.env.PATH ?? ''}`, HOME: home, DSH_HOME: home,
-      DSH_AGENTS_HOME: agents, XDG_CONFIG_HOME: join(fixture, 'config'),
+    env: { ...runtimeEnvironment, ...managerEnvironment, PATH: `${dirname(dsh)}:${process.env.PATH ?? ''}`, HOME: home, DSH_HOME: home,
+      DSH_AGENTS_HOME: agents, XDG_CONFIG_HOME: runtimeEnvironment.XDG_CONFIG_HOME ?? join(fixture, 'config'),
       LANG: 'en_US.UTF-8', TERM: 'xterm-256color',
       DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_BASE_URL: `${baseURL}/v1`, DEEPSEEK_API_KEY: apiKey },
   });
@@ -204,22 +220,24 @@ function startTui(dsh: string, fixture: string, home: string, agents: string, wo
 
 async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
   agents: string, workspace: string, userConfig: string, globalConfig: string): Promise<string> {
-  const profile = join(home, 'profiles', 'dsh-tui');
-  mkdirSync(join(profile, 'patches'), { recursive: true });
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({
-    name: 'dsh-profile-dsh-tui', private: true,
-    dependencies: { [contract.components.tui.package.name]: contract.components.tui.package.version },
-    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', contract.components.tui.package.name] } },
-  }, null, 2));
-  writeFileSync(join(profile, 'cordis.yml'), '[]\n');
-  writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n');
-  writeFileSync(join(profile, 'pnpm-workspace.yaml'),
-    command(process.execPath, [join(repo, 'scripts/tui-compat.mjs')], repo) + '\n');
-  copyFileSync(join(repo, 'compatibility/tui-profile/pnpm-lock.yaml'), join(profile, 'pnpm-lock.yaml'));
-  copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path), join(profile, 'patches/tui-rename.patch'));
-  command('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies', '--ignore-scripts'], profile,
-    300_000, { PATH: process.env.PATH ?? '', HOME: home, XDG_CONFIG_HOME: join(fixture, 'config'),
-      npm_config_userconfig: userConfig, npm_config_globalconfig: globalConfig });
+  if (!installedHome) {
+    const profile = join(home, 'profiles', 'dsh-tui');
+    mkdirSync(join(profile, 'patches'), { recursive: true });
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      name: 'dsh-profile-dsh-tui', private: true,
+      dependencies: { [contract.components.tui.package.name]: contract.components.tui.package.version },
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', contract.components.tui.package.name] } },
+    }, null, 2));
+    writeFileSync(join(profile, 'cordis.yml'), '[]\n');
+    writeFileSync(join(profile, 'cordis.patch.yml'), '[]\n');
+    writeFileSync(join(profile, 'pnpm-workspace.yaml'),
+      command(process.execPath, [join(repo, 'scripts/tui-compat.mjs')], repo) + '\n');
+    copyFileSync(join(repo, 'compatibility/tui-profile/pnpm-lock.yaml'), join(profile, 'pnpm-lock.yaml'));
+    copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path), join(profile, 'patches/tui-rename.patch'));
+    command('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies', '--ignore-scripts'], profile,
+      300_000, { PATH: process.env.PATH ?? '', HOME: home, XDG_CONFIG_HOME: join(fixture, 'config'),
+        npm_config_userconfig: userConfig, npm_config_globalconfig: globalConfig });
+  }
   const apiKey = randomBytes(24).toString('hex');
   const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
     apiKey, successText: tuiAnswer });
@@ -240,6 +258,7 @@ async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
     tui.write(`/rename ${tuiTitle}\r`);
     await waitForTui(tui, () => readEvents(logPath!).some(event =>
       event.type === 'session/title' && event.data?.title === tuiTitle), 'manual title');
+    await waitForTui(tui, () => visibleScreen(tui.screen).includes(`Renamed to "${tuiTitle}"`), 'durable rename acknowledgement');
     await tui.stop();
     assert.equal(tui.exitCode, 0, 'TUI did not exit cleanly before Web handoff');
     const events = readEvents(logPath!, { strict: true });
@@ -453,9 +472,10 @@ async function checkWebWriterContention(dsh: string, fixture: string, home: stri
 
 async function startHost(binary: string, home: string, agents: string, workspace: string,
   baseURL: string, apiKey: string) {
-  const child = spawn(binary, ['--profile', 'web', '--host', '127.0.0.1', '--no-open', '--port', '0'], {
+  const child = spawn(binary, ['--profile', webProfile, '--host', '127.0.0.1', '--no-open', '--port', '0'], {
     cwd: workspace,
     env: {
+      ...runtimeEnvironment, ...managerEnvironment,
       PATH: process.env.PATH ?? '',
       LANG: process.env.LANG ?? 'C.UTF-8',
       HOME: home,
@@ -559,7 +579,13 @@ async function openPage(browser: Browser, host: Awaited<ReturnType<typeof startH
   assert.equal(response?.status(), 200, 'DSH Web Host did not serve the UI');
   const continueButton = page.getByRole('button', { name: 'Continue' });
   await continueButton.waitFor({ timeout: 5_000 }).catch(() => {});
-  if (await continueButton.isVisible()) await continueButton.click();
+  if (await continueButton.isVisible()) {
+    await continueButton.click();
+    await page.getByRole('dialog', { name: 'Internal Testing Notice' })
+      .waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {
+        throw new Error('WORKBENCH_WEB_WELCOME_ACK_FAILED: acknowledgement did not persist');
+      });
+  }
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   return { page, errors };
 }
@@ -616,9 +642,10 @@ async function copiedSessionId(page: Page): Promise<string> {
   await button.waitFor({ timeout: 30_000 });
   const title = await button.getAttribute('title');
   assert.ok(title, 'Web plugin did not report its contract identity');
-  assert.ok(title.includes(workbenchIdentity.contractDigest), 'Web plugin did not report the exact contract digest');
+  assert.ok(title.includes(workbenchIdentity.graphDigest), 'Web plugin did not report the exact graph digest');
   assert.ok(title.includes(`Workbench ${contract.release.version}`));
-  assert.ok(title.includes(`(${contract.status})`));
+  assert.doesNotMatch(title, /\((?:candidate|accepted)\)/,
+    'Web artifact must not advertise an acceptance verdict');
   assert.ok(title.includes(`DSH ${contract.components.dsh.package.version}`));
   assert.ok(title.includes(contract.components.runtimeKit.source.commit));
   assert.ok(title.includes(`TUI ${contract.components.tui.package.version}`));
@@ -629,24 +656,81 @@ async function copiedSessionId(page: Page): Promise<string> {
   return id;
 }
 
-async function startNewSession(page: Page, phase: string, completedIds: readonly string[]): Promise<Locator> {
-  const selected = page.locator('[data-row-key^="session:"][aria-selected="true"]');
-  const previous = await selected.getAttribute('data-row-key');
-  const alreadyBlank = previous !== null
-    && !completedIds.some(id => previous === `session:${id}`)
-    && await selected.getByText('New Session', { exact: true }).count() > 0
-    && await page.locator('[data-conversation-content] [data-chat-flow-kind="user"]').count() === 0;
+async function startNewSession(page: Page, phase: string, completedIds: readonly string[]): Promise<{
+  editor: Locator; checkIdentity: (id: string) => void;
+}> {
+  const checkpoint = (step: string): void => console.log(JSON.stringify({ event: 'new-session', phase, step }));
+  checkpoint('read-current-id');
+  const copy = page.getByRole('button', { name: 'Copy Session ID for TUI' });
+  const hero = page.getByText('Into the Unknown', { exact: true });
+  await Promise.any([
+    copy.waitFor({ timeout: 30_000 }),
+    hero.waitFor({ timeout: 30_000 }),
+  ]);
+  const previous = await copy.isVisible() ? await copiedSessionId(page) : null;
+  if (previous === null) await hero.waitFor({ timeout: 30_000 });
+  checkpoint('click-native-new-session');
+  const createResponses: number[] = [];
+  const createCodes: string[] = [];
+  const createCauses: unknown[] = [];
+  const pendingResponses: Promise<void>[] = [];
+  const creationErrors: unknown[] = [];
+  let creationWarning = false;
+  const onResponse = (response: import('playwright-core').Response): void => {
+    if (new URL(response.url()).pathname !== '/api/session/create') return;
+    createResponses.push(response.status());
+    pendingResponses.push(response.json().then((body: unknown) => {
+      const inspect = (value: unknown, depth: number): void => {
+        if (depth > 5 || value === null || typeof value !== 'object') return;
+        for (const [key, nested] of Object.entries(value)) {
+          if (key === 'code' && typeof nested === 'string' && /^[a-z0-9/_-]{1,100}$/i.test(nested)) createCodes.push(nested);
+          else if (key === 'message' && typeof nested === 'string') {
+            createCauses.push({ duplicateGlobalTool:
+              nested.includes('(for a per-agent variant, register through that agent') });
+          }
+          else inspect(nested, depth + 1);
+        }
+      };
+      inspect(body, 0);
+    }).catch(() => {}));
+  };
+  const onConsole = (message: import('playwright-core').ConsoleMessage): void => {
+    if (!message.text().startsWith('new session failed:')) return;
+    creationWarning = true;
+    for (const argument of message.args().slice(1)) pendingResponses.push(argument.evaluate(value => {
+      if (!(value instanceof Error)) return { kind: 'non-error' };
+      const categories = ['sessions.retain: unknown session', 'Session Controller is disposed',
+        'Session reference', 'session create failed:', 'The operation was aborted'];
+      return { name: value.name, category: categories.find(prefix => value.message.startsWith(prefix)) ?? 'other',
+        functions: (value.stack ?? '').split('\n').flatMap(line => {
+          const match = /^\s*at ([\w$.]+) \(/.exec(line);
+          return match ? [match[1]] : [];
+        }).slice(0, 8) };
+    }).then(value => { creationErrors.push(value); }).catch(() => {}));
+  };
+  page.on('response', onResponse);
+  page.on('console', onConsole);
   await page.getByRole('button', { name: 'New Session' }).first().click();
-  if (!alreadyBlank) {
-    try {
-      await page.waitForFunction(previousKey => {
-        const row = document.querySelector('[data-row-key^="session:"][aria-selected="true"]');
-        return row !== null && row.getAttribute('data-row-key') !== previousKey;
-      }, previous, { timeout: 30_000 });
-    } catch {
-      throw new Error(`${phase}: New Session did not replace the selected session`);
-    }
+  // Native DSH deliberately hides header utilities until the blank session
+  // receives its first message. Verify its blank view now and its ID afterward.
+  try {
+    await hero.waitFor({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'Choose workspace', exact: true }).waitFor({ timeout: 30_000 });
+  } catch {
+    await Promise.all(pendingResponses);
+    const current = await copy.isVisible() ? await copiedSessionId(page) : null;
+    throw new Error(`${phase}: native New Session did not reach its blank view: ${JSON.stringify({
+      createResponses, createCodes, createCauses, creationWarning, creationErrors, retainedPreviousIdentity: previous !== null && current === previous,
+      userMessages: await page.locator('[data-conversation-content] [data-chat-flow-kind="user"]').count(),
+      alerts: await page.getByRole('alert').count(),
+    })}`);
+  } finally {
+    page.off('response', onResponse);
+    page.off('console', onConsole);
   }
+  await copy.waitFor({ state: 'hidden', timeout: 30_000 });
+  assert.equal(await page.locator('[data-conversation-content] [data-chat-flow-kind="user"]').count(), 0,
+    `${phase}: New Session retained conversation messages`);
   const editor = page.getByRole('textbox', { name: editorName });
   await editor.waitFor({ timeout: 30_000 });
   const deadline = Date.now() + 30_000;
@@ -654,7 +738,12 @@ async function startNewSession(page: Page, phase: string, completedIds: readonly
     await new Promise(resolveWait => setTimeout(resolveWait, 50));
   }
   assert.equal((await editor.textContent())?.trim(), '', 'new session composer retained the previous prompt');
-  return editor;
+  checkpoint('blank-view-and-empty-editor-verified');
+  return { editor, checkIdentity: id => {
+    assert.ok(previous === null || id !== previous, `${phase}: New Session did not replace the current session`);
+    assert.ok(!completedIds.includes(id), `${phase}: New Session reused a completed session`);
+    checkpoint('new-identity-verified');
+  } };
 }
 
 async function waitForMockRequests(mock: Awaited<ReturnType<typeof startMockLlmServer>>,
@@ -682,9 +771,10 @@ async function checkHistory(page: Page, id: string, own: string, other: string):
 async function checkTuiHandoff(page: Page, id: string): Promise<void> {
   const row = page.locator(`[data-row-key="session:${id}"]`);
   await row.waitFor({ timeout: 30_000 });
+  // A cold Web list must show the durable manual title before hydration.
+  await row.getByText(tuiTitle, { exact: true }).waitFor({ timeout: 30_000 });
   await row.click();
   assert.equal(await copiedSessionId(page), id, 'Web opened another TUI session ID');
-  await row.getByText(tuiTitle, { exact: true }).waitFor({ timeout: 30_000 });
   const conversation = page.locator('[data-conversation-content]');
   await conversation.getByText(tuiPrompt, { exact: false }).first().waitFor({ timeout: 30_000 });
   const body = await conversation.innerText();
@@ -735,16 +825,19 @@ async function checkFailedHistory(page: Page, id: string): Promise<void> {
 
 async function main(): Promise<void> {
   const dsh = option('--dsh-bin');
+  if (installedHome && !process.argv.includes('--tui-bin')) throw new Error('WORKBENCH_TUI_ENTRY_REQUIRED: installed handoff requires the Workbench TUI entry');
+  const tuiDsh = process.argv.includes('--tui-bin') ? option('--tui-bin') : dsh;
   const browserBin = option('--browser-bin');
-  assert.equal(command(dsh, ['--version'], repo), contract.components.dsh.package.version);
+  assert.equal(command(dsh, ['--version'], repo, 300_000, { ...process.env, ...runtimeEnvironment }),
+    contract.components.dsh.package.version);
   assert.equal(command('pnpm', ['--version'], repo), contract.runtime.pnpm);
   command('pnpm', ['web:build'], repo);
 
   const fixture = mkdtempSync(join(tmpdir(), 'dsh-workbench-web-'));
-  const home = join(fixture, 'home');
+  const home = installedHome ?? join(fixture, 'home');
   const agents = join(fixture, 'agents');
-  const workspace = join(fixture, 'workspace');
-  const profile = join(home, 'profiles', 'web');
+  const workspace = runtimeEnvFile ? join(dirname(runtimeEnvFile), 'workspace') : join(fixture, 'workspace');
+  const profile = join(home, 'profiles', webProfile);
   for (const directory of [home, agents, workspace, profile]) mkdirSync(directory, { recursive: true });
   let mock: Awaited<ReturnType<typeof startMockLlmServer>> | undefined;
   let host: Awaited<ReturnType<typeof startHost>> | undefined;
@@ -752,34 +845,47 @@ async function main(): Promise<void> {
   let pageErrors = 0;
   let hostErrors = 0;
   try {
-    const packed = command('pnpm', ['pack', '--pack-destination', fixture], join(repo, 'web'));
-    const archive = resolve(fixture, packed.split('\n').at(-1)!);
-    writeFileSync(join(profile, 'package.json'), JSON.stringify({
-      name: 'dsh-workbench-web-browser-acceptance', private: true, type: 'module',
-      dependencies: { '@sympoies/dsh-workbench-web': `file:${relative(profile, archive)}` },
-      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } },
-    }, null, 2));
-    writeFileSync(join(profile, 'cordis.patch.yml'),
-      "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n");
+    if (!installedHome) {
+      const packed = command('pnpm', ['pack', '--pack-destination', fixture], join(repo, 'web'));
+      const archive = resolve(fixture, packed.split('\n').at(-1)!);
+      mkdirSync(join(profile, 'patches'), { recursive: true });
+      writeFileSync(join(profile, 'package.json'), JSON.stringify({
+        name: 'dsh-workbench-web-browser-acceptance', private: true, type: 'module',
+        dependencies: {
+          '@sympoies/dsh-workbench-web': `file:${relative(profile, archive)}`,
+          [contract.components.tui.package.name]: contract.components.tui.package.version,
+        },
+        dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app',
+          contract.components.tui.package.name] } },
+      }, null, 2));
+      writeFileSync(join(profile, 'pnpm-workspace.yaml'),
+        command(process.execPath, [join(repo, 'scripts/tui-compat.mjs')], repo));
+      copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path),
+        join(profile, 'patches/tui-rename.patch'));
+      writeFileSync(join(profile, 'cordis.patch.yml'),
+        "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n");
+    }
     const userConfig = join(fixture, 'user.npmrc');
     const globalConfig = join(fixture, 'global.npmrc');
     writeFileSync(userConfig, '');
     writeFileSync(globalConfig, '');
-    command('pnpm', ['install', '--strict-peer-dependencies', '--ignore-scripts',
-      '--reporter', 'append-only'], profile, 300_000, {
-      PATH: process.env.PATH ?? '',
-      LANG: process.env.LANG ?? 'C.UTF-8',
-      HOME: home,
-      XDG_CONFIG_HOME: join(fixture, 'config'),
-      npm_config_userconfig: userConfig,
-      npm_config_globalconfig: globalConfig,
-    });
+    if (!installedHome) {
+      command('pnpm', ['install', '--strict-peer-dependencies', '--ignore-scripts',
+        '--reporter', 'append-only'], profile, 300_000, {
+        PATH: process.env.PATH ?? '',
+        LANG: process.env.LANG ?? 'C.UTF-8',
+        HOME: home,
+        XDG_CONFIG_HOME: join(fixture, 'config'),
+        npm_config_userconfig: userConfig,
+        npm_config_globalconfig: globalConfig,
+      });
+    }
 
-    const tuiSessionId = await seedTuiRenamedSession(dsh, fixture, home, agents,
+    const tuiSessionId = await seedTuiRenamedSession(tuiDsh, fixture, home, agents,
       workspace, userConfig, globalConfig);
 
     const apiKey = randomBytes(24).toString('hex');
-    mock = await startMockLlmServer({ sequence: ['tool_call_success', 'success', 'success', 'tool_call_success', 'success'],
+    mock = await startApprovalMockLlmServer({ sequence: ['tool_call_success', 'success', 'tool_call_success', 'success'],
       repeatLast: true, successText: answer, apiKey, toolName: 'bash',
       toolArguments: JSON.stringify({ command: 'printf TOOL_OK', description: 'Print TOOL_OK',
         sandbox_permissions: 'danger-full-access', justification: 'Verify the approval UI in a disposable workspace' }) });
@@ -793,7 +899,7 @@ async function main(): Promise<void> {
     const firstPage = opened.page;
     const firstErrors = opened.errors;
     await checkTuiHandoff(firstPage, tuiSessionId);
-    const editor = await startNewSession(firstPage, 'first', [tuiSessionId]);
+    const { editor, checkIdentity: checkFirstIdentity } = await startNewSession(firstPage, 'first', [tuiSessionId]);
     await editor.fill(prompts[0]);
     await editor.press('Enter');
     const approval = firstPage.locator('[data-approval-key]');
@@ -804,12 +910,9 @@ async function main(): Promise<void> {
     assert.ok(await approval.getByRole('button', { name: 'Reject' }).isVisible());
     assert.ok((await firstPage.locator('[data-turn-process="1"]').innerText()).includes('Deep diving'),
       'the turn appeared settled while approval was pending');
-    const pendingRow = await firstPage.locator('[data-row-key^="session:"][aria-selected="true"]')
-      .getAttribute('data-row-key');
-    assert.match(pendingRow ?? '', /^session:(?:session-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,
-      'pending Web turn has no exact session ID');
-    const pendingId = pendingRow!.slice('session:'.length);
-    await checkWebWriterContention(dsh, fixture, home, agents, workspace, pendingId,
+    const pendingId = await copiedSessionId(firstPage);
+    checkFirstIdentity(pendingId);
+    await checkWebWriterContention(tuiDsh, fixture, home, agents, workspace, pendingId,
       mock.baseURL, apiKey, 'pending');
     assert.ok(await approval.isVisible(), 'Web approval disappeared after refused TUI resume');
     await approval.getByRole('button', { name: 'Allow once' }).click();
@@ -818,11 +921,10 @@ async function main(): Promise<void> {
     assert.equal(firstId, pendingId, 'Web approval completed in a different session');
     await checkToolResult(firstPage);
 
-    // First-turn title generation runs independently of the tool continuation.
-    // Let it consume its scripted success before the next tool scenario begins.
-    await waitForMockRequests(mock, 3);
+    // Auxiliary title requests use their own fixture sequence.
+    await waitForMockRequests(mock, 2);
 
-    const secondEditor = await startNewSession(firstPage, 'second', [firstId]);
+    const { editor: secondEditor, checkIdentity: checkSecondIdentity } = await startNewSession(firstPage, 'second', [tuiSessionId, firstId]);
     await secondEditor.fill(prompts[1]);
     await secondEditor.press('Enter');
     await approval.waitFor({ timeout: 30_000 });
@@ -830,12 +932,13 @@ async function main(): Promise<void> {
     await approval.waitFor({ state: 'hidden', timeout: 30_000 });
     await firstPage.getByText('Worked', { exact: true }).first().waitFor({ timeout: 30_000 });
     const secondId = await copiedSessionId(firstPage);
+    checkSecondIdentity(secondId);
     assert.ok(firstId !== secondId, 'two new sessions share an ID');
     await checkHistory(firstPage, firstId, prompts[0], prompts[1]);
     await checkHistory(firstPage, secondId, prompts[1], prompts[0]);
     await checkRejectedTool(firstPage);
     await checkHistory(firstPage, firstId, prompts[0], prompts[1]);
-    await checkWebWriterContention(dsh, fixture, home, agents, workspace, firstId, mock.baseURL, apiKey);
+    await checkWebWriterContention(tuiDsh, fixture, home, agents, workspace, firstId, mock.baseURL, apiKey);
     pageErrors += firstErrors.length;
     hostErrors += host.errorCount();
     await crashHost(host.child);
@@ -843,7 +946,7 @@ async function main(): Promise<void> {
     browser = undefined;
     host = undefined;
 
-    await continueWebSessionInTui(dsh, fixture, home, agents, workspace, firstId);
+    await continueWebSessionInTui(tuiDsh, fixture, home, agents, workspace, firstId);
 
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
@@ -874,12 +977,13 @@ async function main(): Promise<void> {
     browser = await launchBrowser(browserBin, home);
     let errorOpened = await openPage(browser, host);
     const errorPage = errorOpened.page;
-    const errorEditor = await startNewSession(errorPage, 'error', [firstId, secondId]);
+    const { editor: errorEditor, checkIdentity: checkErrorIdentity } = await startNewSession(errorPage, 'error', [tuiSessionId, firstId, secondId]);
     await errorEditor.fill(errorPrompt);
     await errorEditor.press('Enter');
     await errorPage.locator('[data-conversation-content]')
       .getByText('This turn failed', { exact: false }).first().waitFor({ timeout: 30_000 });
     const errorId = await copiedSessionId(errorPage);
+    checkErrorIdentity(errorId);
     await checkFailedHistory(errorPage, errorId);
     pageErrors += errorOpened.errors.length;
     hostErrors += host.errorCount();
@@ -905,7 +1009,7 @@ async function main(): Promise<void> {
     host = undefined;
     await mock.close();
     const approvalMarker = join(workspace, 'interrupted-approval-command-executed');
-    mock = await startMockLlmServer({ sequence: ['tool_call_success', 'success'],
+    mock = await startApprovalMockLlmServer({ sequence: ['tool_call_success', 'success'],
       repeatLast: true, successText: answer, apiKey, toolName: 'bash',
       toolArguments: JSON.stringify({ command: `touch '${approvalMarker}'`,
         description: 'Require an approval before the crash',
@@ -914,19 +1018,15 @@ async function main(): Promise<void> {
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
     const interruptedOpened = await openPage(browser, host);
-    const interruptedEditor = await startNewSession(interruptedOpened.page, 'interrupted',
-      [firstId, secondId, errorId]);
+    const { editor: interruptedEditor, checkIdentity: checkInterruptedIdentity } = await startNewSession(interruptedOpened.page, 'interrupted',
+      [tuiSessionId, firstId, secondId, errorId]);
     await interruptedEditor.fill(interruptedPrompt);
     await interruptedEditor.press('Enter');
     const interruptedApproval = interruptedOpened.page.locator('[data-approval-key]');
     await interruptedApproval.waitFor({ timeout: 30_000 });
-    const interruptedRow = await interruptedOpened.page
-      .locator('[data-row-key^="session:"][aria-selected="true"]')
-      .getAttribute('data-row-key');
-    assert.match(interruptedRow ?? '', /^session:(?:session-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,
-      'pending Web approval has no exact session ID');
-    const interruptedId = interruptedRow!.slice('session:'.length);
-    await checkWebWriterContention(dsh, fixture, home, agents, workspace, interruptedId,
+    const interruptedId = await copiedSessionId(interruptedOpened.page);
+    checkInterruptedIdentity(interruptedId);
+    await checkWebWriterContention(tuiDsh, fixture, home, agents, workspace, interruptedId,
       mock.baseURL, apiKey, 'pending');
     assert.ok(await interruptedApproval.isVisible(), 'Web approval vanished before the crash');
     pageErrors += interruptedOpened.errors.length;
@@ -938,7 +1038,7 @@ async function main(): Promise<void> {
     await mock.close();
     mock = undefined;
 
-    await continueInterruptedWebSessionInTui(dsh, fixture, home, agents, workspace, interruptedId);
+    await continueInterruptedWebSessionInTui(tuiDsh, fixture, home, agents, workspace, interruptedId);
     assert.equal(existsSync(approvalMarker), false,
       'the unapproved Web command executed during TUI recovery');
 
@@ -968,8 +1068,8 @@ async function main(): Promise<void> {
     assert.equal(pageErrors, 0, 'browser reported JavaScript errors');
     assert.equal(hostErrors, 0, 'DSH Web Host reported errors');
 
-    const imageEditor = await startNewSession(recoveredOpened.page, 'image',
-      [firstId, secondId, errorId, interruptedId]);
+    const { editor: imageEditor, checkIdentity: checkImageIdentity } = await startNewSession(recoveredOpened.page, 'image',
+      [tuiSessionId, firstId, secondId, errorId, interruptedId]);
     const modelTrigger = recoveredOpened.page.getByRole('button', { name: /^Select model, current/ });
     await modelTrigger.click();
     await recoveredOpened.page.getByRole('menuitem', { name: /^Model\b/ }).click();
@@ -1010,6 +1110,7 @@ async function main(): Promise<void> {
       .catch(() => null);
     const imageConversation = recoveredOpened.page.locator('[data-conversation-content]');
     const imageId = await copiedSessionId(recoveredOpened.page);
+    checkImageIdentity(imageId);
     const imageLog = sessionLog(join(home, 'sessions'), imageId);
     try {
       await imageConversation.getByText(answer, { exact: false }).first()
@@ -1063,7 +1164,7 @@ async function main(): Promise<void> {
     browser = undefined;
     await stopHost(host.child);
     host = undefined;
-    await checkImageHandoffInTui(dsh, fixture, home, agents, workspace, imageId,
+    await checkImageHandoffInTui(tuiDsh, fixture, home, agents, workspace, imageId,
       mock, apiKey, webImagePayload);
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
@@ -1121,7 +1222,7 @@ async function main(): Promise<void> {
     await stopHost(host.child);
     host = undefined;
 
-    await continueLegacyV2InTui(dsh, fixture, home, agents, workspace, legacy, mock, apiKey);
+    await continueLegacyV2InTui(tuiDsh, fixture, home, agents, workspace, legacy, mock, apiKey);
     assert.deepEqual(sessionLogs(join(home, 'sessions')).filter(path => !v4BeforeLegacy.has(path)),
       [legacy.current], 'Legacy handoff created another Session V4 archive');
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
@@ -1142,7 +1243,7 @@ async function main(): Promise<void> {
     hostErrors += host.errorCount();
     assert.equal(pageErrors, 0, 'browser reported JavaScript errors after legacy migration');
     assert.equal(hostErrors, 0, 'DSH Web Host reported errors after legacy migration');
-    console.log(JSON.stringify({ result: 'pass', sessions: 7, tuiToWebTitle: true,
+    console.log(JSON.stringify({ result: 'pass', profile: installedHome ? 'workbench' : 'standalone', sessions: 7, tuiToWebTitle: true,
       webToTuiContinuation: true, writerContention: true, toolApproval: true,
       toolRejection: true, runningTurn: true, errorResume: true,
       toolResultsAfterRestart: true, restartResume: true, settledHostCrashHandoff: true,

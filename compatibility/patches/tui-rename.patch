@@ -1,23 +1,68 @@
+diff --git a/lib/types/adapter/ports/channel-ui.d.ts b/lib/types/adapter/ports/channel-ui.d.ts
+index 6db50f2..e3c22a3 100644
+--- a/lib/types/adapter/ports/channel-ui.d.ts
++++ b/lib/types/adapter/ports/channel-ui.d.ts
+@@ -471,7 +471,7 @@ export interface ChannelUi {
+     setResumeTarget(sessionId: string): void;
+     /** Rename the current session (`/rename`): appends a `session/title`
+      *  event, which the status line and the /resume picker both read. */
+-    renameSession(title: string): void;
++    renameSession(title: string): void | Promise<void>;
+     /** Set the current session's accent color (`/color <name>`): appends a
+      *  `session/color` event; '' clears it back to the theme default. */
+     setSessionColor(color: string): void;
+diff --git a/lib/types/dsh-adapter/channel/session-metadata.d.ts b/lib/types/dsh-adapter/channel/session-metadata.d.ts
+index cf3bf97..93b8118 100644
+--- a/lib/types/dsh-adapter/channel/session-metadata.d.ts
++++ b/lib/types/dsh-adapter/channel/session-metadata.d.ts
+@@ -82,7 +82,7 @@ export declare function createSessionMetadataActions(ctx: Context, deps: {
+         title: string;
+     }>;
+     setResumeTarget: typeof writeResumeTarget;
+-    renameSession: (title: string) => void;
++    renameSession: (title: string) => Promise<void>;
+     setSessionColor: (color: string) => void;
+     deleteSession: (sessionId: string) => Promise<boolean>;
+     renameSessionTo: (sessionId: string, title: string) => Promise<boolean>;
 diff --git a/lib/types/dsh-adapter/channel/session-metadata.js b/lib/types/dsh-adapter/channel/session-metadata.js
-index de95a03af2cb8e06aad7a5b0b3628c18adacfe14..a4611edec95d3799e69a1ce436d337f1619e3171 100644
+index de95a03..ed1d475 100644
 --- a/lib/types/dsh-adapter/channel/session-metadata.js
 +++ b/lib/types/dsh-adapter/channel/session-metadata.js
-@@ -163,8 +163,11 @@ export function createSessionMetadataActions(ctx, deps) {
+@@ -159,12 +159,19 @@ export function createSessionMetadataActions(ctx, deps) {
+         const parsed = parseRecapResponse(outcome.answer);
+         return parsed.title === undefined ? { summary: parsed.summary } : { summary: parsed.summary, title: parsed.title };
+     };
+-    const renameSession = (title) => {
++    const renameSession = async (title) => {
          const capture = deps.binding.capture();
          if (!current(capture))
-             return;
+-            return;
 -        capture.agent.session.append('session/title', { title });
 -        deps.setSessionTitle(title);
++            throw new Error('session binding unavailable for rename');
 +        const titleService = ctx.get('sessionTitle');
-+        if (!titleService)
-+            throw new Error('session title service unavailable');
++        const projectionCache = ctx.get('sessionProjectionCache');
++        if (!titleService || typeof projectionCache?.write !== 'function')
++            throw new Error('session title durability services unavailable');
 +        const accepted = titleService.rename(capture.agent.session, title);
++        await projectionCache.write(capture.agent.session);
++        if (!current(capture))
++            throw new Error('session binding changed before rename acknowledgement');
 +        deps.setSessionTitle(accepted.title);
          deps.emit();
      };
      const setSessionColor = (color) => {
+@@ -193,7 +200,7 @@ export function createSessionMetadataActions(ctx, deps) {
+         if (!current(capture))
+             return false;
+         if (sessionId === capture.agent.session.id) {
+-            renameSession(title);
++            await renameSession(title);
+             return true;
+         }
+         if (appendSessionTitle(sessionId, title) !== 'appended' || !current(capture))
 diff --git a/lib/types/dsh-adapter/compat/sessionLog.js b/lib/types/dsh-adapter/compat/sessionLog.js
-index c31d6e62e56b5c762ce891d9055b211416afff2d..cb0cffd9f522fd6231de61fcc0c076f2b7bb05e5 100644
+index c31d6e6..cb0cffd 100644
 --- a/lib/types/dsh-adapter/compat/sessionLog.js
 +++ b/lib/types/dsh-adapter/compat/sessionLog.js
 @@ -1106,13 +1106,12 @@ export function appendSessionTitle(sessionId, title) {
@@ -36,3 +81,48 @@ index c31d6e62e56b5c762ce891d9055b211416afff2d..cb0cffd9f522fd6231de61fcc0c076f2
          };
          const frame = zstdCompressSync(Buffer.from(JSON.stringify(event) + '\n', 'utf8'));
          appendFileSync(file, frame);
+diff --git a/lib/types/dsh-adapter/plugin.js b/lib/types/dsh-adapter/plugin.js
+index dcc87bd..29a2231 100644
+--- a/lib/types/dsh-adapter/plugin.js
++++ b/lib/types/dsh-adapter/plugin.js
+@@ -1318,7 +1318,7 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
+     const approvalStore = new ApprovalStore(adapterRuntimeFor(ctx));
+     bindApprovalStore(ctx, approvalStore);
+     if (ctx.get('approval') !== undefined) {
+-        ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()));
++        ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()), { global: true, prepend: true });
+         // Badge-flip push (P-4): React does not know the session log appended —
+         // a source-badge verdict that only flips inside getSnapshot() surfaces
+         // solely when something else re-renders. Feed the session firehose to
+diff --git a/lib/types/screens/Chat.js b/lib/types/screens/Chat.js
+index 53a80a9..91cfc76 100644
+--- a/lib/types/screens/Chat.js
++++ b/lib/types/screens/Chat.js
+@@ -1850,8 +1850,9 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
+                     ]);
+                     return true;
+                 }
+-                channel.renameSession(title);
+-                channel.notify(t('rename-done', { title }));
++                void Promise.resolve().then(() => channel.renameSession(title))
++                    .then(() => channel.notify(t('rename-done', { title })))
++                    .catch(error => channel.notify(t('home-rename-failed', { err: error instanceof Error ? error.message : String(error) }), { color: 'error' }));
+                 return true;
+             }
+             case 'rewind':
+@@ -3813,9 +3814,12 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
+                                     }, onApplyTitle: () => {
+                                         if (recap.title === undefined || recap.titleApplied)
+                                             return;
+-                                        channel.renameSession(recap.title);
+-                                        setRecap(prev => (prev ? { ...prev, titleApplied: true } : prev));
+-                                        channel.notify(t('recap-title-applied-notify', { title: recap.title }), { color: 'success' });
++                                        void Promise.resolve().then(() => channel.renameSession(recap.title))
++                                            .then(() => {
++                                                setRecap(prev => (prev && prev.title === recap.title ? { ...prev, titleApplied: true } : prev));
++                                                channel.notify(t('recap-title-applied-notify', { title: recap.title }), { color: 'success' });
++                                            })
++                                            .catch(error => channel.notify(t('home-rename-failed', { err: error instanceof Error ? error.message : String(error) }), { color: 'error' }));
+                                     } }) })) : btw !== null ? (_jsx(Box, { flexDirection: "column", marginTop: 1, children: _jsx(BtwPanel, { question: btw.question, answer: btw.answer, error: btw.error, streaming: !btw.done, onClose: closeBtw, onCopy: () => {
+                                         void setClipboard(btw.answer ?? '').then(raw => { if (raw)
+                                             writeRaw?.(raw); });

@@ -19,10 +19,6 @@ jobs:
             platform: linux
             arch: x64
             nils_target: x86_64-unknown-linux-gnu
-          - runner: macos-15
-            platform: darwin
-            arch: arm64
-            nils_target: aarch64-apple-darwin
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -45,11 +41,14 @@ jobs:
             const c=require("./compatibility/workbench.json");
             const fs=require("node:fs");
             const t=c.components.tui.package;
+            const cli=c.components.dsh.package;
             const outputs={
               kit_commit:c.components.runtimeKit.source.commit,
               dsh_commit:c.components.dsh.source.commit,
               dsh_pnpm:c.components.dsh.toolchain.pnpm,
               workbench_pnpm:c.runtime.pnpm,
+              cli_spec:`${cli.name}@${cli.version}`,
+              cli_file:`${cli.name.slice(1).replace("/","-")}-${cli.version}.tgz`,
               tui_spec:`${t.name}@${t.version}`,
               tui_file:`${t.name.slice(1).replace("/","-")}-${t.version}.tgz`,
               web_file:`sympoies-dsh-workbench-web-${c.release.version}.tgz`
@@ -114,6 +113,9 @@ jobs:
           test -x "$NILS_BIN_DIR/agent-hook"
           test -x "$NILS_BIN_DIR/agent-docs"
           echo "$NILS_BIN_DIR" >> "$GITHUB_PATH"
+      - name: Probe authoritative finish-line host
+        working-directory: dsh-workbench
+        run: node tests/finish-line-host-probe.ts
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: ${{ steps.pins.outputs.dsh_pnpm }}
@@ -140,9 +142,13 @@ jobs:
       - name: Produce runtime-kit authenticated patched peer receipt
         working-directory: dsh-runtime-kit
         run: |
+          mkdir -p "$VERIFICATION_ROOT/dsh-native-registry"
+          node -e 'const fs=require("node:fs"),cp=require("node:child_process"); const m=JSON.parse(fs.readFileSync("compatibility/dsh.json")); for(const name of Object.keys(m.registry_workspace_artifacts)){const r=cp.spawnSync("npm",["pack",`${name}@${m.workspace_artifacts[name].version}`,"--ignore-scripts","--pack-destination",process.argv[1]],{stdio:"inherit"});if(r.status!==0)process.exit(1)}' \
+            "$VERIFICATION_ROOT/dsh-native-registry"
           npm run --silent pack:compatibility-peers -- \
             --source-root "$GITHUB_WORKSPACE/deepseek-harness" \
             --artifact-root "$VERIFICATION_ROOT/dsh-patched-peers" \
+            --registry-artifact-root "$VERIFICATION_ROOT/dsh-native-registry" \
             --channel pinned --patch-state patched \
             --pnpm-bin "$(command -v pnpm)" \
             --receipt "$VERIFICATION_ROOT/dsh-patched-peer-pack.json"
@@ -157,11 +163,13 @@ jobs:
             --artifact-root "$VERIFICATION_ROOT/dsh-patched-peers" \
             --consumer-root "$VERIFICATION_ROOT/kit-peer-verification" \
             > "$VERIFICATION_ROOT/kit-peer-stage.json"
-          node -e 'const r=require(process.argv[1]);if(!r.ok||r.data.packages.length!==64||r.data.patch_state!=="patched")process.exit(1)' \
+          node -e 'const r=require(process.argv[1]);if(!r.ok||r.data.verified_packages.length!==83||r.data.packages.length!==80||r.data.skipped_optional_packages.length!==3||r.data.patch_state!=="patched")process.exit(1)' \
             "$VERIFICATION_ROOT/kit-peer-stage.json"
       - name: Build Web plugin and stage combined Web/TUI profile
         working-directory: dsh-workbench
         env:
+          CLI_SPEC: ${{ steps.pins.outputs.cli_spec }}
+          CLI_FILE: ${{ steps.pins.outputs.cli_file }}
           TUI_SPEC: ${{ steps.pins.outputs.tui_spec }}
           TUI_FILE: ${{ steps.pins.outputs.tui_file }}
           WEB_FILE: ${{ steps.pins.outputs.web_file }}
@@ -173,12 +181,15 @@ jobs:
           test -s "$VERIFICATION_ROOT/$WEB_FILE"
           npm pack "$TUI_SPEC" --ignore-scripts --silent \
             --pack-destination "$VERIFICATION_ROOT" >/dev/null
+          npm pack "$CLI_SPEC" --ignore-scripts --silent \
+            --pack-destination "$VERIFICATION_ROOT" >/dev/null
           install -d -m 0700 "$VERIFICATION_ROOT/dsh-home/profiles"
           node scripts/combined-profile.mjs \
             "$GITHUB_WORKSPACE/dsh-runtime-kit" \
             "$VERIFICATION_ROOT/dsh-patched-peer-pack.json" \
             "$VERIFICATION_ROOT/$TUI_FILE" \
             "$VERIFICATION_ROOT/$WEB_FILE" \
+            "$VERIFICATION_ROOT/$CLI_FILE" \
             "$VERIFICATION_ROOT/dsh-home"
       - name: Install exact DSH/Web/TUI graph with strict frozen peers
         env:
@@ -189,35 +200,9 @@ jobs:
           unset PNPM_HOME
           test "$(npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm --version)" = "$WORKBENCH_PNPM"
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --strict-peer-dependencies --ignore-scripts
+          # Normalize fresh transitive resolutions before runtime-kit owns its mutation.
+          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm dedupe --strict-peer-dependencies --ignore-scripts
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
-      - name: Inventory path-free production dependency licenses
-        working-directory: dsh-workbench
-        env:
-          WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
-        run: |
-          stage=manifest
-          trap 'printf "license inventory stage failed: %s\n" "$stage" >&2' ERR
-          cd "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
-          node -e 'const p=require("./package.json");if(Object.keys(p.devDependencies||{}).length!==0)process.exit(1)'
-          stage=pnpm
-          unset PNPM_HOME
-          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm licenses list --json \
-            > "$VERIFICATION_ROOT/pnpm-production-licenses.json"
-          stage=normalize
-          cd "$GITHUB_WORKSPACE/dsh-workbench"
-          node scripts/license-inventory.ts "$VERIFICATION_ROOT/pnpm-production-licenses.json" \
-            > "$VERIFICATION_ROOT/production-license-inventory.json"
-          stage=publication
-          bash scripts/check-publication.sh --artifact "$VERIFICATION_ROOT/production-license-inventory.json"
-          stage=summary
-          {
-            printf '### Production dependency licenses (%s %s)\n\n' \
-              "${{ matrix.platform }}" "${{ matrix.arch }}"
-            printf 'This path-free report is generated from the exact installed candidate profile.\n\n'
-            printf '```json\n'
-            cat "$VERIFICATION_ROOT/production-license-inventory.json"
-            printf '```\n'
-          } >> "$GITHUB_STEP_SUMMARY"
       - name: Prepare exact profile toolchain and packaged runtime-kit
         working-directory: dsh-runtime-kit
         env:
@@ -232,6 +217,53 @@ jobs:
           tar -xzf "$VERIFICATION_ROOT/$(cat "$VERIFICATION_ROOT/runtime-kit-tarball-name")" \
             -C "$VERIFICATION_ROOT/runtime-kit-package"
           test -f "$VERIFICATION_ROOT/runtime-kit-package/package/dist/bin/dsh-runtime-kit.js"
+      - name: Install authenticated official CLI with the patched closure
+        working-directory: dsh-workbench
+        run: |
+          node --input-type=module - "$VERIFICATION_ROOT" <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { mkdirSync, readFileSync, copyFileSync, writeFileSync } from 'node:fs';
+          import { join, basename } from 'node:path';
+          const root = process.argv[2];
+          const contract = JSON.parse(readFileSync('compatibility/workbench.json'));
+          const cli = contract.components.dsh.package;
+          const host = join(root, 'portable-host');
+          const artifacts = join(host, 'artifacts');
+          mkdirSync(artifacts, { recursive: true });
+          const file = `${cli.name.slice(1).replace('/', '-')}-${cli.version}.tgz`;
+          const bytes = readFileSync(join(root, 'dsh-home/profiles/workbench/artifacts', file));
+          writeFileSync(join(artifacts, file), bytes, { flag: 'wx' });
+          if (`sha512-${createHash('sha512').update(bytes).digest('base64')}` !== cli.integrity) {
+            throw new Error('Official CLI archive integrity mismatch');
+          }
+          const receipt = JSON.parse(readFileSync(join(root, 'dsh-patched-peer-pack.json')));
+          const staged = JSON.parse(readFileSync(join(root, 'kit-peer-stage.json')));
+          if (!receipt.ok || !staged.ok || staged.data.verified_packages.length !== 83
+            || staged.data.packages.length !== 80) throw new Error('Verified patched closure required');
+          let workspace = 'overrides:\n';
+          for (const row of receipt.data.packages) {
+            // Copy the bytes already authenticated by both independent stagers.
+            const source = join(root, 'dsh-home/profiles/workbench/artifacts', basename(row.path));
+            const archive = readFileSync(source);
+            if (createHash('sha256').update(archive).digest('hex') !== row.tarball_sha256) {
+              throw new Error('Staged archive drift');
+            }
+            copyFileSync(source, join(artifacts, basename(row.path)));
+            if (staged.data.packages.includes(row.name)) {
+              workspace += `  '${row.name}': 'file:artifacts/${basename(row.path)}'\n`;
+            }
+          }
+          writeFileSync(join(host, 'pnpm-workspace.yaml'), workspace);
+          writeFileSync(join(host, 'package.json'), JSON.stringify({
+            name: 'dsh-workbench-portable-host', private: true,
+            dependencies: { [cli.name]: `file:artifacts/${file}` },
+          }, null, 2) + '\n');
+          NODE
+          cd "$VERIFICATION_ROOT/portable-host"
+          unset PNPM_HOME
+          pnpm install --ignore-scripts --strict-peer-dependencies
+          pnpm install --ignore-scripts --strict-peer-dependencies --frozen-lockfile
+          test -f node_modules/@deepseek-ai/dsh/lib/bin.js
       - name: Install exact browser for activated Web acceptance
         working-directory: dsh-workbench
         run: |
@@ -246,22 +278,81 @@ jobs:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |
           test "$(pnpm --version)" = "$WORKBENCH_PNPM"
+          command -v zstdcat
           node scripts/verify-combined-runtime.ts \
             "$VERIFICATION_ROOT/runtime-kit-package/package" \
             "$GITHUB_WORKSPACE/deepseek-harness" \
             "$VERIFICATION_ROOT/dsh-home" \
             "$VERIFICATION_ROOT/dsh-runtime" \
             "$NILS_BIN_DIR" \
-            "$WORKBENCH_BROWSER_BIN"
+            "$WORKBENCH_BROWSER_BIN" \
+            "$VERIFICATION_ROOT/dsh-home/profiles/workbench/node_modules/@deepseek-ai/dsh/lib/bin.js"
+      - name: Inventory activated-profile and CLI host production licenses
+        working-directory: dsh-workbench
+        env:
+          WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
+        run: |
+          stage=manifest
+          trap 'printf "license inventory stage failed: %s\n" "$stage" >&2' ERR
+          unset PNPM_HOME
+          for graph in profile host; do
+            if test "$graph" = profile; then
+              install_root="$VERIFICATION_ROOT/dsh-home/profiles/workbench"
+            else
+              install_root="$VERIFICATION_ROOT/portable-host"
+            fi
+            cd "$install_root"
+            node -e 'const p=require("./package.json");if(Object.keys(p.devDependencies||{}).length!==0)process.exit(1)'
+            stage=pnpm
+            npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm licenses list --json \
+              > "$VERIFICATION_ROOT/$graph-pnpm-production-licenses.json"
+            stage=normalize
+            cd "$GITHUB_WORKSPACE/dsh-workbench"
+            node scripts/license-inventory.ts "$VERIFICATION_ROOT/$graph-pnpm-production-licenses.json" \
+              > "$VERIFICATION_ROOT/$graph-production-license-inventory.json"
+            stage=publication
+            bash scripts/check-publication.sh --artifact "$VERIFICATION_ROOT/$graph-production-license-inventory.json"
+            stage=summary
+            {
+              printf '### Production dependency licenses (%s %s, %s)\n\n' \
+                "${{ matrix.platform }}" "${{ matrix.arch }}" "$graph"
+              printf 'This path-free report comes from the exact installed candidate graph.\n\n'
+              printf '```json\n'
+              cat "$VERIFICATION_ROOT/$graph-production-license-inventory.json"
+              printf '\n```\n'
+            } >> "$GITHUB_STEP_SUMMARY"
+            stage=manifest
+          done
       - name: Prepare real TTY acceptance dependencies
         working-directory: dsh-workbench
         run: |
-          if [ "$RUNNER_OS" = macOS ]; then brew install zstd; fi
           pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
-          node - "$VERIFICATION_ROOT/dsh-bin" "$GITHUB_WORKSPACE/deepseek-harness/apps/cli/lib/bin.js" <<'NODE'
+          node - "$VERIFICATION_ROOT/dsh-bin" "$VERIFICATION_ROOT/dsh-home/profiles/workbench/node_modules/@deepseek-ai/dsh/lib/bin.js" <<'NODE'
           const fs = require('node:fs');
           const [target, source] = process.argv.slice(2);
           fs.writeFileSync(target, `#!/bin/sh\nexec "${process.execPath}" "${source}" "$@"\n`, { mode: 0o700 });
+          NODE
+          node - "$VERIFICATION_ROOT/dsh-workbench-bin" \
+            "$VERIFICATION_ROOT/runtime-kit-package/package/dist/bin/dsh-runtime-kit-launch.js" \
+            "$VERIFICATION_ROOT/dsh-runtime" \
+            "$VERIFICATION_ROOT/dsh-home/profiles/workbench/node_modules/@deepseek-ai/dsh/lib/bin.js" <<'NODE'
+          const fs = require('node:fs');
+          const [target, launcher, runtimeRoot, source] = process.argv.slice(2);
+          const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+          const args = [process.execPath, launcher, '--runtime-root', runtimeRoot,
+            '--', process.execPath, source].map(quote).join(' ');
+          fs.writeFileSync(target, `#!/bin/sh\nexec ${args} "$@"\n`, { mode: 0o700 });
+          NODE
+          node - "$VERIFICATION_ROOT/dsh-workbench-tui-bin" \
+            "$VERIFICATION_ROOT/dsh-home/profiles/workbench/workbench-tui/scripts/launch-workbench-tui.ts" \
+            "$VERIFICATION_ROOT/runtime-kit-package/package" \
+            "$VERIFICATION_ROOT/dsh-runtime" \
+            "$VERIFICATION_ROOT/dsh-home/profiles/workbench/node_modules/@deepseek-ai/dsh/lib/bin.js" <<'NODE'
+          const fs = require('node:fs');
+          const [target, entry, kit, runtimeRoot, cli] = process.argv.slice(2);
+          const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+          const args = [process.execPath, entry, kit, runtimeRoot, cli, '--'].map(quote).join(' ');
+          fs.writeFileSync(target, `#!/bin/sh\nexec ${args} "$@"\n`, { mode: 0o700 });
           NODE
       - name: Exercise TUI in a real terminal
         working-directory: dsh-workbench
@@ -274,4 +365,24 @@ jobs:
           pnpm test:web:browser \
             --dsh-bin "$VERIFICATION_ROOT/dsh-bin" \
             --browser-bin "$WORKBENCH_BROWSER_BIN" \
+            "${browser_args[@]}"
+      - name: Exercise activated Workbench profile in a real terminal
+        working-directory: dsh-workbench
+        run: |
+          node tests/finish-line-host-probe.ts
+          pnpm test:tui:terminal \
+            --dsh-bin "$VERIFICATION_ROOT/dsh-workbench-tui-bin" \
+            --installed-dsh-home "$VERIFICATION_ROOT/dsh-home" \
+            --runtime-env-file "$VERIFICATION_ROOT/workbench-verification/terminal-environment.json"
+      - name: Exercise shared sessions in the activated Workbench profile
+        working-directory: dsh-workbench
+        run: |
+          browser_args=()
+          if [ "$RUNNER_OS" = Linux ]; then browser_args+=(--ci-no-browser-sandbox); fi
+          pnpm test:web:browser \
+            --dsh-bin "$VERIFICATION_ROOT/dsh-workbench-bin" \
+            --tui-bin "$VERIFICATION_ROOT/dsh-workbench-tui-bin" \
+            --browser-bin "$WORKBENCH_BROWSER_BIN" \
+            --installed-dsh-home "$VERIFICATION_ROOT/dsh-home" \
+            --runtime-env-file "$VERIFICATION_ROOT/workbench-verification/terminal-environment.json" \
             "${browser_args[@]}"

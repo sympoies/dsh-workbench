@@ -42,16 +42,19 @@ exact contract version:
 pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chromium
 ```
 
-The script builds and packs the Web plugin, installs Web and patched TUI
-profiles in a disposable DSH home, and runs seven sessions against authenticated
-local mock LLM servers. Through a native pseudoterminal provided by the pinned
+The script builds and packs the Web plugin, installs a Web profile containing
+the patched TUI bundle and a separate patched TUI profile in a disposable DSH
+home, and runs seven sessions against authenticated local mock LLM servers.
+Through a native pseudoterminal provided by the pinned
 development-only `node-pty` package, it creates and renames a TUI session,
 stops TUI, then checks that session's exact ID, title, prompt, and answer in
 native Web before and after a
 Web Host restart. While Web still holds a session writer, including while a
 tool approval is pending, it checks that TUI refuses an exact-ID resume without
 rewriting the archive. The fixture then kills Web Host while it still owns a
-settled session. TUI resumes that Web session, completes another turn, and Web
+settled session. It also kills Web while tool approval is pending and checks
+that TUI resumes under recovered authority without executing the unapproved
+command. TUI resumes that Web session, completes another turn, and Web
 reads the continuation
 on restart. It also checks distinct Web IDs, isolated histories, a
 pending turn, tool approval and rejection, a provider error, and Web Host
@@ -65,11 +68,20 @@ historical exchange, TUI continues it under the same ID into Session V4, and
 Web reopens the result. This does not exercise a real user's DSH home.
 Local Chromium sandboxing remains enabled; the Linux GitHub-hosted CI runner
 uses an explicit test-only exception because its browser sandbox cannot initialize.
-The fixture does not establish acceptance for existing user homes or all
-handoff states.
+With `--installed-dsh-home` and `--runtime-env-file`, the same seven scenarios
+use the owner-marked disposable installation and the activated `workbench`
+profile for both interfaces. They preserve its package manifest and lock;
+the installation owner supplies the environment and Git workspace. This mode
+is a release gate and does not authorize testing against an existing user home.
+In installed mode, also supply `--tui-bin` with the Workbench TUI entry; the
+separate `--dsh-bin` starts Web through the runtime owner. Workbench's TUI entry
+projects explicit exact-ID resume through TUI's supported configuration seam
+so the shared graph's Web flag parser cannot consume it. See the
+[combined-profile entry contract](docs/combined-profile.md).
 The combined-profile CI installs the browser revision selected by the pinned
-`playwright-core` package and runs this acceptance on both first-release
-platforms after the exact DSH build.
+`playwright-core` package and runs this acceptance on the first-release Linux
+x64 target after the exact DSH build. macOS arm64 is tracked separately in
+[issue #47](https://github.com/sympoies/dsh-workbench/issues/47).
 
 Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`
@@ -89,24 +101,39 @@ acceptance with an installed executable of the exact DSH contract version:
 pnpm test:tui:terminal --dsh-bin /path/to/pinned/dsh
 ```
 
-The combined-profile CI runs this acceptance on Linux x64 and macOS arm64
+The combined-profile CI runs this acceptance on Linux x64
 after its authenticated graph setup and doctor check. It also starts the
 activated `workbench` Web Host through runtime-kit's owner launcher and checks
-a real browser turn and embedded identity in that installed profile. The
-terminal test itself
-installs the frozen TUI-only profile in a separate disposable home and uses a
-native pseudoterminal through the development-only `node-pty` package. It drives Allow once and
-Reject through two real TTY sessions against an authenticated local mock, and
-checks the final Session V4 archive, approval, tool result, completed turn,
+a real browser approval allow and reject, command execution or nonexecution,
+the durable tool results, and embedded identity in that installed profile. The
+terminal test first installs the frozen TUI-only profile in a separate
+disposable home, then attempts the same scenarios in the installed `workbench`
+profile. The latter remains an acceptance gate for governed Bash. To repeat
+the combined profile check against an isolated installation, use the
+runtime-kit launcher wrapper and pass
+`--installed-dsh-home /absolute/path/to/dsh-home` plus
+`--runtime-env-file /absolute/path/to/terminal-environment.json`; the runtime
+verification script marks only its disposable DSH home and emits the matching
+environment file for this use. Both paths use a native pseudoterminal through
+the development-only `node-pty` package. The acceptance drives Allow once with
+the TUI's explicit `1` shortcut and Reject with `Esc` through two real TTY
+sessions against an authenticated local mock. `Enter` submits the current focus,
+which can be Reject. The driver waits for the rendered approval choice before
+sending a decision. The acceptance checks the final Session V4 archive,
+approval, tool result, completed turn,
 and whether the allowed or rejected command actually ran. It also creates a
 72-turn conversation beyond the TUI's initial rendered-row cap, exits,
 resumes its exact ID, submits another turn, and checks its unique title and
 the exact `/resume` session count through a headless terminal screen. It also
 renames a session, exits, resumes that exact ID, and completes another turn
 while checking the durable user-title event. It then exercises the patched
-stopped-session title writer and resumes the same ID again. It never
-reads an existing DSH home or provider credential. This gate does not claim
-cross-interface handoff or real-TTY operation of the combined profile.
+stopped-session title writer and resumes the same ID again. The default test
+uses a disposable DSH home; the installed-home option must point to a
+disposable installation because the scenarios create sessions there. No
+provider credential is needed. Combined-profile CI also runs the test against
+the activated `workbench` profile in a disposable home. Its pseudoterminal
+preserves the host's systemd user manager connection for runtime-kit's
+finish-line containment. This gate does not claim cross-interface handoff.
 
 For durable design or compatibility outcomes, update the current owner first,
 then use `devlog new` to append one evidence-backed entry. Run `devlog check`
