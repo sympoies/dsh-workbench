@@ -862,10 +862,23 @@ async function main(): Promise<void> {
     assert.equal(await sendImage.isEnabled(), true, 'image upload did not reach a sendable state');
     await sendImage.click();
     const imageConversation = recoveredOpened.page.locator('[data-conversation-content]');
-    await imageConversation.getByText(answer, { exact: false }).first()
-      .waitFor({ timeout: 30_000 });
     const imageId = await copiedSessionId(recoveredOpened.page);
     const imageLog = sessionLog(join(home, 'sessions'), imageId);
+    try {
+      await imageConversation.getByText(answer, { exact: false }).first()
+        .waitFor({ timeout: 30_000 });
+    } catch (error) {
+      const events = readEvents(imageLog);
+      console.error(JSON.stringify({ phase: 'image-response', requestCount: mock.requests.length,
+        requestImages: mock.requests.map(request => inlineImages(request.body).length),
+        eventTypes: events.slice(-8).map(event => event.type),
+        lastTurnKind: (events.filter(event => event.type === 'turn/end').at(-1)?.data?.reason as
+          { kind?: string } | undefined)?.kind ?? 'none',
+        webFailureVisible: await imageConversation.getByText('This turn failed', { exact: false }).count() > 0,
+        pageErrors: recoveredOpened.errors.length, hostErrors: host.errorCount(),
+        hostDiagnostic: host.diagnostic() }));
+      throw error;
+    }
     const imageMessage = readEvents(imageLog, { strict: true }).find(event =>
       event.type === 'user/message' && JSON.stringify(event.data?.content).includes(imagePrompt));
     const imageContent = imageMessage?.data?.content;
