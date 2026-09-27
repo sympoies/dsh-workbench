@@ -174,8 +174,13 @@ command did not execute, TUI resumes the same ID and closes the interrupted
 turn, TUI completes a new turn, and Web reads that continuation after restart.
 This proves recovery for the approval-wait state only; it does not establish
 cancellation of an executing command or turn, recovery from crashes at other
-active-turn phases, attachments, live cross-interface title updates, complete
-projection-cache behavior, or existing-session migration.
+active-turn phases, live cross-interface title updates, complete
+projection-cache behavior, or existing-session migration. The browser fixture
+also exercises a synthetic PNG uploaded in native Web: Session V4 retains the
+attachment identity and dimensions without embedding raw bytes in the message,
+the exact-ID TUI continuation sends the same image bytes to the model, and Web
+reopens the image after TUI exits. This covers one settled PNG handoff, not
+other attachment types or interruption while an upload is pending.
 Those are release acceptance work under
 [#7](https://github.com/sympoies/dsh-workbench/issues/7), with TUI-specific
 checks under [#4](https://github.com/sympoies/dsh-workbench/issues/4).
