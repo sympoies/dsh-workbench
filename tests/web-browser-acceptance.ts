@@ -52,7 +52,7 @@ function seedLegacyV2Copy(fixture: string, home: string, workspace: string, exis
   const source = join(directory, 'session.v2.jsonl.zstd');
   const current = join(directory, 'session.v4.jsonl.zstd');
   const header = { type: 'session', version: 2, id, createdAt: Date.now(), cwd: workspace,
-    delegationDepth: 0 };
+    isSeeded: false, delegationDepth: 0 };
   const events = [
     { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
     { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
@@ -60,9 +60,17 @@ function seedLegacyV2Copy(fixture: string, home: string, workspace: string, exis
       data: { id: 'legacy-user', role: 'user', content: [{ type: 'text', text: legacyPrompt }],
         source: { kind: 'user' } } },
     { type: 'assistant/message', seq: 3, time: 4, surfaceOp: 'append',
-      data: { turn: 1, step: 1, message: { id: 'legacy-assistant', role: 'assistant',
-        content: [{ type: 'text', text: legacyAnswer }],
-        source: { kind: 'model', provider: 'mock', model: 'mock' } } } },
+      data: { turn: 1, step: 1,
+        message: { id: 'legacy-assistant', role: 'assistant',
+          content: [{ type: 'text', text: legacyAnswer }],
+          source: { kind: 'model', provider: 'mock', model: 'mock' } },
+        stream: [
+          { type: 'chunk', time: 3, chunk: { type: 'block-start', index: 0, blockType: 'text' } },
+          { type: 'text-chunks', time0: 3, index: 0, dt: [], texts: [legacyAnswer] },
+          { type: 'chunk', time: 4, chunk: { type: 'block-end', index: 0,
+            block: { type: 'text', text: legacyAnswer } } },
+          { type: 'chunk', time: 4, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+        ] } },
     { type: 'step/end', seq: 4, time: 5, data: { turn: 1, step: 1 } },
     { type: 'turn/end', seq: 5, time: 6, data: { turn: 1, reason: { kind: 'completed' } } },
   ];
@@ -274,9 +282,11 @@ async function continueWebSessionInTui(dsh: string, fixture: string, home: strin
 }
 
 async function continueLegacyV2InTui(dsh: string, fixture: string, home: string, agents: string,
-  workspace: string, legacy: ReturnType<typeof seedLegacyV2Copy>, baseURL: string,
+  workspace: string, legacy: ReturnType<typeof seedLegacyV2Copy>,
+  mock: Awaited<ReturnType<typeof startMockLlmServer>>,
   apiKey: string): Promise<void> {
-  const tui = startTui(dsh, fixture, home, agents, workspace, baseURL, apiKey,
+  const requestsBefore = mock.requests.length;
+  const tui = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey,
     ['--resume', legacy.id]);
   try {
     await waitForTui(tui, () => visibleScreen(tui.screen).includes(legacyAnswer),
@@ -292,6 +302,20 @@ async function continueLegacyV2InTui(dsh: string, fixture: string, home: string,
     assert.ok(JSON.stringify(events).includes(legacyAnswer), 'the migrated V4 log lost the old answer');
     assert.ok(JSON.stringify(events).includes(legacyContinuationPrompt),
       'the migrated V4 log lost the TUI continuation');
+    const continuationRequest = mock.requests.slice(requestsBefore).find(request =>
+      JSON.stringify(request.body).includes(legacyContinuationPrompt));
+    assert.ok(continuationRequest, 'the migrated TUI turn did not reach the model');
+    const messages = (continuationRequest.body as { messages?: unknown }).messages;
+    assert.ok(Array.isArray(messages), 'the migrated model request has no messages');
+    const roles = messages.map(message => (message as { role?: unknown }).role);
+    const oldUser = messages.findIndex((message, index) => roles[index] === 'user' &&
+      JSON.stringify(message).includes(legacyPrompt));
+    const oldAssistant = messages.findIndex((message, index) => index > oldUser &&
+      roles[index] === 'assistant' && JSON.stringify(message).includes(legacyAnswer));
+    const newUser = messages.findIndex((message, index) => index > oldAssistant &&
+      roles[index] === 'user' && JSON.stringify(message).includes(legacyContinuationPrompt));
+    assert.ok(oldUser >= 0 && oldAssistant > oldUser && newUser > oldAssistant,
+      'the migrated model request lost or reordered the historical conversation');
     assert.ok(readFileSync(legacy.source).equals(legacy.original),
       'migration changed the historical source bytes');
     assert.ok(readFileSync(legacy.backup).equals(legacy.original),
@@ -1055,8 +1079,7 @@ async function main(): Promise<void> {
     await stopHost(host.child);
     host = undefined;
 
-    await continueLegacyV2InTui(dsh, fixture, home, agents, workspace, legacy,
-      mock.baseURL, apiKey);
+    await continueLegacyV2InTui(dsh, fixture, home, agents, workspace, legacy, mock, apiKey);
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
     const migratedOpened = await openPage(browser, host);
