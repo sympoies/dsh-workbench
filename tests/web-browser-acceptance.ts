@@ -31,7 +31,7 @@ const imageName = 'workbench-handoff.png';
 const imagePrompt = 'WEB_IMAGE_HANDOFF_PROMPT';
 const imageContinuationPrompt = 'TUI_IMAGE_HANDOFF_CONTINUATION';
 const imageBytes = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+tmWQAAAAASUVORK5CYII=',
+  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHUlEQVQ4y2M0Tpv5n4ECwESJ5lEDRg0YNWAwGQAAJeECUeW0yNsAAAAASUVORK5CYII=',
   'base64');
 
 function inlineImages(body: unknown): string[] {
@@ -919,14 +919,14 @@ async function main(): Promise<void> {
         height?: number }; data?: unknown } | undefined;
     assert.equal(imageBlock?.attachment?.name, imageName);
     assert.equal(imageBlock?.attachment?.mediaType, 'image/png');
-    assert.equal(imageBlock?.attachment?.width, 1);
-    assert.equal(imageBlock?.attachment?.height, 1);
+    assert.equal(imageBlock?.attachment?.width, 16);
+    assert.equal(imageBlock?.attachment?.height, 16);
     assert.ok(imageBlock?.attachment?.attachmentId,
       'image content lacks a durable attachment identity');
     assert.equal(imageBlock?.data, undefined, 'Session V4 image content embeds raw bytes');
     const webImage = imageConversation.getByRole('img', { name: imageName });
     await webImage.waitFor({ timeout: 30_000 });
-    assert.equal(await webImage.evaluate(element => (element as HTMLImageElement).naturalWidth), 1,
+    assert.equal(await webImage.evaluate(element => (element as HTMLImageElement).naturalWidth), 16,
       'Web could not read the durable image before handoff');
     const webImagePayload = mock.requests.flatMap(request => inlineImages(request.body)).at(-1);
     assert.ok(webImagePayload, 'Web image prompt did not reach the model as an image');
@@ -950,7 +950,7 @@ async function main(): Promise<void> {
       .waitFor({ timeout: 30_000 });
     const reopenedImage = reopenedImageConversation.getByRole('img', { name: imageName });
     await reopenedImage.waitFor({ timeout: 30_000 });
-    assert.equal(await reopenedImage.evaluate(element => (element as HTMLImageElement).naturalWidth), 1,
+    assert.equal(await reopenedImage.evaluate(element => (element as HTMLImageElement).naturalWidth), 16,
       'Web could not read the durable image after TUI continuation');
     pageErrors += imageOpened.errors.length;
     hostErrors += host.errorCount();
