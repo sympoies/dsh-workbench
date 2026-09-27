@@ -389,8 +389,8 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     const runtimeMessages = events.filter(event => event.type === 'user/message'
       && (event.data?.source as { kind?: string } | undefined)?.kind === 'dsh-runtime-kit');
     const steerClasses = runtimeMessages.map(event => {
-      const message = event.data?.message as { content?: Array<{ text?: string }> } | undefined;
-      const text = message?.content?.find(block => typeof block.text === 'string')?.text ?? '';
+      const content = event.data?.content as Array<{ text?: string }> | undefined;
+      const text = content?.find(block => typeof block.text === 'string')?.text ?? '';
       if (text.startsWith('Finish-line')) return 'finish-line';
       if (text.startsWith('Authoritative acceptance')) return 'acceptance';
       if (text.startsWith('The lifecycle policy')) return 'lifecycle-policy';
