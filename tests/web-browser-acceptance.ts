@@ -258,9 +258,11 @@ async function checkImageHandoffInTui(dsh: string, fixture: string, home: string
       .includes(imageContinuationPrompt), 'TUI continuation did not persist under the image session');
     assert.equal((events.filter(event => event.type === 'turn/end').at(-1)?.data?.reason as
       { kind?: string } | undefined)?.kind, 'completed');
-    assert.ok(mock.requests.slice(requestsBefore).some(request =>
-      inlineImages(request.body).includes(webImagePayload)),
-    'TUI continuation did not send the durable Web image to the model');
+    const continuationRequest = mock.requests.slice(requestsBefore).find(request =>
+      JSON.stringify(request.body).includes(imageContinuationPrompt));
+    assert.ok(continuationRequest, 'TUI continuation did not reach the model');
+    assert.ok(inlineImages(continuationRequest.body).includes(webImagePayload),
+      'TUI continuation did not send the durable Web image to the model');
   } finally {
     await tui.stop();
   }
