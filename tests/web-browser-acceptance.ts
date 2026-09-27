@@ -27,6 +27,29 @@ const continuationAnswer = 'WEB_TO_TUI_CONTINUATION_ANSWER';
 const interruptedPrompt = 'WEB_APPROVAL_CRASH_PROMPT';
 const recoveredPrompt = 'INTERRUPTED_WEB_TO_TUI_PROMPT';
 const recoveredAnswer = 'INTERRUPTED_WEB_TO_TUI_ANSWER';
+const imageName = 'workbench-handoff.png';
+const imagePrompt = 'WEB_IMAGE_HANDOFF_PROMPT';
+const imageContinuationPrompt = 'TUI_IMAGE_HANDOFF_CONTINUATION';
+const imageBytes = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHUlEQVQ4y2M0Tpv5n4ECwESJ5lEDRg0YNWAwGQAAJeECUeW0yNsAAAAASUVORK5CYII=',
+  'base64');
+
+function inlineImages(body: unknown): string[] {
+  const messages = (body as { messages?: unknown } | null)?.messages;
+  if (!Array.isArray(messages)) return [];
+  return messages.flatMap(message => {
+    const content = (message as { content?: unknown } | null)?.content;
+    if (!Array.isArray(content)) return [];
+    return content.flatMap(part => {
+      const image = part as { type?: unknown; source?: {
+        type?: unknown; media_type?: unknown; data?: unknown;
+      } } | null;
+      return image?.type === 'image' && image.source?.type === 'base64' &&
+        image.source.media_type === 'image/png' && typeof image.source.data === 'string'
+        ? [image.source.data] : [];
+    });
+  });
+}
 
 function option(name: string): string {
   const index = process.argv.indexOf(name);
@@ -205,6 +228,43 @@ async function continueWebSessionInTui(dsh: string, fixture: string, home: strin
   } finally {
     const cleanup = await Promise.allSettled([tui.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI continuation cleanup failed');
+  }
+}
+
+async function checkImageHandoffInTui(dsh: string, fixture: string, home: string, agents: string,
+  workspace: string, id: string, mock: Awaited<ReturnType<typeof startMockLlmServer>>,
+  apiKey: string, webImagePayload: string): Promise<void> {
+  const logRoot = join(home, 'sessions');
+  const logPath = sessionLog(logRoot, id);
+  const previous = new Set(sessionLogs(logRoot));
+  const requestsBefore = mock.requests.length;
+  const turnsBefore = readEvents(logPath, { strict: true })
+    .filter(event => event.type === 'turn/end').length;
+  const tui = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey,
+    ['--resume', id]);
+  try {
+    await waitForTui(tui, () => visibleScreen(tui.screen).includes(answer),
+      'settled Web answer in the resumed TUI transcript');
+    tui.write(`${imageContinuationPrompt}\r`);
+    await waitForTui(tui, () => readEvents(logPath).filter(event =>
+      event.type === 'turn/end').length === turnsBefore + 1,
+    'completed image-session TUI continuation');
+    await tui.stop();
+    assert.equal(tui.exitCode, 0, 'TUI did not exit cleanly after image handoff');
+    assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [],
+      'Image handoff created another session');
+    const events = readEvents(logPath, { strict: true });
+    assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message'))
+      .includes(imageContinuationPrompt), 'TUI continuation did not persist under the image session');
+    assert.equal((events.filter(event => event.type === 'turn/end').at(-1)?.data?.reason as
+      { kind?: string } | undefined)?.kind, 'completed');
+    const continuationRequest = mock.requests.slice(requestsBefore).find(request =>
+      JSON.stringify(request.body).includes(imageContinuationPrompt));
+    assert.ok(continuationRequest, 'TUI continuation did not reach the model');
+    assert.ok(inlineImages(continuationRequest.body).includes(webImagePayload),
+      'TUI continuation did not send the durable Web image to the model');
+  } finally {
+    await tui.stop();
   }
 }
 
@@ -781,11 +841,128 @@ async function main(): Promise<void> {
     hostErrors += host.errorCount();
     assert.equal(pageErrors, 0, 'browser reported JavaScript errors');
     assert.equal(hostErrors, 0, 'DSH Web Host reported errors');
-    console.log(JSON.stringify({ result: 'pass', sessions: 5, tuiToWebTitle: true,
+
+    const imageEditor = await startNewSession(recoveredOpened.page, 'image',
+      [firstId, secondId, errorId, interruptedId]);
+    const modelTrigger = recoveredOpened.page.getByRole('button', { name: /^Select model, current/ });
+    await modelTrigger.click();
+    await recoveredOpened.page.getByRole('menuitem', { name: /^Model\b/ }).click();
+    await recoveredOpened.page.getByRole('menuitemradio',
+      { name: 'DeepSeek-V41-Flash' }).click();
+    await recoveredOpened.page.locator('input[type="file"]').setInputFiles({
+      name: imageName, mimeType: 'image/png', buffer: imageBytes,
+    });
+    await recoveredOpened.page.getByRole('group', { name: 'Pending attachments' })
+      .getByRole('img', { name: imageName }).waitFor({ timeout: 30_000 });
+    await imageEditor.fill(imagePrompt);
+    const sendImage = recoveredOpened.page.getByRole('button', { name: 'Send message' });
+    await sendImage.waitFor({ timeout: 30_000 });
+    const readyDeadline = Date.now() + 30_000;
+    while (!await sendImage.isEnabled() && Date.now() < readyDeadline) {
+      await new Promise(resolveWait => setTimeout(resolveWait, 50));
+    }
+    assert.equal(await sendImage.isEnabled(), true, 'image upload did not reach a sendable state');
+    const imageHttp: string[] = [];
+    recoveredOpened.page.on('request', request => {
+      const path = new URL(request.url()).pathname;
+      if (path.endsWith('/api/session/prompt') || path.endsWith('/api/session/attachment')) {
+        imageHttp.push(path);
+      }
+    });
+    recoveredOpened.page.on('response', response => {
+      const path = new URL(response.url()).pathname;
+      if (path.endsWith('/api/session/prompt') || path.endsWith('/api/session/attachment')) {
+        imageHttp.push(`${path}:${response.status()}`);
+      }
+    });
+    await recoveredOpened.page.getByRole('alert').first()
+      .waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+    await sendImage.click();
+    const imageAlert = await recoveredOpened.page.getByRole('alert').first()
+      .waitFor({ timeout: 4_000 })
+      .then(() => recoveredOpened.page.getByRole('alert').first().innerText())
+      .catch(() => null);
+    const imageConversation = recoveredOpened.page.locator('[data-conversation-content]');
+    const imageId = await copiedSessionId(recoveredOpened.page);
+    const imageLog = sessionLog(join(home, 'sessions'), imageId);
+    try {
+      await imageConversation.getByText(answer, { exact: false }).first()
+        .waitFor({ timeout: 30_000 });
+    } catch (error) {
+      const events = readEvents(imageLog);
+      const bodyText = await recoveredOpened.page.locator('body')
+        .innerText({ timeout: 1_000 }).catch(() => '');
+      console.error(JSON.stringify({ phase: 'image-response', requestCount: mock.requests.length,
+        requestImages: mock.requests.map(request => inlineImages(request.body).length),
+        imageHttp,
+        eventTypes: events.slice(-8).map(event => event.type),
+        lastTurnKind: (events.filter(event => event.type === 'turn/end').at(-1)?.data?.reason as
+          { kind?: string } | undefined)?.kind ?? 'none',
+        webFailureVisible: bodyText.includes('This turn failed'),
+        composerPresent: await imageEditor.count() > 0,
+        bodyHasPrompt: bodyText.includes(imagePrompt),
+        bodyHasModel: bodyText.includes('DeepSeek-V41-Flash'),
+        bodyHasImageName: bodyText.includes(imageName),
+        attachmentRetained: await recoveredOpened.page.getByRole('group',
+          { name: 'Pending attachments' }).getByRole('img', { name: imageName }).count() > 0,
+        alert: imageAlert?.replaceAll(apiKey, '[redacted]').replaceAll(home, '[home]')
+          .replaceAll(agents, '[agents]').replaceAll(workspace, '[workspace]')
+          .replaceAll(mock.baseURL, '[mock endpoint]').slice(0, 300) ?? null,
+        pageErrors: recoveredOpened.errors.length, hostErrors: host.errorCount(),
+        hostDiagnostic: host.diagnostic() }));
+      throw error;
+    }
+    const imageMessage = readEvents(imageLog, { strict: true }).find(event =>
+      event.type === 'user/message' && JSON.stringify(event.data?.content).includes(imagePrompt));
+    const imageContent = imageMessage?.data?.content;
+    assert.ok(Array.isArray(imageContent), 'Web image prompt did not persist ordered content');
+    const imageBlock = imageContent.find((block: { type?: string }) => block.type === 'image') as
+      { attachment?: { attachmentId?: string; mediaType?: string; name?: string; width?: number;
+        height?: number }; data?: unknown } | undefined;
+    assert.equal(imageBlock?.attachment?.name, imageName);
+    assert.equal(imageBlock?.attachment?.mediaType, 'image/png');
+    assert.equal(imageBlock?.attachment?.width, 16);
+    assert.equal(imageBlock?.attachment?.height, 16);
+    assert.ok(imageBlock?.attachment?.attachmentId,
+      'image content lacks a durable attachment identity');
+    assert.equal(imageBlock?.data, undefined, 'Session V4 image content embeds raw bytes');
+    const webImage = imageConversation.getByRole('img', { name: imageName });
+    await webImage.waitFor({ timeout: 30_000 });
+    assert.equal(await webImage.evaluate(element => (element as HTMLImageElement).naturalWidth), 16,
+      'Web could not read the durable image before handoff');
+    const webImagePayload = mock.requests.flatMap(request => inlineImages(request.body)).at(-1);
+    assert.ok(webImagePayload, 'Web image prompt did not reach the model as an image');
+
+    await browser.close();
+    browser = undefined;
+    await stopHost(host.child);
+    host = undefined;
+    await checkImageHandoffInTui(dsh, fixture, home, agents, workspace, imageId,
+      mock, apiKey, webImagePayload);
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
+    browser = await launchBrowser(browserBin, home);
+    const imageOpened = await openPage(browser, host);
+    const imageRow = imageOpened.page.locator(`[data-row-key="session:${imageId}"]`);
+    await imageRow.waitFor({ timeout: 30_000 });
+    await imageRow.click();
+    assert.equal(await copiedSessionId(imageOpened.page), imageId,
+      'Web reopened the image session under another ID');
+    const reopenedImageConversation = imageOpened.page.locator('[data-conversation-content]');
+    await reopenedImageConversation.getByText(imageContinuationPrompt, { exact: false }).first()
+      .waitFor({ timeout: 30_000 });
+    const reopenedImage = reopenedImageConversation.getByRole('img', { name: imageName });
+    await reopenedImage.waitFor({ timeout: 30_000 });
+    assert.equal(await reopenedImage.evaluate(element => (element as HTMLImageElement).naturalWidth), 16,
+      'Web could not read the durable image after TUI continuation');
+    pageErrors += imageOpened.errors.length;
+    hostErrors += host.errorCount();
+    assert.equal(pageErrors, 0, 'browser reported JavaScript errors after image handoff');
+    assert.equal(hostErrors, 0, 'DSH Web Host reported errors after image handoff');
+    console.log(JSON.stringify({ result: 'pass', sessions: 6, tuiToWebTitle: true,
       webToTuiContinuation: true, writerContention: true, toolApproval: true,
       toolRejection: true, runningTurn: true, errorResume: true,
       toolResultsAfterRestart: true, restartResume: true, settledHostCrashHandoff: true,
-      interruptedHostCrashHandoff: true,
+      interruptedHostCrashHandoff: true, imageHandoff: true,
       interactionRequests, errorRequests, recoveryRequests: mock.requests.length, pageErrors, hostErrors }));
   } finally {
     const cleanup = await Promise.allSettled([

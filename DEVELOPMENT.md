@@ -43,7 +43,7 @@ pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chrom
 ```
 
 The script builds and packs the Web plugin, installs Web and patched TUI
-profiles in a disposable DSH home, and runs four sessions against authenticated
+profiles in a disposable DSH home, and runs six sessions against authenticated
 local mock LLM servers. Through a native pseudoterminal provided by the pinned
 development-only `node-pty` package, it creates and renames a TUI session,
 stops TUI, then checks that session's exact ID, title, prompt, and answer in
@@ -55,12 +55,15 @@ settled session. TUI resumes that Web session, completes another turn, and Web
 reads the continuation
 on restart. It also checks distinct Web IDs, isolated histories, a
 pending turn, tool approval and rejection, a provider error, and Web Host
-restart recovery. The fixture, profiles, and mock endpoints are removed
-afterward. Package installation is isolated from caller credentials. Local
-Chromium sandboxing remains enabled; the Linux GitHub-hosted CI runner uses an
-explicit test-only exception because its browser sandbox cannot initialize.
-This does not establish the full
-cross-interface handoff, image composition, or release acceptance gates.
+restart recovery. Its image scenario uploads a synthetic PNG through native
+Web, checks the durable Session V4 attachment reference, resumes the exact
+session in TUI, verifies the continued model request includes the image, and
+reopens the same image in Web. The fixture, profiles, and mock endpoints are
+removed afterward. Package installation is isolated from caller credentials.
+Local Chromium sandboxing remains enabled; the Linux GitHub-hosted CI runner
+uses an explicit test-only exception because its browser sandbox cannot initialize.
+The fixture does not establish acceptance for existing user homes or all
+handoff states.
 The combined-profile CI installs the browser revision selected by the pinned
 `playwright-core` package and runs this acceptance on both first-release
 platforms after the exact DSH build.
