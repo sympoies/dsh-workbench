@@ -391,7 +391,11 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     const steerClasses = runtimeMessages.map(event => {
       const content = event.data?.content as Array<{ text?: string }> | undefined;
       const text = content?.find(block => typeof block.text === 'string')?.text ?? '';
-      if (text.startsWith('Finish-line')) return 'finish-line';
+      if (text.startsWith('Finish-line state is unavailable')) return 'finish-line-state';
+      if (text.startsWith('Finish-line response identity changed')) return 'finish-line-identity';
+      if (text.startsWith('Finish-line release is unavailable')) return 'finish-line-release';
+      if (text.startsWith('Finish-line blocked:')) return 'finish-line-blocked';
+      if (text.startsWith('Finish-line')) return 'finish-line-other';
       if (text.startsWith('Authoritative acceptance')) return 'acceptance';
       if (text.startsWith('The lifecycle policy')) return 'lifecycle-policy';
       return 'other';
