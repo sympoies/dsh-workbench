@@ -54,6 +54,23 @@ instrument(packageRoot, 'dist/src/policy/index.js', [
   ['const headerCwd = session.header.cwd;', 'validation-header-cwd', 'before'],
   ['const spec = resolveFinishLineShellSpec(shell, operation, {', 'validation-shell-spec', 'before'],
 ]);
+const policyModulePath = join(packageRoot, 'dist/src/policy/index.js');
+let policyModule = readFileSync(policyModulePath, 'utf8');
+const approvalCalls = policyModule.match(
+  /const approvedMode = await approveEscalation\(\{[\s\S]*?signal: exec\.signal,\s*\}\);/gu) ?? [];
+assert.equal(approvalCalls.length, 1, 'validation approval call must occur exactly once');
+policyModule = policyModule.replace(approvalCalls[0], approvalCalls[0].replace(/\}\);$/u, `}).catch(error => {
+  const message = error instanceof Error ? error.message : '';
+  const category = /user rejected escalating/u.test(message) ? 'rejected'
+    : /was cancelled/u.test(message) ? 'cancelled'
+      : /no approval channel is available|no approval service is composed/u.test(message)
+        ? 'unavailable'
+        : /not strictly wider/u.test(message) ? 'not-wider' : 'other';
+  workbenchPolicyStage('validation-approval-failed:' + category
+    + ':' + (exec.signal.aborted ? 'aborted' : 'live'));
+  throw error;
+});`));
+writeFileSync(policyModulePath, policyModule);
 instrument(packageRoot, 'dist/src/workspace-lease/index.js', [
   ['const downstream = await next();', 'lease-downstream'],
   ['const targets = await this.#resolutionFor(exec, provider, slot, identity, admissionSignal.signal);',
@@ -150,7 +167,7 @@ tuiPlugin = tuiPlugin.replace(tuiApprovalHandler,
   "ctx.on('approval/request', (req, next) => {\n"
   + "  workbenchPolicyStage('tui-approval-handler:before');\n"
   + "  return approvalStore.park(req).then(outcome => {\n"
-  + "    workbenchPolicyStage('tui-approval-handler:resolved');\n"
+  + "    workbenchPolicyStage('tui-approval-handler:resolved:' + (['allowed-once', 'rejected', 'cancelled', 'unavailable'].includes(outcome) ? outcome : 'invalid'));\n"
   + "    return outcome;\n"
   + "  }).catch(() => {\n"
   + "    workbenchPolicyStage('tui-approval-handler:fallback');\n"
