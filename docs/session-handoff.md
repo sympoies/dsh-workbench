@@ -195,6 +195,16 @@ history under the same ID. This covers
 one V2 text conversation, not V0, V1, V3, attachments or tools in historical
 archives, or a real user's existing home.
 
+The installed Linux browser fixture also creates a second TUI session under a
+different canonical workspace. Native Web starts in the first workspace and
+lists both exact IDs with their recorded canonical paths. It opens the second
+session's settled title and history, then returns to the first for the
+remaining handoff scenarios. After the second directory is moved away, a cold
+Web Host still lists the old session identity; selecting it does not expose an
+active editor. This checks a missing local path, not a different OS account or
+a remote filesystem permission boundary. The portable installation owner must
+still bind the permitted workspace roots and verify its own path mapping.
+
 Treat a V2-to-V4 continuation as a one-way format upgrade. Before trying a
 future installer against an existing home, stop both writers and make a
 separate, complete copy of that DSH home, including sessions and profile state.

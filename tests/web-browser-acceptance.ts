@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +38,9 @@ const editorName = 'Describe what you want to build, / commands, @ files or sess
 const tuiPrompt = 'TUI_TO_WEB_RENAMED_PROMPT';
 const tuiAnswer = 'TUI_TO_WEB_RENAMED_ANSWER';
 const tuiTitle = 'TUI_TO_WEB_MANUAL_TITLE';
+const firstTuiMarkers = { prompt: tuiPrompt, answer: tuiAnswer, title: tuiTitle };
+const secondTuiMarkers = { prompt: 'SECOND_WORKSPACE_TUI_PROMPT',
+  answer: 'SECOND_WORKSPACE_TUI_ANSWER', title: 'SECOND_WORKSPACE_TUI_TITLE' };
 const continuationPrompt = 'WEB_TO_TUI_CONTINUATION_PROMPT';
 const continuationAnswer = 'WEB_TO_TUI_CONTINUATION_ANSWER';
 const interruptedPrompt = 'WEB_APPROVAL_CRASH_PROMPT';
@@ -219,7 +222,8 @@ function startTui(dsh: string, fixture: string, home: string, agents: string, wo
 }
 
 async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
-  agents: string, workspace: string, userConfig: string, globalConfig: string): Promise<string> {
+  agents: string, workspace: string, userConfig: string, globalConfig: string,
+  markers = firstTuiMarkers): Promise<string> {
   if (!installedHome) {
     const profile = join(home, 'profiles', 'dsh-tui');
     mkdirSync(join(profile, 'patches'), { recursive: true });
@@ -240,14 +244,14 @@ async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
   }
   const apiKey = randomBytes(24).toString('hex');
   const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
-    apiKey, successText: tuiAnswer });
+    apiKey, successText: markers.answer });
   const logRoot = join(home, 'sessions');
   mkdirSync(logRoot, { recursive: true });
   const previous = new Set(sessionLogs(logRoot));
   const tui = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey);
   try {
     await waitForTui(tui, () => visibleScreen(tui.screen).includes('Explore the uncharted!'), 'startup');
-    tui.write(`${tuiPrompt}\r`);
+    tui.write(`${markers.prompt}\r`);
     let logPath: string | undefined;
     await waitForTui(tui, () => {
       const added = sessionLogs(logRoot).filter(path => !previous.has(path));
@@ -255,15 +259,15 @@ async function seedTuiRenamedSession(dsh: string, fixture: string, home: string,
       logPath = added[0];
       return readEvents(logPath).some(event => event.type === 'turn/end');
     }, 'settled first turn');
-    tui.write(`/rename ${tuiTitle}\r`);
+    tui.write(`/rename ${markers.title}\r`);
     await waitForTui(tui, () => readEvents(logPath!).some(event =>
-      event.type === 'session/title' && event.data?.title === tuiTitle), 'manual title');
-    await waitForTui(tui, () => visibleScreen(tui.screen).includes(`Renamed to "${tuiTitle}"`), 'durable rename acknowledgement');
+      event.type === 'session/title' && event.data?.title === markers.title), 'manual title');
+    await waitForTui(tui, () => visibleScreen(tui.screen).includes(`Renamed to "${markers.title}"`), 'durable rename acknowledgement');
     await tui.stop();
     assert.equal(tui.exitCode, 0, 'TUI did not exit cleanly before Web handoff');
     const events = readEvents(logPath!, { strict: true });
     assert.deepEqual(events.filter(event => event.type === 'session/title').at(-1)?.data,
-      { title: tuiTitle, messageSeqs: [], source: { kind: 'user' } });
+      { title: markers.title, messageSeqs: [], source: { kind: 'user' } });
     return basename(dirname(logPath!));
   } finally {
     const cleanup = await Promise.allSettled([tui.stop(), mock.close()]);
@@ -392,7 +396,7 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     'the approval turn settled before the Web Host crash');
   const previous = new Set(sessionLogs(logRoot));
   const apiKey = randomBytes(24).toString('hex');
-  const marker = join(workspace, 'recovered-approval-execution-count');
+  const marker = join(workspace, `recovered-approval-execution-count-${id}`);
   const escapedMarker = "'" + marker.replaceAll("'", "'\\''") + "'";
   const toolOutput = 'RECOVERED_BASH_EXECUTED';
   const mock = await startApprovalMockLlmServer({
@@ -643,7 +647,8 @@ async function openPage(browser: Browser, host: Awaited<ReturnType<typeof startH
   return { page, errors };
 }
 
-async function listedSessionIds(page: Page): Promise<{ status: number; ids: string[]; errorCode?: string }> {
+async function listedSessionIds(page: Page): Promise<{ status: number; ids: string[];
+  locations: Array<{ sessionId: string; cwd?: string }>; errorCode?: string }> {
   return page.evaluate(async () => {
     const response = await fetch('/api/session/list', {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -651,10 +656,12 @@ async function listedSessionIds(page: Page): Promise<{ status: number; ids: stri
         method: 'session/list', payload: { args: { _request: {} } } }),
     });
     const body = await response.json() as { result?: {
-      value?: { items?: Array<{ sessionId?: string }> }; error?: { code?: string };
+      value?: { items?: Array<{ sessionId?: string; cwd?: string }> }; error?: { code?: string };
     } };
     return { status: response.status,
       ids: body.result?.value?.items?.flatMap(item => item.sessionId ? [item.sessionId] : []) ?? [],
+      locations: body.result?.value?.items?.flatMap(item => item.sessionId
+        ? [{ sessionId: item.sessionId, cwd: item.cwd }] : []) ?? [],
       errorCode: body.result?.error?.code };
   });
 }
@@ -677,7 +684,7 @@ async function revealSessionRow(page: Page, id: string): Promise<Locator> {
     hiddenOverflow: document.querySelectorAll('button[data-row-key^="overflow:"][aria-expanded="false"]').length,
     alerts: document.querySelectorAll('[role="alert"]').length,
   }));
-  throw new Error(`The session list did not reveal the copied legacy session: ${JSON.stringify(state)}`);
+  throw new Error(`The session list did not reveal session ${id}: ${JSON.stringify(state)}`);
 }
 
 function launchBrowser(executablePath: string, home: string): Promise<Browser> {
@@ -821,18 +828,22 @@ async function checkHistory(page: Page, id: string, own: string, other: string):
   assert.ok(body.includes(answer), 'session lost its mock answer');
 }
 
-async function checkTuiHandoff(page: Page, id: string): Promise<void> {
-  const row = page.locator(`[data-row-key="session:${id}"]`);
-  await row.waitFor({ timeout: 30_000 });
+async function checkTuiHandoff(page: Page, id: string,
+  markers = firstTuiMarkers, other?: typeof firstTuiMarkers): Promise<void> {
+  const row = await revealSessionRow(page, id);
   // A cold Web list must show the durable manual title before hydration.
-  await row.getByText(tuiTitle, { exact: true }).waitFor({ timeout: 30_000 });
+  await row.getByText(markers.title, { exact: true }).waitFor({ timeout: 30_000 });
   await row.click();
   assert.equal(await copiedSessionId(page), id, 'Web opened another TUI session ID');
   const conversation = page.locator('[data-conversation-content]');
-  await conversation.getByText(tuiPrompt, { exact: false }).first().waitFor({ timeout: 30_000 });
+  await conversation.getByText(markers.prompt, { exact: false }).first().waitFor({ timeout: 30_000 });
   const body = await conversation.innerText();
-  assert.ok(body.includes(tuiPrompt), 'Web lost the TUI prompt');
-  assert.ok(body.includes(tuiAnswer), 'Web lost the TUI answer');
+  assert.ok(body.includes(markers.prompt), 'Web lost the TUI prompt');
+  assert.ok(body.includes(markers.answer), 'Web lost the TUI answer');
+  if (other) {
+    assert.ok(!body.includes(other.prompt) && !body.includes(other.answer),
+      'Web mixed histories across canonical workspaces');
+  }
 }
 
 async function openToolDetails(page: Page) {
@@ -936,6 +947,11 @@ async function main(): Promise<void> {
 
     const tuiSessionId = await seedTuiRenamedSession(tuiDsh, fixture, home, agents,
       workspace, userConfig, globalConfig);
+    const otherWorkspace = join(fixture, 'second-workspace');
+    mkdirSync(otherWorkspace, { recursive: true });
+    const secondWorkspaceSessionId = await seedTuiRenamedSession(tuiDsh, fixture, home, agents,
+      otherWorkspace, userConfig, globalConfig, secondTuiMarkers);
+    assert.notEqual(secondWorkspaceSessionId, tuiSessionId);
 
     const apiKey = randomBytes(24).toString('hex');
     mock = await startApprovalMockLlmServer({ sequence: ['tool_call_success', 'success', 'tool_call_success', 'success'],
@@ -951,8 +967,17 @@ async function main(): Promise<void> {
     let opened = await openPage(browser, host);
     const firstPage = opened.page;
     const firstErrors = opened.errors;
-    await checkTuiHandoff(firstPage, tuiSessionId);
-    const { editor, checkIdentity: checkFirstIdentity } = await startNewSession(firstPage, 'first', [tuiSessionId]);
+    const crossWorkspaceList = await listedSessionIds(firstPage);
+    assert.equal(crossWorkspaceList.status, 200);
+    assert.equal(crossWorkspaceList.errorCode, undefined);
+    assert.equal(crossWorkspaceList.locations.find(item => item.sessionId === tuiSessionId)?.cwd,
+      realpathSync(workspace), 'Web did not retain the first TUI session workspace');
+    assert.equal(crossWorkspaceList.locations.find(item => item.sessionId === secondWorkspaceSessionId)?.cwd,
+      realpathSync(otherWorkspace), 'Web did not retain the second TUI session workspace');
+    await checkTuiHandoff(firstPage, secondWorkspaceSessionId, secondTuiMarkers, firstTuiMarkers);
+    await checkTuiHandoff(firstPage, tuiSessionId, firstTuiMarkers, secondTuiMarkers);
+    const { editor, checkIdentity: checkFirstIdentity } = await startNewSession(firstPage, 'first',
+      [tuiSessionId, secondWorkspaceSessionId]);
     await editor.fill(prompts[0]);
     await editor.press('Enter');
     const approval = firstPage.locator('[data-approval-key]');
@@ -1061,7 +1086,7 @@ async function main(): Promise<void> {
     await stopHost(host.child);
     host = undefined;
     await mock.close();
-    const approvalMarker = join(workspace, 'interrupted-approval-command-executed');
+    const approvalMarker = join(workspace, `interrupted-approval-command-executed-${randomUUID()}`);
     mock = await startApprovalMockLlmServer({ sequence: ['tool_call_success', 'success'],
       repeatLast: true, successText: answer, apiKey, toolName: 'bash',
       toolArguments: JSON.stringify({ command: `touch '${approvalMarker}'`,
@@ -1294,13 +1319,46 @@ async function main(): Promise<void> {
       .waitFor({ timeout: 30_000 });
     pageErrors += migratedOpened.errors.length;
     hostErrors += host.errorCount();
+
+    // A path that disappeared after a settled handoff must not offer a live editor.
+    renameSync(otherWorkspace, join(fixture, 'second-workspace-moved'));
+    await browser.close();
+    browser = undefined;
+    await stopHost(host.child);
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
+    browser = await launchBrowser(browserBin, home);
+    const unavailableOpened = await openPage(browser, host);
+    const unavailableList = await listedSessionIds(unavailableOpened.page);
+    assert.equal(unavailableList.status, 200);
+    assert.equal(unavailableList.locations.find(item => item.sessionId === secondWorkspaceSessionId)?.cwd,
+      otherWorkspace, 'Cold Web list lost the original canonical workspace identity');
+    const unavailableRow = await revealSessionRow(unavailableOpened.page, secondWorkspaceSessionId);
+    assert.equal(existsSync(otherWorkspace), false, 'Moved workspace unexpectedly exists before selection');
+    await unavailableRow.click();
+    // Wait for the selected session to settle as either read-only history or a
+    // Host-reported load error; a brief absence of the editor is only loading.
+    const unavailableConversation = unavailableOpened.page.locator('[data-conversation-content]');
+    const unavailableOutcome = await Promise.any([
+      unavailableConversation.getByText(secondTuiMarkers.prompt, { exact: false }).first()
+        .waitFor({ timeout: 30_000 }).then(() => 'history' as const),
+      unavailableConversation.getByText(/^Failed to load history:/).first()
+        .waitFor({ timeout: 30_000 }).then(() => 'load-error' as const),
+    ]);
+    assert.equal(existsSync(otherWorkspace), false, 'Web recreated the missing canonical workspace');
+    const unavailableEditor = unavailableOpened.page.getByRole('textbox', { name: editorName });
+    assert.ok(await unavailableEditor.count() === 0 || !await unavailableEditor.isEnabled(),
+      'Web offered an active editor for a session whose workspace no longer exists');
+    console.log(JSON.stringify({ event: 'unavailable-workspace', outcome: unavailableOutcome }));
+    pageErrors += unavailableOpened.errors.length;
+    hostErrors += host.errorCount();
     assert.equal(pageErrors, 0, 'browser reported JavaScript errors after legacy migration');
     assert.equal(hostErrors, 0, 'DSH Web Host reported errors after legacy migration');
-    console.log(JSON.stringify({ result: 'pass', profile: installedHome ? 'workbench' : 'standalone', sessions: 7, tuiToWebTitle: true,
+    console.log(JSON.stringify({ result: 'pass', profile: installedHome ? 'workbench' : 'standalone', sessions: 8, tuiToWebTitle: true,
       webToTuiContinuation: true, writerContention: true, toolApproval: true,
       toolRejection: true, runningTurn: true, errorResume: true,
       toolResultsAfterRestart: true, restartResume: true, settledHostCrashHandoff: true,
       interruptedHostCrashHandoff: true, imageHandoff: true, copiedLegacyMigration: true,
+      crossWorkspaceMapping: true, unavailableWorkspaceGuard: true,
       interactionRequests, errorRequests, recoveryRequests: mock.requests.length, pageErrors, hostErrors }));
   } finally {
     const cleanup = await Promise.allSettled([
