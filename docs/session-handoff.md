@@ -174,14 +174,34 @@ command did not execute, TUI resumes the same ID and closes the interrupted
 turn, TUI completes a new turn, and Web reads that continuation after restart.
 This proves recovery for the approval-wait state only; it does not establish
 cancellation of an executing command or turn, recovery from crashes at other
-active-turn phases, live cross-interface title updates, complete
-projection-cache behavior, or existing-session migration. The browser fixture
+active-turn phases, live cross-interface title updates, or complete
+projection-cache behavior. The browser fixture
 also exercises a synthetic PNG uploaded in native Web: Session V4 retains the
 attachment identity and dimensions without embedding raw bytes in the message,
 the exact-ID TUI continuation sends the same image bytes to the model, and Web
 reopens the image after TUI exits. This covers one settled PNG handoff, not
 other attachment types or interruption while an upload is pending.
-Those are release acceptance work under
+The fixture also places a synthetic Session V2 archive in a disposable DSH
+home, retaining a byte-identical rollback copy outside that home. Native Web
+lists and reads the historical prompt and answer under the same ID without
+changing the V2 source. After Web Host stops, TUI resumes that ID, includes
+the historical exchange in its next model request, and completes a Session V4
+continuation without creating another session ID. Web then reopens the V4
+history under the same ID. This covers
+one V2 text conversation, not V0, V1, V3, attachments or tools in historical
+archives, or a real user's existing home.
+
+Treat a V2-to-V4 continuation as a one-way format upgrade. Before trying a
+future installer against an existing home, stop both writers and make a
+separate, complete copy of that DSH home, including sessions and profile state.
+Test the upgrade on another copy and verify exact IDs and history before any
+deployment change. To roll back, stop both interfaces and restore the whole
+pre-upgrade home with the old binary; do not point an older binary at a home
+that has published V4 generations or merge selected files from two homes.
+The portable installer still needs its own copy-based migration and rollback
+acceptance under [#9](https://github.com/sympoies/dsh-workbench/issues/9).
+
+The remaining scenarios are release acceptance work under
 [#7](https://github.com/sympoies/dsh-workbench/issues/7), with TUI-specific
 checks under [#4](https://github.com/sympoies/dsh-workbench/issues/4).
 Existing homes must be tested on copies with a rollback plan before any
