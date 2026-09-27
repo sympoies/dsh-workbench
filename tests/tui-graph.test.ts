@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -75,7 +75,7 @@ test('pinned pnpm rejects the stale TUI graph and installs the reviewed correcti
   }
 });
 
-test('reviewed TUI profile lock installs without resolving a new graph', { timeout: 600_000 }, () => {
+test('reviewed TUI profile lock installs without resolving a new graph', { timeout: 600_000 }, async () => {
   const stage = mkdtempSync(join(tmpdir(), 'dsh-workbench-tui-profile-'));
   try {
     mkdirSync(join(stage, 'patches'));
@@ -99,6 +99,39 @@ test('reviewed TUI profile lock installs without resolving a new graph', { timeo
     const frozen = run('pnpm', ['install', '--frozen-lockfile', '--strict-peer-dependencies',
       '--ignore-scripts', '--reporter', 'append-only'], stage);
     assert.equal(frozen.status, 0, errorCode(frozen));
+    const tuiRoot = join(stage, 'node_modules', contract.components.tui.package.name);
+    const patchedPlugin = readFileSync(join(tuiRoot, 'lib/types/dsh-adapter/plugin.js'), 'utf8');
+    const headlessHostGuard = patchedPlugin.indexOf("if (hostMode === 'headless-host') {");
+    const headlessHostReturn = patchedPlugin.indexOf('return;', headlessHostGuard);
+    const approvalHandler = patchedPlugin.indexOf("ctx.on('approval/request'");
+    assert.ok(headlessHostGuard >= 0 && headlessHostReturn > headlessHostGuard
+      && approvalHandler > headlessHostReturn,
+    'headless Web hosts must return before registering the global TUI approval handler');
+    assert.match(patchedPlugin,
+      /ctx\.on\('approval\/request', \(req, next\) => approvalStore\.park\(req\)\.catch\(\(\) => next\(\)\), \{ global: true, prepend: true \}\);/,
+      'installed TUI approval handler must receive agent-scoped dispatch before other global listeners');
+    const { ApprovalStore } = await import(pathToFileURL(join(tuiRoot, 'lib/types/dsh-adapter/approvals.js')).href);
+    const approvalStore = new ApprovalStore({ mode: 'legacy', slices: [] });
+    const sharedCallId = 'shared-low-entropy-call-id';
+    const request = (agentId: string) => ({
+      agent: {
+        id: agentId,
+        session: { events: [{ type: 'tool/call', data: { callId: sharedCallId, arguments: '{"command":"true"}' } }] },
+      },
+      callId: sharedCallId,
+      toolName: 'bash',
+      signal: new AbortController().signal,
+    });
+    const firstResult = approvalStore.park(request('agent-first'));
+    const secondResult = approvalStore.park(request('agent-second'));
+    assert.deepEqual(approvalStore.pendingAgentIds(), ['agent-first', 'agent-second']);
+    assert.equal(approvalStore.getSnapshot()?.agentId, 'agent-first');
+    approvalStore.decide('allowed-once');
+    assert.equal(await firstResult, 'allowed-once');
+    assert.equal(approvalStore.getSnapshot()?.agentId, 'agent-second');
+    approvalStore.decide('rejected');
+    assert.equal(await secondResult, 'rejected');
+    assert.deepEqual(approvalStore.pendingAgentIds(), []);
     const lock = readFileSync(join(stage, 'pnpm-lock.yaml'), 'utf8');
     assert.ok(lock.includes(contract.components.tui.package.integrity), 'TUI integrity missing');
     assert.ok(lock.includes(contract.components.tui.compatibilityPatch!.sha256), 'TUI patch digest missing');

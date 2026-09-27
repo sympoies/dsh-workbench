@@ -2,11 +2,11 @@
 export const workbenchIdentity = {
   "schemaVersion": 1,
   "release": {
-    "version": "0.1.0-rc.7",
-    "tag": "v0.1.0-rc.7"
+    "version": "0.1.0-rc.10",
+    "tag": "v0.1.0-rc.10"
   },
   "status": "candidate",
-  "contractDigest": "sha256:ec75cf6090d91deeb3f1859ce518cc5038a6fdc21d169ee7065a481ad4089236",
+  "contractDigest": "sha256:e771d430bb2d321b39436728dad53761d27b704e6c893e22588bc6fc4ef408b9",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",
@@ -32,13 +32,13 @@ export const workbenchIdentity = {
     "runtimeKit": {
       "source": {
         "url": "https://github.com/sympoies/dsh-runtime-kit",
-        "commit": "dd53024fb892831bd55fc2466259e9f5f4062cf1",
-        "tree": "c7e1ec8f3d310ceecc9e0641dd95031ae47a6ad5"
+        "commit": "407da96d891a6457b20b375406e2460cfd576b6b",
+        "tree": "958423a46063e99f8cfb86ed2988c31a03e78fd3"
       },
       "package": {
         "name": "@sympoies/dsh-runtime-kit",
         "version": "0.0.0",
-        "integrity": "git-tree:c7e1ec8f3d310ceecc9e0641dd95031ae47a6ad5"
+        "integrity": "git-tree:958423a46063e99f8cfb86ed2988c31a03e78fd3"
       }
     },
     "tui": {

@@ -1,8 +1,7 @@
 diff --git a/lib/types/dsh-adapter/channel/session-metadata.js b/lib/types/dsh-adapter/channel/session-metadata.js
-index de95a03af2cb8e06aad7a5b0b3628c18adacfe14..a4611edec95d3799e69a1ce436d337f1619e3171 100644
 --- a/lib/types/dsh-adapter/channel/session-metadata.js
 +++ b/lib/types/dsh-adapter/channel/session-metadata.js
-@@ -163,8 +163,11 @@ export function createSessionMetadataActions(ctx, deps) {
+@@ -163,8 +163,11 @@
          const capture = deps.binding.capture();
          if (!current(capture))
              return;
@@ -17,10 +16,9 @@ index de95a03af2cb8e06aad7a5b0b3628c18adacfe14..a4611edec95d3799e69a1ce436d337f1
      };
      const setSessionColor = (color) => {
 diff --git a/lib/types/dsh-adapter/compat/sessionLog.js b/lib/types/dsh-adapter/compat/sessionLog.js
-index c31d6e62e56b5c762ce891d9055b211416afff2d..cb0cffd9f522fd6231de61fcc0c076f2b7bb05e5 100644
 --- a/lib/types/dsh-adapter/compat/sessionLog.js
 +++ b/lib/types/dsh-adapter/compat/sessionLog.js
-@@ -1106,13 +1106,12 @@ export function appendSessionTitle(sessionId, title) {
+@@ -1106,13 +1106,12 @@
              if (typeof seq === 'number' && seq > maxSeq)
                  maxSeq = seq;
          }
@@ -36,3 +34,15 @@ index c31d6e62e56b5c762ce891d9055b211416afff2d..cb0cffd9f522fd6231de61fcc0c076f2
          };
          const frame = zstdCompressSync(Buffer.from(JSON.stringify(event) + '\n', 'utf8'));
          appendFileSync(file, frame);
+diff --git a/lib/types/dsh-adapter/plugin.js b/lib/types/dsh-adapter/plugin.js
+--- a/lib/types/dsh-adapter/plugin.js
++++ b/lib/types/dsh-adapter/plugin.js
+@@ -1318,7 +1318,7 @@
+     const approvalStore = new ApprovalStore(adapterRuntimeFor(ctx));
+     bindApprovalStore(ctx, approvalStore);
+     if (ctx.get('approval') !== undefined) {
+-        ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()));
++        ctx.on('approval/request', (req, next) => approvalStore.park(req).catch(() => next()), { global: true, prepend: true });
+         // Badge-flip push (P-4): React does not know the session log appended —
+         // a source-badge verdict that only flips inside getSnapshot() surfaces
+         // solely when something else re-renders. Feed the session firehose to

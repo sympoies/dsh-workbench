@@ -97,6 +97,25 @@ Workbench `v0.1.0-rc.7` pins runtime-kit's typed nils host-denial diagnostics
 and records the resulting Web plugin identity and artifact digest. This
 diagnostic change does not provide the missing macOS finish-line backend or
 accept the candidate graph.
+Workbench `v0.1.0-rc.9` extends the exact TUI 0.11.0 compatibility patch so
+its approval listener receives requests dispatched in a DSH agent scope and
+runs before DSH's global `Include` listener, which otherwise ends the
+waterfall before TUI can display an approval. The pinned TUI returns from its
+headless-host path before registering this listener; the combined browser
+acceptance therefore loads the same patched TUI bundle while proving Web
+approval still works. The TUI approval store still validates that each request
+belongs to a live tool call before presenting it. The patch digest, frozen TUI
+profile lock, Web identity, and reviewed Web artifact digest are updated
+together. Combined-profile allow/reject acceptance remains required before
+this candidate can be accepted.
+Workbench `v0.1.0-rc.10` pins the merged runtime-kit finish-line lifecycle
+repair at commit `407da96d891a6457b20b375406e2460cfd576b6b` and its exact
+Git tree. The combined-profile acceptance now checks browser approval allow
+and reject in the installed `workbench` profile, including command execution,
+Session V4 approval decisions, and durable tool results. The Linux TUI
+finish-line gate must pass against this pin. The macOS arm64 candidate remains
+pending an OS-enforced descendant-cleanup backend under
+[`nils-cli#1800`](https://github.com/sympoies/nils-cli/issues/1800).
 The pin also includes runtime-kit's managed DSH home instructions at
 `<dshHome>/AGENTS.md`. Setup, update, and rollback preview refuse an existing
 file without a recorded runtime-kit digest with exit 65 and
