@@ -1,4 +1,4 @@
-# Native Web extension candidate
+# Native Web extension
 
 The Web package at `web/` targets the exact DSH source and package version in
 [the Workbench contract](../compatibility/workbench.json). It is an out-of-tree
@@ -11,7 +11,7 @@ DSH 0.1.7-rc.1 provides explicit
 references and a
 [`SessionProvider` target](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/client/ui-sidebar-right/src/client/shell/RightbarRoot.tsx).
 The prior addressed-session source patch is therefore excluded from this
-candidate. An eventual multi-pane contribution must use these public owners
+graph. An eventual multi-pane contribution must use these public owners
 and prove lifecycle behavior in a real browser before acceptance.
 
 The first additive action uses the official
@@ -30,14 +30,14 @@ contract revision, run `node scripts/web-metadata.mjs write` and regenerate
 the frozen lockfile. The package is not published to a package registry while
 release packaging and artifact review remain pending.
 
-No predecessor source file or history was copied. This candidate has strict
+No predecessor source file or history was copied. The accepted Linux graph has strict
 dependency installation, a TypeScript build that emits the DSH Client module
 loader format, and artifact-level registration and clipboard interaction tests.
 The packaged plugin loaded without page errors in a disposable native Web
 profile on the pinned DSH runtime. CI builds the pinned DSH Web frontend with
 `pnpm run build:web` and checks `apps/web/dist/index.html` before Chromium.
 The [browser acceptance script](../tests/web-browser-acceptance.ts) uses a local
-mock LLM across seven sessions. It checks isolated histories and copied IDs,
+mock LLM across eight Linux sessions. It checks isolated histories and copied IDs,
 exercises a pending turn, a tool approval and
 rejection, and a provider error. It restarts the Web Host and reopens the
 initial Web sessions, including the settled tool results and failed turn. It
@@ -49,14 +49,18 @@ continuation sends the same image to the model before Web reopens it. The
 assertion is tied to the continuation request, so an automatic resume recap
 cannot satisfy it. The script
 requires explicit paths to the pinned DSH executable and a Chromium executable;
-see [development instructions](../DEVELOPMENT.md). CI runs this native browser
-test on Linux x64 and macOS arm64; the [six-session image handoff run](https://github.com/sympoies/dsh-workbench/actions/runs/36295265939)
+see [development instructions](../DEVELOPMENT.md). Earlier CI ran the native
+browser test on Linux x64 and macOS arm64; the historical
+[six-session image handoff run](https://github.com/sympoies/dsh-workbench/actions/runs/36295265939)
 passed both platforms. The seventh session checks copied V2 text history,
 exact-ID TUI continuation to V4, and Web reopening on both targets. Its
 Chromium archives are pinned by URL and
 SHA-256 in [the browser CI contract](../compatibility/browser-ci.json); the
-installer verifies the Playwright package and Chromium revision, then checks
-the archive digest before extracting and executing it. Installed graph
-mismatch rejection remains acceptance work under
-[#5](https://github.com/sympoies/dsh-workbench/issues/5); cross-interface
-handoff remains under [#7](https://github.com/sympoies/dsh-workbench/issues/7).
+browser acceptance verifies the Playwright package and Chromium revision, then
+checks the archive digest before extracting and executing it. The installed
+Linux compatibility handoff gate also covers crash recovery, fresh Bash
+decisions after takeover, and distinct canonical workspaces. Portable installer
+graph mismatch rejection and owner path mapping remain release work under
+[#5](https://github.com/sympoies/dsh-workbench/issues/5),
+[#7](https://github.com/sympoies/dsh-workbench/issues/7), and
+[#9](https://github.com/sympoies/dsh-workbench/issues/9).
