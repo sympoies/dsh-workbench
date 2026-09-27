@@ -846,7 +846,7 @@ async function main(): Promise<void> {
     await modelTrigger.click();
     await recoveredOpened.page.getByRole('menuitem', { name: /^Model\b/ }).click();
     await recoveredOpened.page.getByRole('menuitemradio',
-      { name: 'DeepSeek-V4-Flash-Vision-Exp' }).click();
+      { name: 'DeepSeek-V41-Flash' }).click();
     await recoveredOpened.page.locator('input[type="file"]').setInputFiles({
       name: imageName, mimeType: 'image/png', buffer: imageBytes,
     });
