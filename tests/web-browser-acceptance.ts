@@ -569,6 +569,22 @@ async function openPage(browser: Browser, host: Awaited<ReturnType<typeof startH
   return { page, errors };
 }
 
+async function listedSessionIds(page: Page): Promise<{ status: number; ids: string[]; errorCode?: string }> {
+  return page.evaluate(async () => {
+    const response = await fetch('/api/session/list', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'client-request', rpcId: 'legacy-copy-list',
+        method: 'session/list', payload: { args: { _request: {} } } }),
+    });
+    const body = await response.json() as { result?: {
+      value?: { items?: Array<{ sessionId?: string }> }; error?: { code?: string };
+    } };
+    return { status: response.status,
+      ids: body.result?.value?.items?.flatMap(item => item.sessionId ? [item.sessionId] : []) ?? [],
+      errorCode: body.result?.error?.code };
+  });
+}
+
 function launchBrowser(executablePath: string, home: string): Promise<Browser> {
   const ciWithoutSandbox = process.argv.includes('--ci-no-browser-sandbox');
   if (ciWithoutSandbox && (process.env.CI !== 'true' || process.platform !== 'linux')) {
@@ -1061,6 +1077,11 @@ async function main(): Promise<void> {
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
     const legacyOpened = await openPage(browser, host);
+    const legacyListed = await listedSessionIds(legacyOpened.page);
+    assert.ok(legacyListed.ids.includes(legacy.id),
+      `Copied V2 session is absent from Host session/list: HTTP ${legacyListed.status}, ` +
+      `listed=${legacyListed.ids.length}, code=${legacyListed.errorCode ?? 'none'}, ` +
+      `hostErrors=${host.errorCount()}`);
     const legacyRow = legacyOpened.page.locator(`[data-row-key="session:${legacy.id}"]`);
     await legacyRow.waitFor({ timeout: 30_000 });
     await legacyRow.click();
