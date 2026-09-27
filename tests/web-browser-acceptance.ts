@@ -491,18 +491,9 @@ async function startHost(binary: string, home: string, agents: string, workspace
         reject(new Error(`DSH Web Host exited before readiness: ${code}`));
       });
     });
-    const safeDiagnostic = () => stderr
-      .replaceAll(apiKey, '[redacted key]')
-      .replaceAll(baseURL, '[mock endpoint]')
-      .replaceAll(home, '[home]')
-      .replaceAll(agents, '[agents]')
-      .replaceAll(workspace, '[workspace]')
-      .replace(/([?&]token=)[^\s"']+/gi, '$1[redacted]');
-    const diagnostic = () => {
-      const safe = safeDiagnostic();
-      const firstError = safe.split('\n').find(line => /(?:Error:|corrupt session log)/.test(line)) ?? '';
-      return `${firstError.slice(0, 500)}\n${safe.slice(-1_000)}`;
-    };
+    const diagnostic = () => `errorLines=${errorLines}; `
+      + `sessionIdentityError=${stderr.includes('assertStoredIdentity')}; `
+      + `corruptArchiveError=${stderr.includes('corrupt session log')}`;
     return { child, url, errorCount: () => errorLines, diagnostic };
   } catch (error) {
     await stopHost(child);

@@ -28,6 +28,17 @@ platforms. Governed Bash acceptance in that installed profile, installer
 mismatch rejection, and the broader cross-interface release gate remain
 pending; this evidence does not accept the version tuple.
 
+The [legacy-home acceptance](https://github.com/sympoies/dsh-workbench/pull/46)
+also passed on Linux x64 and macOS arm64 in the
+[two-platform profile run](https://github.com/sympoies/dsh-workbench/actions/runs/36300441902).
+Its disposable home contains a valid Session V2 archive and a separately saved
+backup. Native Web reads the historical exchange, TUI resumes that exact ID
+and continues it into Session V4, and Web reopens the continued conversation.
+The test checks that the original archive and backup retain their bytes and no
+second V4 archive is created. This is copy-only migration evidence for a
+synthetic fixture; existing user homes and live handoff still need the broader
+[#7](https://github.com/sympoies/dsh-workbench/issues/7) gate.
+
 The [combined candidate profile procedure](combined-profile.md) stages the
 patched DSH workspace dependency closure and TUI before runtime-kit setup.
 The isolated Linux x64 graph passed strict and frozen pnpm installation,
