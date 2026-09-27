@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
@@ -33,6 +33,48 @@ const imageContinuationPrompt = 'TUI_IMAGE_HANDOFF_CONTINUATION';
 const imageBytes = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHUlEQVQ4y2M0Tpv5n4ECwESJ5lEDRg0YNWAwGQAAJeECUeW0yNsAAAAASUVORK5CYII=',
   'base64');
+const legacyPrompt = 'LEGACY_V2_PROMPT';
+const legacyAnswer = 'LEGACY_V2_ANSWER';
+const legacyContinuationPrompt = 'LEGACY_V2_TUI_CONTINUATION';
+
+function zstdFrame(content: string): Buffer {
+  const result = spawnSync('zstd', ['-q', '-c'], { input: content, maxBuffer: 1_000_000 });
+  assert.equal(result.error, undefined, 'zstd could not start for the legacy fixture');
+  assert.equal(result.status, 0, 'zstd could not encode the legacy fixture');
+  assert.ok(Buffer.isBuffer(result.stdout));
+  return result.stdout;
+}
+
+function seedLegacyV2Copy(fixture: string, home: string, workspace: string, existingId: string) {
+  const id = randomUUID();
+  const project = dirname(dirname(sessionLog(join(home, 'sessions'), existingId)));
+  const directory = join(project, id);
+  const source = join(directory, 'session.v2.jsonl.zstd');
+  const current = join(directory, 'session.v4.jsonl.zstd');
+  const header = { type: 'session', version: 2, id, createdAt: Date.now(), cwd: workspace,
+    delegationDepth: 0 };
+  const events = [
+    { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+    { type: 'user/message', seq: 2, time: 3, surfaceOp: 'append',
+      data: { id: 'legacy-user', role: 'user', content: [{ type: 'text', text: legacyPrompt }],
+        source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 3, time: 4, surfaceOp: 'append',
+      data: { turn: 1, step: 1, message: { id: 'legacy-assistant', role: 'assistant',
+        content: [{ type: 'text', text: legacyAnswer }],
+        source: { kind: 'model', provider: 'mock', model: 'mock' } } } },
+    { type: 'step/end', seq: 4, time: 5, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: 5, time: 6, data: { turn: 1, reason: { kind: 'completed' } } },
+  ];
+  const original = Buffer.concat([zstdFrame(`${JSON.stringify(header)}\n`),
+    zstdFrame(events.map(event => JSON.stringify(event)).join('\n') + '\n')]);
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(source, original, { flag: 'wx' });
+  const backup = join(fixture, 'legacy-backup', 'sessions', relative(join(home, 'sessions'), source));
+  mkdirSync(dirname(backup), { recursive: true });
+  copyFileSync(source, backup);
+  return { id, source, current, backup, original };
+}
 
 function inlineImages(body: unknown): string[] {
   const messages = (body as { messages?: unknown } | null)?.messages;
@@ -228,6 +270,34 @@ async function continueWebSessionInTui(dsh: string, fixture: string, home: strin
   } finally {
     const cleanup = await Promise.allSettled([tui.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI continuation cleanup failed');
+  }
+}
+
+async function continueLegacyV2InTui(dsh: string, fixture: string, home: string, agents: string,
+  workspace: string, legacy: ReturnType<typeof seedLegacyV2Copy>, baseURL: string,
+  apiKey: string): Promise<void> {
+  const tui = startTui(dsh, fixture, home, agents, workspace, baseURL, apiKey,
+    ['--resume', legacy.id]);
+  try {
+    await waitForTui(tui, () => visibleScreen(tui.screen).includes(legacyAnswer),
+      'restored legacy answer');
+    tui.write(`${legacyContinuationPrompt}\r`);
+    await waitForTui(tui, () => existsSync(legacy.current) &&
+      readEvents(legacy.current).filter(event => event.type === 'turn/end').length === 2,
+    'completed legacy continuation in Session V4');
+    await tui.stop();
+    assert.equal(tui.exitCode, 0, 'TUI did not exit cleanly after legacy migration');
+    const events = readEvents(legacy.current, { strict: true });
+    assert.ok(JSON.stringify(events).includes(legacyPrompt), 'the migrated V4 log lost the old prompt');
+    assert.ok(JSON.stringify(events).includes(legacyAnswer), 'the migrated V4 log lost the old answer');
+    assert.ok(JSON.stringify(events).includes(legacyContinuationPrompt),
+      'the migrated V4 log lost the TUI continuation');
+    assert.ok(readFileSync(legacy.source).equals(legacy.original),
+      'migration changed the historical source bytes');
+    assert.ok(readFileSync(legacy.backup).equals(legacy.original),
+      'migration changed the isolated rollback copy');
+  } finally {
+    await tui.stop();
   }
 }
 
@@ -958,11 +1028,59 @@ async function main(): Promise<void> {
     hostErrors += host.errorCount();
     assert.equal(pageErrors, 0, 'browser reported JavaScript errors after image handoff');
     assert.equal(hostErrors, 0, 'DSH Web Host reported errors after image handoff');
-    console.log(JSON.stringify({ result: 'pass', sessions: 6, tuiToWebTitle: true,
+    await browser.close();
+    browser = undefined;
+    await stopHost(host.child);
+    host = undefined;
+
+    const legacy = seedLegacyV2Copy(fixture, home, workspace, imageId);
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
+    browser = await launchBrowser(browserBin, home);
+    const legacyOpened = await openPage(browser, host);
+    const legacyRow = legacyOpened.page.locator(`[data-row-key="session:${legacy.id}"]`);
+    await legacyRow.waitFor({ timeout: 30_000 });
+    await legacyRow.click();
+    assert.equal(await copiedSessionId(legacyOpened.page), legacy.id,
+      'Web opened the copied legacy session under another ID');
+    await legacyOpened.page.locator('[data-conversation-content]')
+      .getByText(legacyPrompt, { exact: false }).first().waitFor({ timeout: 30_000 });
+    await legacyOpened.page.locator('[data-conversation-content]')
+      .getByText(legacyAnswer, { exact: false }).first().waitFor({ timeout: 30_000 });
+    assert.ok(readFileSync(legacy.source).equals(legacy.original),
+      'Web read changed the copied historical source');
+    pageErrors += legacyOpened.errors.length;
+    hostErrors += host.errorCount();
+    await browser.close();
+    browser = undefined;
+    await stopHost(host.child);
+    host = undefined;
+
+    await continueLegacyV2InTui(dsh, fixture, home, agents, workspace, legacy,
+      mock.baseURL, apiKey);
+    host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
+    browser = await launchBrowser(browserBin, home);
+    const migratedOpened = await openPage(browser, host);
+    const migratedRow = migratedOpened.page.locator(`[data-row-key="session:${legacy.id}"]`);
+    await migratedRow.waitFor({ timeout: 30_000 });
+    await migratedRow.click();
+    assert.equal(await copiedSessionId(migratedOpened.page), legacy.id,
+      'Web reopened the migrated session under another ID');
+    const migratedConversation = migratedOpened.page.locator('[data-conversation-content]');
+    await migratedConversation.getByText(legacyPrompt, { exact: false }).first()
+      .waitFor({ timeout: 30_000 });
+    await migratedConversation.getByText(legacyAnswer, { exact: false }).first()
+      .waitFor({ timeout: 30_000 });
+    await migratedConversation.getByText(legacyContinuationPrompt, { exact: false }).first()
+      .waitFor({ timeout: 30_000 });
+    pageErrors += migratedOpened.errors.length;
+    hostErrors += host.errorCount();
+    assert.equal(pageErrors, 0, 'browser reported JavaScript errors after legacy migration');
+    assert.equal(hostErrors, 0, 'DSH Web Host reported errors after legacy migration');
+    console.log(JSON.stringify({ result: 'pass', sessions: 7, tuiToWebTitle: true,
       webToTuiContinuation: true, writerContention: true, toolApproval: true,
       toolRejection: true, runningTurn: true, errorResume: true,
       toolResultsAfterRestart: true, restartResume: true, settledHostCrashHandoff: true,
-      interruptedHostCrashHandoff: true, imageHandoff: true,
+      interruptedHostCrashHandoff: true, imageHandoff: true, copiedLegacyMigration: true,
       interactionRequests, errorRequests, recoveryRequests: mock.requests.length, pageErrors, hostErrors }));
   } finally {
     const cleanup = await Promise.allSettled([
