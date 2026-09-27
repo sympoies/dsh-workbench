@@ -376,6 +376,7 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     await terminal.waitFor('Explore the uncharted!');
     terminal.write(`Run the Bash command printf ${scenario.toolOutput} and report its output.\r`);
     await terminal.waitFor('Awaiting approval · bash');
+    await terminal.waitFor('Yes, allow once');
     terminal.write(scenario.decision);
     const logPath = await waitForTurn(logRoot, previous);
     await terminal.stop();
