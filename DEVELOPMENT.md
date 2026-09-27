@@ -44,7 +44,7 @@ pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chrom
 
 The script builds and packs the Web plugin, installs a Web profile containing
 the patched TUI bundle and a separate patched TUI profile in a disposable DSH
-home, and runs seven sessions against authenticated local mock LLM servers.
+home, and runs eight sessions against authenticated local mock LLM servers.
 Through a native pseudoterminal provided by the pinned
 development-only `node-pty` package, it creates and renames a TUI session,
 stops TUI, then checks that session's exact ID, title, prompt, and answer in
@@ -66,12 +66,17 @@ Web, checks the durable Session V4 attachment reference, resumes the exact
 session in TUI, verifies the continued model request includes the image, and
 reopens the same image in Web. The fixture, profiles, and mock endpoints are
 removed afterward. Package installation is isolated from caller credentials.
-The seventh session is a synthetic copied Session V2 archive: Web reads the
+Another TUI session starts in a second canonical workspace. Web, launched from
+the first workspace, must list both exact IDs with their distinct canonical
+paths and open the second session's title and history. After the second path is
+moved away, a cold Web Host may still show its history but must not offer an
+active editor for the unavailable workspace. The eighth session is a synthetic
+copied Session V2 archive: Web reads the
 historical exchange, TUI continues it under the same ID into Session V4, and
 Web reopens the result. This does not exercise a real user's DSH home.
 Local Chromium sandboxing remains enabled; the Linux GitHub-hosted CI runner
 uses an explicit test-only exception because its browser sandbox cannot initialize.
-With `--installed-dsh-home` and `--runtime-env-file`, the same seven scenarios
+With `--installed-dsh-home` and `--runtime-env-file`, the same eight scenarios
 use the owner-marked disposable installation and the activated `workbench`
 profile for both interfaces. They preserve its package manifest and lock;
 the installation owner supplies the environment and Git workspace. This mode
