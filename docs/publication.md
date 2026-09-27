@@ -20,19 +20,20 @@ history. For each proposed import from private work, record in its PR:
 
 ## Upstream attribution
 
-The initial candidate sources were checked at their selected immutable
-revisions. All three upstream source licenses are MIT:
+The accepted Linux compatibility sources were checked at their selected
+immutable revisions. All three upstream source licenses are MIT:
 
-| Component | Candidate source | Copyright holder | License evidence |
+| Component | Accepted Linux source pin | Copyright holder | License evidence |
 | --- | --- | --- |
 | DeepSeek Harness | [`dsh-v0.1.7-rc.1` at `46a7f68b0922371ce7144b668b90e377d8e799f4`](https://github.com/deepseek-ai/deepseek-harness/tree/46a7f68b0922371ce7144b668b90e377d8e799f4) | DeepSeek | [MIT license at the pinned commit](https://github.com/deepseek-ai/deepseek-harness/blob/46a7f68b0922371ce7144b668b90e377d8e799f4/LICENSE) |
 | dsh-TUI | [`v0.11.0` at `19c76a1d877b69ee3f399147bf84f2bae3b10e58`](https://github.com/ccch1mneyyy/dsh-TUI/tree/19c76a1d877b69ee3f399147bf84f2bae3b10e58) | chimney (`ccch1mneyyy`) | [MIT license at the pinned commit](https://github.com/ccch1mneyyy/dsh-TUI/blob/19c76a1d877b69ee3f399147bf84f2bae3b10e58/LICENSE) |
-| dsh-runtime-kit | [candidate commit `00f91aadae872ee98622192b347f13a6d8b1508f`](https://github.com/sympoies/dsh-runtime-kit/tree/00f91aadae872ee98622192b347f13a6d8b1508f) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/00f91aadae872ee98622192b347f13a6d8b1508f/LICENSE) |
+| dsh-runtime-kit | [commit `00f91aadae872ee98622192b347f13a6d8b1508f`](https://github.com/sympoies/dsh-runtime-kit/tree/00f91aadae872ee98622192b347f13a6d8b1508f) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/00f91aadae872ee98622192b347f13a6d8b1508f/LICENSE) |
 
 The upstream copyright lines and license texts for these pinned source trees
 are preserved in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). These are
-candidate identities, not accepted pins or a complete dependency license
-inventory. The Workbench's own source is MIT-licensed in [LICENSE](../LICENSE).
+accepted compatibility pins, not a complete dependency license inventory or
+a published Workbench release. The Workbench's own source is MIT-licensed in
+[LICENSE](../LICENSE).
 
 ## Repeatable checks
 

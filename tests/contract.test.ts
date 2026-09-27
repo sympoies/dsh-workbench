@@ -45,7 +45,7 @@ function run(command: string, path: string, extra: string[] = []) {
   });
 }
 
-test('candidate contract is valid but cannot be activated', () => {
+test('accepted Linux contract is valid and can be activated', () => {
   const check = run('check', source);
   assert.equal(check.status, 0, check.stderr);
   assert.equal(check.stdout, 'Contract valid.\n');
@@ -55,8 +55,26 @@ test('candidate contract is valid but cannot be activated', () => {
   assert.equal(printed.stdout, `${JSON.stringify(JSON.parse(readFileSync(source, 'utf8')))}\n`);
   assert.equal(printed.stderr, '');
   const activation = run('require-accepted', source);
-  assert.notEqual(activation.status, 0);
-  assert.match(activation.stderr, /candidate/i);
+  assert.equal(activation.status, 0, activation.stderr);
+});
+
+test('a candidate contract cannot be activated', () => {
+  const { dir, path } = fixture(contract => {
+    contract.status = 'candidate';
+    for (const component of Object.values(contract.components)) component.status = 'candidate';
+    for (const gate of Object.values(contract.acceptance)) {
+      gate.status = 'pending';
+      gate.evidence = [];
+    }
+  });
+  try {
+    assert.equal(run('check', path).status, 0);
+    const activation = run('require-accepted', path);
+    assert.notEqual(activation.status, 0);
+    assert.match(activation.stderr, /candidate/i);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('first release targets Linux x64 while macOS remains a later version', () => {
@@ -187,7 +205,12 @@ test('a copied contract rejects a changed or missing patch in its own tree', () 
 
 test('platform and toolchain changes require a new Workbench version', () => {
   for (const change of ([
-    contract => { contract.runtime.platforms = ['darwin-arm64']; },
+    contract => {
+      contract.runtime.platforms = ['darwin-arm64'];
+      for (const gate of Object.values(contract.acceptance)) {
+        gate.evidence[0].platform = 'darwin-arm64';
+      }
+    },
     contract => { contract.runtime.pnpm = '11.25.0'; },
     contract => { contract.components.tui.toolchain.pnpm = '11.22.0'; },
     contract => { contract.components.tui.peerOverrides!.react = '19.2.0'; },
@@ -242,7 +265,7 @@ test('a new release version must move forward', () => {
 
 test('accepted contract needs recorded validation for every gate', () => {
   const { dir, path } = fixture(contract => {
-    contract.status = 'accepted';
+    contract.acceptance.web.evidence = [];
   });
   try {
     const result = run('check', path);
@@ -253,22 +276,29 @@ test('accepted contract needs recorded validation for every gate', () => {
   }
 });
 
-test('accepted contract passes only after all component and gate evidence is recorded', () => {
-  const { dir, path } = fixture(contract => {
-    accept(contract);
-  });
-  try {
-    const result = run('require-accepted', path);
-    assert.equal(result.status, 0, result.stderr);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
+test('accepted contract refuses each missing component or gate verdict', () => {
+  for (const component of ['dsh', 'runtimeKit', 'tui'] as const) {
+    const { dir, path } = fixture(contract => { contract.components[component].status = 'candidate'; });
+    try {
+      assert.match(run('require-accepted', path).stderr, /accepted contract requires accepted components/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  for (const gate of ['runtimeKit', 'tui', 'web', 'handoff'] as const) {
+    const { dir, path } = fixture(contract => { contract.acceptance[gate].status = 'pending'; });
+    try {
+      assert.match(run('require-accepted', path).stderr, /accepted contract requires accepted components/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 
 test('an accepted release cannot be downgraded under its existing version', () => {
   const previous = fixture(accept);
   const current = fixture(contract => {
-    contract.acceptance.web.evidence = [];
+    contract.status = 'candidate';
   });
   try {
     assert.match(run('compare', current.path, ['--previous', previous.path]).stderr, /accepted release contract is immutable/i);

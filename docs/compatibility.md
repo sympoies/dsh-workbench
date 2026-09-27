@@ -13,12 +13,16 @@ has two later lanes: native reduced capabilities under
 [#48](https://github.com/sympoies/dsh-workbench/issues/48), and full authority
 under [#47](https://github.com/sympoies/dsh-workbench/issues/47) with
 [nils-cli #1800](https://github.com/sympoies/nils-cli/issues/1800). Neither lane
-is implemented or accepted by this Linux candidate. The full-authority lane's
+is implemented or accepted by this Linux release contract. The full-authority lane's
 unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current graph is **candidate**. Its DSH and TUI package integrity values
+The Linux x64 component graph for `v0.1.0-rc.13` is **accepted for compatibility**.
+This records the pinned graph and its installed-profile acceptance; no Workbench
+release, portable installer, OCI image, or owner deployment is published by
+that status. Those remain separate [#9](https://github.com/sympoies/dsh-workbench/issues/9)
+and [#8](https://github.com/sympoies/dsh-workbench/issues/8) gates. Its DSH and TUI package integrity values
 come from the npm registry at the pinned package versions. Git commit and tree
 values identify the upstream source revisions. The runtime-kit source pins
 the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runtime-kit/pull/272),
@@ -35,13 +39,13 @@ runtime-kit has no published npm release at this revision, so its Git tree is
 its source integrity identity. The contract records the upstream package
 version `0.0.0` for runtime-kit; that is not a Workbench release version.
 These identities were checked on 2026-09-27. Runtime-kit compatibility and
-managed-worktree recovery passed its owner CI. The candidate's native Web/TUI
+managed-worktree recovery passed its owner CI. The graph's native Web/TUI
 browser fixture passed settled text and PNG handoff on Linux x64 and macOS
 arm64 in [PR #44](https://github.com/sympoies/dsh-workbench/pull/44). The exact
 combined profile also passed frozen installation and runtime-kit doctor on both
-platforms. Governed Bash acceptance in that installed profile, installer
-mismatch rejection, and the broader cross-interface release gate remain
-pending; this evidence does not accept the version tuple.
+platforms. That earlier two-platform result is component evidence only; the
+Linux x64 accepted gate below adds governed Bash and cross-interface proof.
+Portable installer mismatch rejection and owner deployment remain pending.
 
 The [legacy-home acceptance](https://github.com/sympoies/dsh-workbench/pull/46)
 also passed on Linux x64 and macOS arm64 in the
@@ -79,8 +83,8 @@ session ID, completed another turn in the same archive, and confirmed both the
 exact fixture session count and the long session's unique title in `/resume`.
 The terminal assertion reconstructs the screen
 from ANSI updates; searching the output byte stream cannot verify a changed
-count because the TUI may emit only the changed digit. These checks do not yet
-establish the full TUI acceptance gate. The overrides do
+count because the TUI may emit only the changed digit. Those isolated checks
+preceded the accepted combined Linux TUI gate below. The overrides do
 not relax peer checks for any other
 dependency; a future installer must include them in its frozen graph and
 reject an unexpected working-activity version.
@@ -91,7 +95,7 @@ Workbench `v0.1.0-rc.3` adds an exact
 now calls DSH's session-title service, which records the normalized title
 with `messageSeqs: []` and `source.kind: user` and supersedes automatic
 title generation. The persisted-session picker writes the same user-title
-payload. In the current candidate, live rename also awaits DSH's public
+payload. In the accepted Linux graph, live rename also awaits DSH's public
 `sessionProjectionCache.write(session)` durability barrier before updating the
 TUI title or acknowledging success. Both `/rename` and recap-title application
 handle rejection; a changed channel binding cannot acknowledge the old operation
@@ -105,9 +109,9 @@ proved manual rename, exact-ID restart, and another completed turn against
 the patched profile. It also exercised the stopped-session title writer and
 another exact-ID restart. The native Web browser acceptance now opens a
 TUI-renamed Session V4 archive under the same ID and verifies its title,
-prompt, and answer before and after a Web Host restart. The broader
-cross-interface gate remains
-under [#7](https://github.com/sympoies/dsh-workbench/issues/7).
+prompt, and answer before and after a Web Host restart. The installed Linux
+cross-interface gate passed below; owner path mapping remains under
+[#7](https://github.com/sympoies/dsh-workbench/issues/7).
 
 Workbench `v0.1.0-rc.4` narrows the first release's acceptance targets to
 Linux x64 and macOS arm64. Linux arm64 and macOS x64 may be evaluated for a
@@ -175,7 +179,7 @@ single component contract before the handoff proof is repeated.
 
 ## Gate
 
-The rc.13 candidate pins runtime-kit commit
+The accepted rc.13 Linux graph pins runtime-kit commit
 `00f91aadae872ee98622192b347f13a6d8b1508f` and its authenticated nils-cli
 1.29.0 release. Finish-line open binds authority to the actual DSH process.
 A live owner still prevents takeover. After a crash, nils must prove that the
@@ -184,26 +188,34 @@ the old validation evidence before returning a recovered capability. A resumed
 turn does not inherit permission to execute an unapproved command. Sessions
 without a committed recoverable owner binding still fail closed; this protocol
 does not permit stealing another live owner's authority. The installed Linux
-gate must prove pending-approval SIGKILL recovery through TUI and reopening in
-Web, alongside ordinary allow/reject and handoff. Runtime-kit's green owner CI
-is dependency evidence, not acceptance of this Workbench tuple.
+gate proved pending-approval SIGKILL recovery through TUI and reopening in
+Web, alongside ordinary allow/reject and handoff. The four distinct public
+records in the contract are the
+[runtime-kit owner CI](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36348019468),
+[combined TUI profile](https://github.com/sympoies/dsh-workbench/actions/runs/36351502065),
+[combined Web and recovery profile](https://github.com/sympoies/dsh-workbench/actions/runs/36353719094),
+and [cross-workspace handoff profile](https://github.com/sympoies/dsh-workbench/actions/runs/36357463622).
+The final run covers ordinary and recovered Bash allow/reject, exact Session V4
+continuation, distinct canonical workspace mapping, and unavailable historical
+workspace handling. Runtime-kit's owner CI supplies dependency evidence; the
+Workbench profile runs supply installed interface and handoff evidence.
 
 `node scripts/contract.mjs check` validates structure and immutable pin shape.
-`node scripts/contract.mjs require-accepted` is the activation gate: it fails
-while the contract is a candidate. An accepted contract requires all three
+`node scripts/contract.mjs require-accepted` is the contract activation gate:
+it now passes for Linux x64. An accepted contract requires all three
 components marked accepted and distinct public evidence links for runtime-kit,
 TUI, Web, and cross-interface handoff on every declared target platform. A
-local schema check alone does not
-establish that upstream packages match the recorded hashes; the build and
-installation workflows must verify those bytes when implemented.
+local schema check alone does not establish that upstream packages match the
+recorded hashes; the release build and installation must verify those bytes.
 Schema 3 adds the TUI patch identity; the compare gate reads schema 1 and 2
 candidates only as previous releases.
 
 The current common runtime baseline is Node.js 24 or newer, derived from the
 pinned runtime-kit's minimum, on the target platform set recorded in the
-contract. A target platform is a planned test target while
-the contract is a candidate; it becomes a supported platform only when its
-release acceptance passes. Upstream package manager versions are recorded as
+contract. A target platform is planned while the contract is a candidate; it
+becomes compatible when the graph gates pass. Distribution and installed
+product support still require the separate release and owner installation
+gates. Upstream package manager versions are recorded as
 source-build facts. Workbench pins pnpm `11.24.0` for its own graph. The
 generated pnpm settings explicitly exempt only the exact selected TUI release
 from a local minimum-release-age policy, because a freshly published release
@@ -213,7 +225,7 @@ still comes from the contract and strict frozen installation remains required.
 ## Workbench versions
 
 Workbench uses its own SemVer release identity and tags `v<version>`. The
-candidate target version in the contract is reserved for this tuple; it is not
+target version in the accepted contract is reserved for this tuple; it is not
 a published release. A change to any component source URL, tag, commit, tree,
 package name, version, integrity, compatibility patch, runtime platform, or
 toolchain requires a new
@@ -234,7 +246,7 @@ acceptance evidence so promoting the same tested bytes cannot change the
 artifact. The external contract owns acceptance; the Web package does not
 advertise an acceptance verdict. Its package build checks that identity against
 the contract.
-This identifies a candidate build; it does not prove the actual installed
+This identifies a graph build; it does not prove the actual installed
 runtime-kit or TUI package matches. Future Web images, TUI packages, install
 receipts, and release metadata must verify the installed graph and derive
 their identity from the same contract before activation.

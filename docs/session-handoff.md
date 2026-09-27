@@ -1,9 +1,10 @@
 # Session visibility and handoff
 
-This document records the observed two-process behavior of the **candidate**
-DSH 0.1.7-rc.1, dsh-TUI 0.11.0, and dsh-runtime-kit graph. It selects a
-service-stop topology for the first Workbench milestone. It is not an accepted
-release or a migration procedure for an existing DSH home.
+This document records the observed two-process behavior of the Linux x64
+**accepted compatibility graph**: DSH 0.1.7-rc.1, dsh-TUI 0.11.0, and the
+pinned dsh-runtime-kit revision. It selects a service-stop topology for the
+first Workbench milestone. It is not a published release or a migration
+procedure for an existing DSH home.
 
 ## Supported first-milestone topology
 
@@ -23,15 +24,17 @@ Only one interface owns a session writer at a time. To hand off a session:
    workspace, list its sessions, and resume the exact session ID. Verify its
    last settled turn before entering a new prompt.
 
-Workbench must show writer contention as **in use elsewhere**. The candidate
+Workbench must show writer contention as **in use elsewhere**. The pinned
 TUI currently reports a Web-held writer as an unreadable or corrupt stored log;
 that message is inaccurate. An installer or launcher must use the pinned DSH
 binary and frozen graph, rather than whichever `dsh` appears first on PATH.
 Runtime update commands must not silently change a pinned install.
 The Workbench-scoped TUI patch makes `/rename` resumable in a real TTY. Native
 Web opens the renamed session with its authoritative title and history in the
-automated Linux browser acceptance. The broader handoff gate remains under
-[#7](https://github.com/sympoies/dsh-workbench/issues/7).
+automated Linux browser acceptance. The installed Linux compatibility handoff
+gate has passed; portable owner installation and path mapping remain under
+[#7](https://github.com/sympoies/dsh-workbench/issues/7) and
+[#9](https://github.com/sympoies/dsh-workbench/issues/9).
 
 This topology requires stopping Web service for a Web-to-TUI handoff. It does
 not offer simultaneous Web and TUI editing or per-session Web writer release.
@@ -215,8 +218,10 @@ that has published V4 generations or merge selected files from two homes.
 The portable installer still needs its own copy-based migration and rollback
 acceptance under [#9](https://github.com/sympoies/dsh-workbench/issues/9).
 
-The remaining scenarios are release acceptance work under
-[#7](https://github.com/sympoies/dsh-workbench/issues/7), with TUI-specific
-checks under [#4](https://github.com/sympoies/dsh-workbench/issues/4).
+Portable installation, owner path mapping, copy-only upgrade and rollback,
+publication, and deployment are separate release gates under
+[#7](https://github.com/sympoies/dsh-workbench/issues/7),
+[#9](https://github.com/sympoies/dsh-workbench/issues/9), and
+[#8](https://github.com/sympoies/dsh-workbench/issues/8).
 Existing homes must be tested on copies with a rollback plan before any
 private deployment changes.
