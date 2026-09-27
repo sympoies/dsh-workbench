@@ -243,8 +243,8 @@ async function checkImageHandoffInTui(dsh: string, fixture: string, home: string
   const tui = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey,
     ['--resume', id]);
   try {
-    await waitForTui(tui, () => visibleScreen(tui.screen).includes(imageName),
-      'durable Web image in the resumed TUI transcript');
+    await waitForTui(tui, () => visibleScreen(tui.screen).includes(answer),
+      'settled Web answer in the resumed TUI transcript');
     tui.write(`${imageContinuationPrompt}\r`);
     await waitForTui(tui, () => readEvents(logPath).filter(event =>
       event.type === 'turn/end').length === turnsBefore + 1,
