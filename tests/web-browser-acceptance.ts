@@ -392,8 +392,16 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     'the approval turn settled before the Web Host crash');
   const previous = new Set(sessionLogs(logRoot));
   const apiKey = randomBytes(24).toString('hex');
-  const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
-    apiKey, successText: recoveredAnswer });
+  const marker = join(workspace, 'recovered-approval-execution-count');
+  const escapedMarker = "'" + marker.replaceAll("'", "'\\''") + "'";
+  const toolOutput = 'RECOVERED_BASH_EXECUTED';
+  const mock = await startApprovalMockLlmServer({
+    sequence: ['success', 'tool_call_success', 'success', 'tool_call_success', 'success'],
+    repeatLast: true, apiKey, successText: recoveredAnswer, toolName: 'bash',
+    toolArguments: JSON.stringify({ command: `printf 'executed\\n' >> ${escapedMarker} && printf ${toolOutput}`,
+      description: 'Count recovered-session Bash executions', sandbox_permissions: 'danger-full-access',
+      justification: 'Verify fresh approvals in a disposable recovered session' }),
+  }, recoveredAnswer);
   const tui = startTui(dsh, fixture, home, agents, workspace, mock.baseURL, apiKey,
     ['--resume', id]);
   try {
@@ -407,16 +415,61 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
     await waitForTui(tui, () => JSON.stringify(readEvents(logPath)
       .filter(event => event.type === 'user/message')).includes(recoveredPrompt),
     'persisted post-crash TUI prompt');
-    await waitForTui(tui, () => mock.requests.length >= 2,
+    await waitForTui(tui, () => mock.requests.length >= 1,
       'post-crash TUI continuation model request');
     await waitForTui(tui, () => readEvents(logPath).filter(event => event.type === 'turn/end').length === 2,
       'completed post-crash TUI continuation');
+    assert.equal(existsSync(marker), false, 'Recovery recap executed the fresh Bash command');
+    const approvalIds = new Set(before.filter(event => event.type === 'approval/asked')
+      .map(event => event.data?.id));
+    for (const [index, scenario] of [
+      { prompt: 'RECOVERED_BASH_ALLOW', decision: '1', outcome: 'allowed-once', isError: false },
+      { prompt: 'RECOVERED_BASH_REJECT', decision: '\x1b', outcome: 'rejected', isError: true },
+    ].entries()) {
+      const start = readEvents(logPath, { strict: true }).length;
+      tui.write(`${scenario.prompt}\r`);
+      await waitForTui(tui, () => readEvents(logPath).slice(start)
+        .some(event => event.type === 'approval/asked'), 'fresh recovered Bash approval');
+      await waitForTui(tui, () => visibleScreen(tui.screen).includes('Awaiting approval · bash')
+        && visibleScreen(tui.screen).includes('Yes, allow once'), 'rendered recovered Bash choice');
+      tui.write(scenario.decision);
+      await waitForTui(tui, () => readEvents(logPath).filter(event => event.type === 'turn/end')
+        .length === index + 3, 'completed recovered Bash turn');
+      const turn = readEvents(logPath, { strict: true }).slice(start);
+      const asked = turn.filter(event => event.type === 'approval/asked');
+      const decided = turn.filter(event => event.type === 'approval/decided');
+      const results = turn.filter(event => event.type === 'tool/result');
+      assert.equal(asked.length, 1);
+      assert.equal(asked[0]?.data?.toolName, 'bash');
+      const approvalId = asked[0]?.data?.id;
+      assert.equal(typeof approvalId, 'string');
+      assert.ok(!approvalIds.has(approvalId), 'Recovered Bash reused an old approval identity');
+      approvalIds.add(approvalId);
+      assert.equal(decided.length, 1);
+      assert.equal(decided[0]?.data?.id, approvalId);
+      assert.equal(decided[0]?.data?.outcome, scenario.outcome);
+      assert.equal(results.length, 1);
+      const message = results[0]?.data?.message as { isError?: boolean; content?: unknown } | undefined;
+      assert.equal(message?.isError, scenario.isError);
+      const content = JSON.stringify(message?.content);
+      assert.ok(scenario.isError ? content.includes('the user rejected escalating this command')
+        : content.includes(toolOutput));
+      if (scenario.isError) assert.ok(!content.includes(toolOutput));
+      assert.equal((turn.find(event => event.type === 'turn/end')?.data?.reason as
+        { kind?: string } | undefined)?.kind, 'completed');
+      assert.equal(readFileSync(marker, 'utf8'), 'executed\n',
+        'Fresh allow must execute once and fresh reject must leave the count unchanged');
+    }
     await tui.stop();
     assert.equal(tui.exitCode, 0, 'TUI did not exit cleanly after interrupted Web handoff');
     assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [],
       'Interrupted-turn TUI resume created another session');
     const events = readEvents(logPath, { strict: true });
+    assert.deepEqual(events.slice(0, before.length), before, 'Recovery rewrote pre-crash history');
     const endedTurns = events.filter(event => event.type === 'turn/end');
+    assert.deepEqual(events.filter(event => event.type === 'approval/decided')
+      .map(event => event.data?.outcome), ['allowed-once', 'rejected'],
+    'Recovered session must prove fresh Bash allow and reject');
     assert.equal((endedTurns.at(-1)?.data?.reason as { kind?: string } | undefined)?.kind, 'completed',
       'the post-crash TUI continuation did not complete');
     assert.ok(JSON.stringify(events.filter(event => event.type === 'user/message')).includes(interruptedPrompt));
@@ -440,8 +493,8 @@ async function continueInterruptedWebSessionInTui(dsh: string, fixture: string, 
         })),
       };
     })())}`);
-    assert.ok(mock.requests.length >= 2,
-      'TUI did not request both its resume recap and the post-crash continuation');
+    assert.ok(mock.requests.length >= 5,
+      'TUI did not request the text continuation and both recovered Bash turns');
   } finally {
     const cleanup = await Promise.allSettled([tui.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('Interrupted-turn cleanup failed');
