@@ -4,10 +4,11 @@ import { pipeline } from 'node:stream/promises';
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server';
 
 /** Keep auxiliary title calls from consuming the scripted approval turn. */
-export async function startApprovalMockLlmServer(options: Parameters<typeof startMockLlmServer>[0]) {
+export async function startApprovalMockLlmServer(options: Parameters<typeof startMockLlmServer>[0],
+  auxiliaryText = 'Workbench verification') {
   const agent = await startMockLlmServer(options);
   const title = await startMockLlmServer({ sequence: ['success'], repeatLast: true,
-    apiKey: options.apiKey, successText: 'Workbench verification' });
+    apiKey: options.apiKey, successText: auxiliaryText });
   const server = createServer((request, response) => {
     void (async () => {
       const chunks: Buffer[] = [];

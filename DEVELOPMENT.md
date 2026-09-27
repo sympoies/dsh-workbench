@@ -54,7 +54,10 @@ tool approval is pending, it checks that TUI refuses an exact-ID resume without
 rewriting the archive. The fixture then kills Web Host while it still owns a
 settled session. It also kills Web while tool approval is pending and checks
 that TUI resumes under recovered authority without executing the unapproved
-command. TUI resumes that Web session, completes another turn, and Web
+command. In the same recovered TUI process and session, the fixture completes
+a text turn and then fresh Bash allow and reject turns. It checks new approval
+identities, successful execution exactly once, rejected nonexecution, and
+completed turns while preserving the pre-crash history. Web
 reads the continuation
 on restart. It also checks distinct Web IDs, isolated histories, a
 pending turn, tool approval and rejection, a provider error, and Web Host

@@ -171,7 +171,11 @@ owns a settled session, then requires TUI continuation and native Web recovery
 under the same ID. A separate browser scenario terminates Web Host with
 SIGKILL while a Bash approval is pending. It verifies that the unapproved
 command did not execute, TUI resumes the same ID and closes the interrupted
-turn, TUI completes a new turn, and Web reads that continuation after restart.
+turn, and the same TUI process completes a text continuation and new Bash allow
+and reject turns in that session. Each new request has a fresh approval ID;
+allow executes exactly once and reject leaves the execution count unchanged.
+The archive retains its pre-crash history and both new turns complete. Web
+reads the continuation after restart.
 This proves recovery for the approval-wait state only; it does not establish
 cancellation of an executing command or turn, recovery from crashes at other
 active-turn phases, live cross-interface title updates, or complete
