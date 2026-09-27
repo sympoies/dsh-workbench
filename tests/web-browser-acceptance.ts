@@ -860,6 +860,19 @@ async function main(): Promise<void> {
       await new Promise(resolveWait => setTimeout(resolveWait, 50));
     }
     assert.equal(await sendImage.isEnabled(), true, 'image upload did not reach a sendable state');
+    const imageHttp: string[] = [];
+    recoveredOpened.page.on('request', request => {
+      const path = new URL(request.url()).pathname;
+      if (path.endsWith('/api/session/prompt') || path.endsWith('/api/session/attachment')) {
+        imageHttp.push(path);
+      }
+    });
+    recoveredOpened.page.on('response', response => {
+      const path = new URL(response.url()).pathname;
+      if (path.endsWith('/api/session/prompt') || path.endsWith('/api/session/attachment')) {
+        imageHttp.push(`${path}:${response.status()}`);
+      }
+    });
     await recoveredOpened.page.getByRole('alert').first()
       .waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
     await sendImage.click();
@@ -875,13 +888,19 @@ async function main(): Promise<void> {
         .waitFor({ timeout: 30_000 });
     } catch (error) {
       const events = readEvents(imageLog);
+      const bodyText = await recoveredOpened.page.locator('body')
+        .innerText({ timeout: 1_000 }).catch(() => '');
       console.error(JSON.stringify({ phase: 'image-response', requestCount: mock.requests.length,
         requestImages: mock.requests.map(request => inlineImages(request.body).length),
+        imageHttp,
         eventTypes: events.slice(-8).map(event => event.type),
         lastTurnKind: (events.filter(event => event.type === 'turn/end').at(-1)?.data?.reason as
           { kind?: string } | undefined)?.kind ?? 'none',
-        webFailureVisible: await imageConversation.getByText('This turn failed', { exact: false }).count() > 0,
-        draftRetained: (await imageEditor.innerText()).includes(imagePrompt),
+        webFailureVisible: bodyText.includes('This turn failed'),
+        composerPresent: await imageEditor.count() > 0,
+        bodyHasPrompt: bodyText.includes(imagePrompt),
+        bodyHasModel: bodyText.includes('DeepSeek-V41-Flash'),
+        bodyHasImageName: bodyText.includes(imageName),
         attachmentRetained: await recoveredOpened.page.getByRole('group',
           { name: 'Pending attachments' }).getByRole('img', { name: imageName }).count() > 0,
         alert: imageAlert?.replaceAll(apiKey, '[redacted]').replaceAll(home, '[home]')
