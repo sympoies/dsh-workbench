@@ -585,6 +585,18 @@ async function listedSessionIds(page: Page): Promise<{ status: number; ids: stri
   });
 }
 
+async function revealSessionRow(page: Page, id: string): Promise<Locator> {
+  const row = page.locator(`[data-row-key="session:${id}"]`);
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (await row.isVisible()) return row;
+    const expand = page.locator('button[data-row-key^="overflow:"][aria-expanded="false"]').first();
+    if (await expand.isVisible()) await expand.click();
+    await page.waitForTimeout(250);
+  }
+  throw new Error('The session list did not reveal the copied legacy session');
+}
+
 function launchBrowser(executablePath: string, home: string): Promise<Browser> {
   const ciWithoutSandbox = process.argv.includes('--ci-no-browser-sandbox');
   if (ciWithoutSandbox && (process.env.CI !== 'true' || process.platform !== 'linux')) {
@@ -1077,13 +1089,17 @@ async function main(): Promise<void> {
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
     const legacyOpened = await openPage(browser, host);
-    const legacyListed = await listedSessionIds(legacyOpened.page);
+    let legacyListed = await listedSessionIds(legacyOpened.page);
+    const listDeadline = Date.now() + 30_000;
+    while (!legacyListed.ids.includes(legacy.id) && Date.now() < listDeadline) {
+      await legacyOpened.page.waitForTimeout(250);
+      legacyListed = await listedSessionIds(legacyOpened.page);
+    }
     assert.ok(legacyListed.ids.includes(legacy.id),
       `Copied V2 session is absent from Host session/list: HTTP ${legacyListed.status}, ` +
       `listed=${legacyListed.ids.length}, code=${legacyListed.errorCode ?? 'none'}, ` +
       `hostErrors=${host.errorCount()}`);
-    const legacyRow = legacyOpened.page.locator(`[data-row-key="session:${legacy.id}"]`);
-    await legacyRow.waitFor({ timeout: 30_000 });
+    const legacyRow = await revealSessionRow(legacyOpened.page, legacy.id);
     await legacyRow.click();
     assert.equal(await copiedSessionId(legacyOpened.page), legacy.id,
       'Web opened the copied legacy session under another ID');
@@ -1104,8 +1120,7 @@ async function main(): Promise<void> {
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
     const migratedOpened = await openPage(browser, host);
-    const migratedRow = migratedOpened.page.locator(`[data-row-key="session:${legacy.id}"]`);
-    await migratedRow.waitFor({ timeout: 30_000 });
+    const migratedRow = await revealSessionRow(migratedOpened.page, legacy.id);
     await migratedRow.click();
     assert.equal(await copiedSessionId(migratedOpened.page), legacy.id,
       'Web reopened the migrated session under another ID');
