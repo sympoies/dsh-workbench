@@ -43,7 +43,7 @@ pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chrom
 ```
 
 The script builds and packs the Web plugin, installs Web and patched TUI
-profiles in a disposable DSH home, and runs six sessions against authenticated
+profiles in a disposable DSH home, and runs seven sessions against authenticated
 local mock LLM servers. Through a native pseudoterminal provided by the pinned
 development-only `node-pty` package, it creates and renames a TUI session,
 stops TUI, then checks that session's exact ID, title, prompt, and answer in
@@ -60,6 +60,9 @@ Web, checks the durable Session V4 attachment reference, resumes the exact
 session in TUI, verifies the continued model request includes the image, and
 reopens the same image in Web. The fixture, profiles, and mock endpoints are
 removed afterward. Package installation is isolated from caller credentials.
+The seventh session is a synthetic copied Session V2 archive: Web reads the
+historical exchange, TUI continues it under the same ID into Session V4, and
+Web reopens the result. This does not exercise a real user's DSH home.
 Local Chromium sandboxing remains enabled; the Linux GitHub-hosted CI runner
 uses an explicit test-only exception because its browser sandbox cannot initialize.
 The fixture does not establish acceptance for existing user homes or all

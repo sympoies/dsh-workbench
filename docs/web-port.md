@@ -37,7 +37,7 @@ The packaged plugin loaded without page errors in a disposable native Web
 profile on the pinned DSH runtime. CI builds the pinned DSH Web frontend with
 `pnpm run build:web` and checks `apps/web/dist/index.html` before Chromium.
 The [browser acceptance script](../tests/web-browser-acceptance.ts) uses a local
-mock LLM across six sessions. It checks isolated histories and copied IDs,
+mock LLM across seven sessions. It checks isolated histories and copied IDs,
 exercises a pending turn, a tool approval and
 rejection, and a provider error. It restarts the Web Host and reopens the
 initial Web sessions, including the settled tool results and failed turn. It
@@ -51,7 +51,9 @@ cannot satisfy it. The script
 requires explicit paths to the pinned DSH executable and a Chromium executable;
 see [development instructions](../DEVELOPMENT.md). CI runs this native browser
 test on Linux x64 and macOS arm64; the [six-session image handoff run](https://github.com/sympoies/dsh-workbench/actions/runs/36295265939)
-passed both platforms. Its Chromium archives are pinned by URL and
+passed both platforms. The seventh session checks copied V2 text history,
+exact-ID TUI continuation to V4, and Web reopening on both targets. Its
+Chromium archives are pinned by URL and
 SHA-256 in [the browser CI contract](../compatibility/browser-ci.json); the
 installer verifies the Playwright package and Chromium revision, then checks
 the archive digest before extracting and executing it. Installed graph

@@ -590,11 +590,20 @@ async function revealSessionRow(page: Page, id: string): Promise<Locator> {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (await row.isVisible()) return row;
+    const workspace = page.locator('[data-row-key^="workspace:"][aria-expanded="false"]').first();
+    if (await workspace.isVisible()) await workspace.click();
     const expand = page.locator('button[data-row-key^="overflow:"][aria-expanded="false"]').first();
     if (await expand.isVisible()) await expand.click();
     await page.waitForTimeout(250);
   }
-  throw new Error('The session list did not reveal the copied legacy session');
+  const state = await page.evaluate(() => ({
+    sessionRows: document.querySelectorAll('[data-row-key^="session:"]').length,
+    workspaceRows: document.querySelectorAll('[data-row-key^="workspace:"]').length,
+    collapsedWorkspaces: document.querySelectorAll('[data-row-key^="workspace:"][aria-expanded="false"]').length,
+    hiddenOverflow: document.querySelectorAll('button[data-row-key^="overflow:"][aria-expanded="false"]').length,
+    alerts: document.querySelectorAll('[role="alert"]').length,
+  }));
+  throw new Error(`The session list did not reveal the copied legacy session: ${JSON.stringify(state)}`);
 }
 
 function launchBrowser(executablePath: string, home: string): Promise<Browser> {
@@ -1085,6 +1094,7 @@ async function main(): Promise<void> {
     await stopHost(host.child);
     host = undefined;
 
+    const v4BeforeLegacy = new Set(sessionLogs(join(home, 'sessions')));
     const legacy = seedLegacyV2Copy(fixture, home, workspace, imageId);
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
@@ -1098,7 +1108,7 @@ async function main(): Promise<void> {
     assert.ok(legacyListed.ids.includes(legacy.id),
       `Copied V2 session is absent from Host session/list: HTTP ${legacyListed.status}, ` +
       `listed=${legacyListed.ids.length}, code=${legacyListed.errorCode ?? 'none'}, ` +
-      `hostErrors=${host.errorCount()}`);
+      `hostErrors=${host.errorCount()}, diagnostic=${host.diagnostic()}`);
     const legacyRow = await revealSessionRow(legacyOpened.page, legacy.id);
     await legacyRow.click();
     assert.equal(await copiedSessionId(legacyOpened.page), legacy.id,
@@ -1117,6 +1127,8 @@ async function main(): Promise<void> {
     host = undefined;
 
     await continueLegacyV2InTui(dsh, fixture, home, agents, workspace, legacy, mock, apiKey);
+    assert.deepEqual(sessionLogs(join(home, 'sessions')).filter(path => !v4BeforeLegacy.has(path)),
+      [legacy.current], 'Legacy handoff created another Session V4 archive');
     host = await startHost(dsh, home, agents, workspace, mock.baseURL, apiKey);
     browser = await launchBrowser(browserBin, home);
     const migratedOpened = await openPage(browser, host);
