@@ -20,8 +20,13 @@ runtime-kit has no published npm release at this revision, so its Git tree is
 its source integrity identity. The contract records the upstream package
 version `0.0.0` for runtime-kit; that is not a Workbench release version.
 These identities were checked on 2026-09-26. Runtime-kit compatibility and
-managed-worktree recovery passed its owner CI; Web/TUI composition and
-cross-interface session handoff remain candidate gates.
+managed-worktree recovery passed its owner CI. The candidate's native Web/TUI
+browser fixture passed settled text and PNG handoff on Linux x64 and macOS
+arm64 in [PR #44](https://github.com/sympoies/dsh-workbench/pull/44). The exact
+combined profile also passed frozen installation and runtime-kit doctor on both
+platforms. Governed Bash acceptance in that installed profile, installer
+mismatch rejection, and the broader cross-interface release gate remain
+pending; this evidence does not accept the version tuple.
 
 The [combined candidate profile procedure](combined-profile.md) stages the
 patched DSH workspace dependency closure and TUI before runtime-kit setup.
