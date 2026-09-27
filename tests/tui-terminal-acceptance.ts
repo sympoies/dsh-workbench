@@ -26,7 +26,7 @@ for (const name of ['DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR']) {
 }
 const profileName = installedHome ? 'workbench' : 'dsh-tui';
 const scenarios = [
-  { name: 'allow', decision: '\r', outcome: 'allowed-once', toolOutput: 'TUI_ALLOW_TOOL_OK',
+  { name: 'allow', decision: '1', outcome: 'allowed-once', toolOutput: 'TUI_ALLOW_TOOL_OK',
     answer: 'TUI_ALLOW_FINISHED', error: false },
   { name: 'reject', decision: '\x1b', outcome: 'rejected', toolOutput: 'TUI_REJECT_TOOL_OUTPUT',
     answer: 'TUI_REJECT_FINISHED', error: true },

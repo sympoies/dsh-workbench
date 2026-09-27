@@ -98,9 +98,11 @@ runtime-kit launcher wrapper and pass
 `--runtime-env-file /absolute/path/to/terminal-environment.json`; the runtime
 verification script marks only its disposable DSH home and emits the matching
 environment file for this use. Both paths use a native pseudoterminal through
-the development-only `node-pty` package. The acceptance drives Allow once and
-Reject through two real TTY sessions against an authenticated local mock, and
-checks the final Session V4 archive, approval, tool result, completed turn,
+the development-only `node-pty` package. The acceptance drives Allow once with
+the TUI's explicit `1` shortcut and Reject with `Esc` through two real TTY
+sessions against an authenticated local mock. `Enter` submits the current focus,
+which can be Reject. The acceptance checks the final Session V4 archive,
+approval, tool result, completed turn,
 and whether the allowed or rejected command actually ran. It also creates a
 72-turn conversation beyond the TUI's initial rendered-row cap, exits,
 resumes its exact ID, submits another turn, and checks its unique title and
