@@ -148,6 +148,26 @@ ${spawnCall[0]}
 assert.equal(instrumentedNilsClient.split('function workbenchPolicyStage(stage)').length, 2,
   'finish-line diagnostics must retain exactly one stage writer');
 writeFileSync(nilsClientPath, instrumentedNilsClient);
+instrument(tuiRoot, 'components/approvals/ApprovalPanel.js', [
+  ["if (key.escape || (key.ctrl && input === 'c')) {", 'tui-panel-key', 'before'],
+]);
+const tuiPanelPath = join(tuiRoot, 'components/approvals/ApprovalPanel.js');
+let tuiPanel = readFileSync(tuiPanelPath, 'utf8');
+const panelKeyProbe = "workbenchPolicyStage('tui-panel-key:before');";
+assert.equal(tuiPanel.split(panelKeyProbe).length, 2, 'TUI panel key probe must occur once');
+tuiPanel = tuiPanel.replace(panelKeyProbe, `workbenchPolicyStage('tui-panel-key:'
+  + (input === '1' ? 'one' : input === '2' ? 'two'
+    : key.escape ? 'escape' : key.ctrl && input === 'c' ? 'ctrl-c'
+      : isPlainReturnInput(input, key) ? 'enter' : 'other'));`);
+for (const [statement, outcome] of [
+  ["onDecide('rejected');", 'rejected'],
+  ['onDecide(OUTCOMES[Number(input) - 1]);', 'numbered'],
+  ['onDecide(OUTCOMES[focusIndex]);', 'focused'],
+] as const) {
+  assert.equal(tuiPanel.split(statement).length, 2, `TUI panel ${outcome} decision must occur once`);
+  tuiPanel = tuiPanel.replace(statement, `workbenchPolicyStage('tui-panel-decide:${outcome}');\n${statement}`);
+}
+writeFileSync(tuiPanelPath, tuiPanel);
 const tuiPluginPath = join(tuiRoot, 'dsh-adapter/plugin.js');
 let tuiPlugin = readFileSync(tuiPluginPath, 'utf8');
 const tuiApprovalStoreCreation = 'const approvalStore = new ApprovalStore(adapterRuntimeFor(ctx));';
@@ -179,6 +199,18 @@ writeFileSync(tuiPluginPath, marker + tuiPlugin);
 instrument(tuiRoot, 'dsh-adapter/approvals.js', [
   ['this.queue.push(pending);\n            this.startNext();', 'tui-approval-park'],
 ]);
+const approvalStorePath = join(tuiRoot, 'dsh-adapter/approvals.js');
+let approvalStore = readFileSync(approvalStorePath, 'utf8');
+for (const [statement, stage] of [
+  ['decide(outcome) {\n        const pending = this.active;', 'decide'],
+  ['settleAll(outcome) {\n        const active = this.active;', 'settle'],
+] as const) {
+  assert.equal(approvalStore.split(statement).length, 2, `TUI approval store ${stage} must occur once`);
+  approvalStore = approvalStore.replace(statement, statement.replace('{\n', `{\n        workbenchPolicyStage('tui-store-${stage}:'
+            + (['allowed-once', 'rejected', 'cancelled', 'unavailable'].includes(outcome)
+                ? outcome : 'invalid'));\n`));
+}
+writeFileSync(approvalStorePath, approvalStore);
 // DSH resolves in-box bundles from its installation, which is this exact
 // source checkout in the acceptance harness. The CLI declares dsh-base as a
 // workspace dependency, but dsh-base owns the approval/Cordis importer graph.
