@@ -383,13 +383,15 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly');
     const events = readEvents(logPath, { strict: true });
     const ended = events.find(event => event.type === 'turn/end');
-    assert.equal((ended?.data?.reason as { kind?: string } | undefined)?.kind, 'completed');
+    const decided = events.find(event => event.type === 'approval/decided');
+    const result = events.find(event => event.type === 'tool/result');
+    assert.equal((ended?.data?.reason as { kind?: string } | undefined)?.kind, 'completed',
+      `${scenario.name} turn; approval=${String(decided?.data?.outcome ?? 'missing')}; `
+      + `toolResult=${result === undefined ? 'missing' : 'present'}`);
     const finalMessage = events.filter(event => event.type === 'assistant/message').at(-1)?.data?.message as
       { content?: Array<{ type?: string; text?: string }> } | undefined;
     assert.ok(finalMessage?.content?.some(block => block.type === 'text' && block.text === scenario.answer),
       'TUI did not persist the expected final answer');
-    const decided = events.find(event => event.type === 'approval/decided');
-    const result = events.find(event => event.type === 'tool/result');
     assert.equal(decided?.data?.outcome, scenario.outcome);
     assert.equal((result?.data?.message as { isError?: boolean } | undefined)?.isError, scenario.error);
     const content = JSON.stringify((result?.data?.message as { content?: unknown } | undefined)?.content);
