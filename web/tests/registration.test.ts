@@ -50,9 +50,9 @@ test('built Client module registers an additive DSH header action', () => {
   const html = renderToStaticMarkup(createElement(component, { sessionId: 'session-one' }));
   assert.match(html, /Copy Session ID/);
   assert.doesNotMatch(html, /session-one/);
-  assert.ok(html.includes(workbenchIdentity.contractDigest));
+  assert.ok(html.includes(workbenchIdentity.graphDigest));
+  assert.doesNotMatch(html, /\((?:candidate|accepted)\)/);
   assert.ok(html.includes(workbenchIdentity.release.version));
-  assert.ok(html.includes(`(${workbenchIdentity.status})`));
   assert.ok(html.includes(`DSH ${workbenchIdentity.components.dsh.package.version}`));
   assert.ok(html.includes(workbenchIdentity.components.runtimeKit.source.commit));
   assert.ok(html.includes(`TUI ${workbenchIdentity.components.tui.package.version}`));

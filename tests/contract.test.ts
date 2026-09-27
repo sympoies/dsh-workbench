@@ -59,9 +59,9 @@ test('candidate contract is valid but cannot be activated', () => {
   assert.match(activation.stderr, /candidate/i);
 });
 
-test('first release targets only Linux x64 and macOS arm64', () => {
+test('first release targets Linux x64 while macOS remains a later version', () => {
   const contract = JSON.parse(readFileSync(source, 'utf8')) as WorkbenchContract;
-  assert.deepEqual(contract.runtime.platforms, ['linux-x64', 'darwin-arm64']);
+  assert.deepEqual(contract.runtime.platforms, ['linux-x64']);
 });
 
 test('pins have immutable source and integrity identities', () => {
@@ -187,7 +187,7 @@ test('a copied contract rejects a changed or missing patch in its own tree', () 
 
 test('platform and toolchain changes require a new Workbench version', () => {
   for (const change of ([
-    contract => contract.runtime.platforms.pop(),
+    contract => { contract.runtime.platforms = ['darwin-arm64']; },
     contract => { contract.runtime.pnpm = '11.25.0'; },
     contract => { contract.components.tui.toolchain.pnpm = '11.22.0'; },
     contract => { contract.components.tui.peerOverrides!.react = '19.2.0'; },

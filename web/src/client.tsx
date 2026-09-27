@@ -8,11 +8,11 @@ import { workbenchIdentity } from './identity.js';
 
 type HandoffActionProps = PropsRuntime<'conversation.session.header.utilities'>;
 const versionSummary = [
-  `Workbench ${workbenchIdentity.release.version} (${workbenchIdentity.status})`,
+  `Workbench ${workbenchIdentity.release.version}`,
   `DSH ${workbenchIdentity.components.dsh.package.version}`,
   `runtime-kit ${workbenchIdentity.components.runtimeKit.source.commit}`,
   `TUI ${workbenchIdentity.components.tui.package.version}`,
-  workbenchIdentity.contractDigest,
+  workbenchIdentity.graphDigest,
 ].join(' | ');
 
 /** Copy only the opaque Session identity; the other interface may resume after Web Host exit. */

@@ -49,7 +49,7 @@ test('Web manifest and DSH catalog are derived from the single Workbench contrac
   }
 });
 
-test('Web identity is generated from the complete contract and rejects stale metadata', () => {
+test('Web identity authenticates the immutable graph and rejects stale metadata', () => {
   const stage = mkdtempSync(join(tmpdir(), 'dsh-workbench-web-identity-'));
   try {
     for (const dir of ['scripts', 'src', 'compatibility', 'web/src']) mkdirSync(join(stage, dir), { recursive: true });
@@ -62,9 +62,22 @@ test('Web identity is generated from the complete contract and rejects stale met
     assert.equal(run('write').status, 0);
     const contractPath = join(stage, 'compatibility/workbench.json');
     const contract = JSON.parse(readFileSync(contractPath, 'utf8')) as WorkbenchContract;
-    const digest = createHash('sha256').update(JSON.stringify(contract)).digest('hex');
     const identity = readFileSync(join(stage, 'web/src/identity.ts'), 'utf8');
-    assert.match(identity, new RegExp(`sha256:${digest}`));
+    const parsed = JSON.parse(identity.slice(identity.indexOf('=') + 1, identity.lastIndexOf(' as const;')));
+    const { graphDigest, ...graph } = parsed;
+    assert.equal(graphDigest, `sha256:${createHash('sha256').update(JSON.stringify(graph)).digest('hex')}`);
+    assert.equal(parsed.schemaVersion, 2);
+    assert.equal('status' in parsed, false);
+    assert.equal('acceptance' in parsed, false);
+    assert.deepEqual(Object.keys(graph).sort(), ['components', 'release', 'runtime', 'schemaVersion']);
+    assert.deepEqual(graph.release, contract.release);
+    assert.deepEqual(graph.runtime, contract.runtime);
+    assert.deepEqual(Object.keys(graph.components).sort(), Object.keys(contract.components).sort());
+    for (const [name, component] of Object.entries(contract.components)) {
+      assert.deepEqual(graph.components[name],
+        Object.fromEntries(Object.entries(component).filter(([key]) => key !== 'status')),
+        `${name} immutable fields are not completely authenticated`);
+    }
     assert.match(identity, new RegExp(contract.release.version.replaceAll('.', '\\.')));
     for (const component of Object.values(contract.components)) {
       assert.ok(identity.includes(component.source.commit));
@@ -78,6 +91,36 @@ test('Web identity is generated from the complete contract and rejects stale met
     assert.match(stale.stderr, /identity differs/);
     assert.equal(run('write').status, 0);
     assert.equal(run('check').status, 0);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
+});
+
+test('acceptance promotion preserves the exact Web artifact identity', () => {
+  const stage = mkdtempSync(join(tmpdir(), 'dsh-workbench-web-promotion-'));
+  try {
+    for (const dir of ['scripts', 'src', 'compatibility', 'web/src']) mkdirSync(join(stage, dir), { recursive: true });
+    for (const file of ['scripts/web-metadata.mjs', 'src/web-metadata.ts',
+      'compatibility/workbench.json', 'web/package.json', 'pnpm-workspace.yaml']) {
+      copyFileSync(join(root, file), join(stage, file));
+    }
+    const run = () => spawnSync(process.execPath,
+      [join(stage, 'scripts/web-metadata.mjs'), 'write'], { encoding: 'utf8' });
+    assert.equal(run().status, 0);
+    const identityPath = join(stage, 'web/src/identity.ts');
+    const candidate = readFileSync(identityPath, 'utf8');
+    const path = join(stage, 'compatibility/workbench.json');
+    const contract = JSON.parse(readFileSync(path, 'utf8')) as WorkbenchContract;
+    contract.status = 'accepted';
+    for (const component of Object.values(contract.components)) component.status = 'accepted';
+    Object.values(contract.acceptance).forEach((value, index) => {
+      value.status = 'passed';
+      value.evidence = [{ platform: 'linux-x64', url: `https://github.com/sympoies/dsh-workbench/pull/${100 + index}` }];
+    });
+    writeFileSync(path, JSON.stringify(contract));
+    assert.equal(run().status, 0);
+    assert.equal(readFileSync(identityPath, 'utf8'), candidate,
+      'Promoting the same tested graph changes Web artifact bytes');
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }

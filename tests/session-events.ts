@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-export type SessionEvent = { type: string; data?: Record<string, unknown> };
+export type SessionEvent = { type: string; cwd?: string; data?: Record<string, unknown> };
 
 export function readEvents(path: string, options: { strict?: boolean } = {}): SessionEvent[] {
   const result = spawnSync('zstdcat', [path], { encoding: 'utf8', timeout: 5_000, maxBuffer: 32_000_000 });
