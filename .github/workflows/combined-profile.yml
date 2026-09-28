@@ -235,6 +235,7 @@ jobs:
           import { createHash } from 'node:crypto';
           import { mkdirSync, readFileSync, copyFileSync, writeFileSync } from 'node:fs';
           import { join, basename } from 'node:path';
+          import { inspectPeerArtifact } from './src/package-artifact.ts';
           const root = process.argv[2];
           const contract = JSON.parse(readFileSync('compatibility/workbench.json'));
           const cli = contract.components.dsh.package;
@@ -253,10 +254,12 @@ jobs:
             || staged.data.packages.length !== 80) throw new Error('Verified patched closure required');
           let workspace = 'overrides:\n';
           for (const row of receipt.data.packages) {
-            // Copy the bytes already authenticated by both independent stagers.
+            // The reviewed repack changes tar bytes while retaining the pinned package content.
             const source = join(root, 'dsh-home/profiles/workbench/artifacts', basename(row.path));
             const archive = readFileSync(source);
-            if (createHash('sha256').update(archive).digest('hex') !== row.tarball_sha256) {
+            const artifact = inspectPeerArtifact(archive);
+            if (artifact.name !== row.name || artifact.version !== row.version
+              || artifact.artifactSha256 !== row.artifact_sha256) {
               throw new Error('Staged archive drift');
             }
             copyFileSync(source, join(artifacts, basename(row.path)));
