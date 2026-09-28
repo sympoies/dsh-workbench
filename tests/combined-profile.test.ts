@@ -175,14 +175,14 @@ test('portable profile normalizes authenticated workspace tarballs across gzip m
   }
 });
 
-test('normalized workspace tarballs ignore member order', () => {
+test('normalized workspace tarballs ignore member order and inert manifest order', () => {
   const file = tarEntry('package/lib/client.js', Buffer.from('export const same = true;'));
   const first = gzipSync(Buffer.concat([
     tarEntry('package/package.json', Buffer.from('{"name":"@deepseek-ai/cordis","version":"4.0.4"}')),
     file, Buffer.alloc(1024),
   ]));
   const second = gzipSync(Buffer.concat([
-    file, tarEntry('package/package.json', Buffer.from('{"name":"@deepseek-ai/cordis","version":"4.0.4"}')),
+    file, tarEntry('package/package.json', Buffer.from('{ "version": "4.0.4", "name": "@deepseek-ai/cordis" }')),
     Buffer.alloc(1024),
   ]));
   assert.equal(inspectPeerArtifact(first).artifactSha256, inspectPeerArtifact(second).artifactSha256);

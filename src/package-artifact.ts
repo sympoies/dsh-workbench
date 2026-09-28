@@ -18,6 +18,17 @@ function canonicalJson(value: unknown): unknown {
   return value;
 }
 
+function stableManifest(value: unknown, preserveOrder = false): unknown {
+  if (Array.isArray(value)) return value.map(child => stableManifest(child, preserveOrder));
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value);
+    if (!preserveOrder) entries.sort(([left], [right]) => left.localeCompare(right));
+    return Object.fromEntries(entries.map(([key, child]) => [key, stableManifest(child,
+      preserveOrder || ['exports', 'imports', 'typesVersions', 'browser'].includes(key))]));
+  }
+  return value;
+}
+
 function textField(header: Buffer, offset: number, length: number): string {
   const zero = header.indexOf(0, offset);
   const end = zero >= offset && zero < offset + length ? zero : offset + length;
@@ -110,10 +121,11 @@ function tarField(header: Buffer, offset: number, width: number, value: number):
   header.write(`${octal.padStart(width - 1, '0')}\0`, offset, width, 'ascii');
 }
 
-function stableEntry(entry: PeerEntry): Buffer {
-  // Package manifests can contain order-sensitive conditional exports.
-  // Repack archive metadata, but never rewrite an authenticated member payload.
-  const bytes = entry.bytes;
+function stableEntry(entry: PeerEntry, manifest: unknown): Buffer {
+  // Normalize inert manifest formatting while preserving condition order in
+  // exports/imports and other resolution maps. Other member bytes are unchanged.
+  const bytes = entry.path === 'package/package.json'
+    ? Buffer.from(`${JSON.stringify(stableManifest(manifest))}\n`) : entry.bytes;
   const header = Buffer.alloc(512);
   const pathBytes = Buffer.byteLength(entry.path);
   if (pathBytes <= 100) header.write(entry.path, 0, 'utf8');
@@ -148,10 +160,10 @@ function stableEntry(entry: PeerEntry): Buffer {
 
 /** Repack authenticated workspace content into stable bytes for a frozen lockfile. */
 export function normalizePeerArtifact(tarball: Buffer): Buffer {
-  const { entries } = parsePeerArtifact(tarball);
+  const { entries, manifest } = parsePeerArtifact(tarball);
   const tar = Buffer.concat([...entries.sort((left, right) =>
     left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
-    .map(stableEntry), Buffer.alloc(1024)]);
+    .map(entry => stableEntry(entry, manifest)), Buffer.alloc(1024)]);
   const normalized = gzipSync(tar, { level: 0 });
   const before = inspectPeerArtifact(tarball);
   const after = inspectPeerArtifact(normalized);

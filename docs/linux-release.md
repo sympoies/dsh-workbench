@@ -73,7 +73,8 @@ is also checked against that Git commit. CI installs from this exact lockfile
 without resolving or deduplicating a new dependency graph.
 Before creating that lockfile, Workbench verifies the runtime-kit peer-pack
 receipt and canonical package digests, then repacks workspace and Web archives
-in a deterministic tar/gzip form without rewriting package member bytes.
+in a deterministic tar/gzip form. Non-manifest member bytes remain unchanged;
+the package manifest canonicalization preserves the order of resolution maps.
 Registry archives retain their pinned raw
 integrities. This prevents build-host tar metadata from changing the file
 integrities recorded by the frozen lockfile.
