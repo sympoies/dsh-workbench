@@ -250,10 +250,10 @@ the session list API returned all five. The restored pre-upgrade copy matched
 the original byte for byte. Per-session evidence stays in the owner's private
 record.
 
-Portable installation, copy-only upgrade and rollback, and publication passed
-their release gates under
-[#7](https://github.com/sympoies/dsh-workbench/issues/7),
-[#9](https://github.com/sympoies/dsh-workbench/issues/9), and
-[#8](https://github.com/sympoies/dsh-workbench/issues/8).
+Portable installation, copy-only upgrade and rollback, and publication have
+passed ([#9](https://github.com/sympoies/dsh-workbench/issues/9)), after the
+public source and artifact audit
+([#8](https://github.com/sympoies/dsh-workbench/issues/8)). Owner path mapping
+is out of scope; see [Workspace boundary](#workspace-boundary).
 Existing homes must be tested on copies with a rollback plan before any
 private deployment changes.

@@ -81,8 +81,8 @@ backup. Native Web reads the historical exchange, TUI resumes that exact ID
 and continues it into Session V4, and Web reopens the continued conversation.
 The test checks that the original archive and backup retain their bytes and no
 second V4 archive is created. This is copy-only migration evidence for a
-synthetic fixture; existing user homes and live handoff still need the broader
-[#7](https://github.com/sympoies/dsh-workbench/issues/7) gate.
+synthetic fixture. A real existing home and installed live handoff were
+accepted later; see [session handoff](session-handoff.md).
 
 The [combined candidate profile procedure](combined-profile.md) stages the
 patched DSH workspace dependency closure and TUI before runtime-kit setup.
