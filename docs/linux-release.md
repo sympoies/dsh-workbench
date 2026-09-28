@@ -257,7 +257,10 @@ agents. DSH runs with its file sandbox disabled
 the launchers keep the caller's `XDG_CONFIG_HOME`, `XDG_STATE_HOME`,
 `CODEX_HOME`, and `CLAUDE_CONFIG_DIR`. The agent therefore uses the machine's
 own Git identity and signing, GitHub CLI login, and other tool configuration
-without extra grants. The install-private homes still isolate runtime-kit
+without extra grants. In this default mode DSH passes its whole environment to
+tool commands, so they can read the owner's DeepSeek credential from the owner
+environment and every other inherited variable, as with any host agent. The
+install-private homes still isolate runtime-kit
 setup, and the pinned hook policy, agent-docs, and state paths stay explicit.
 Isolation belongs to a container or an explicit sandbox, not to an edited
 process environment.
