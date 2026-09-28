@@ -172,7 +172,8 @@ export function advanceDraftRelease(input: { tag: string; notes: string; sourceC
   if (!published || published.id !== id || published.draft || published.immutable !== true
     || published.tag_name !== input.tag
     || published.name !== 'DSH Workbench 0.1.0 — Linux x64'
-    || published.prerelease !== false || published.html_url !== release.html_url
+    || published.prerelease !== false
+    || !published.html_url?.endsWith(`/releases/tag/${input.tag}`)
     || published.body !== input.notes || published.assets?.length !== input.expected.size
     || reviewReleaseAssets(published.assets, input.expected).length
     || releaseForTag(operations.list(), input.tag)?.id !== id) {
