@@ -192,7 +192,7 @@ Keep:
 - an artifact that a pending next layer must consume, named in the receipt,
   until that layer completes.
 
-Delete before finishing:
+Delete from the run directory before finishing:
 
 - dependency trees and package stores: `node_modules`, `.pnpm-store`, npm,
   pnpm, and uv caches, `.venv`, and `uv-env`;
@@ -207,8 +207,17 @@ Delete before finishing:
   tree when the next attempt starts, and keep only the listing and digest of
   the accepted one;
 - isolated `HOME`, `AGENT_HOME`, DSH home, and browser profile directories.
-  These also hold copied provider auth, so they must not outlive the run;
+  These also hold copied provider auth, so delete them as soon as no pending
+  layer needs them;
 - traces and videos of passing browser runs, core dumps, and heap snapshots.
+
+The pending-layer exception overrides every item above: a checkout, isolated
+home, installed tree, or candidate archive that the receipt names as input to a
+pending attestation, resume, or publication review stays until that layer
+completes. On handoff, keep what the receiving agent needs to resume and name
+it in the handoff. The rule covers only run directories the agent created;
+never delete shared host caches such as `~/.npm`, the pnpm store, or
+`~/.cache/uv`, managed worktrees, or another agent's runs.
 
 Measured on the shared development host: workbench runs held 31 GB after one
 month. One Linux portable release delivery kept nine superseded
