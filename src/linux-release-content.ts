@@ -339,7 +339,10 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
     ['profile/THIRD_PARTY_NOTICES.md', sourceBlob('THIRD_PARTY_NOTICES.md')],
     ['profile/patches/tui-rename.patch', sourceBlob(contract.components.tui.compatibilityPatch!.path)],
     ['profile/cordis.yml', '[]\n'],
-    ['profile/cordis.patch.yml', "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"],
+    // Same bytes as WORKBENCH_PROFILE_PATCH; kept inline because combined-profile.ts
+    // is not an installer source shipped in the release.
+    ['profile/cordis.patch.yml', "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"
+      + '- id: approval\n  config:\n    policy: ask\n'],
     ['profile/workbench-tui/LICENSE', sourceBlob('LICENSE')],
     ['profile/workbench-tui/src/launch-workbench.ts', sourceBlob('src/launch-workbench.ts')],
     ['profile/workbench-tui/scripts/launch-workbench-tui.ts',
