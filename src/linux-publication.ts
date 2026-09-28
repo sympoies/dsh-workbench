@@ -11,7 +11,8 @@ type Assets = { archiveSha256: string; carrierArchiveSha256: string };
 const digest = /^[a-f0-9]{64}$/;
 const commit = /^[a-f0-9]{40}$/;
 
-export function assertPublicationIdentity(packet: PublicationPacket, source: Source, assets: Assets):
+export function assertPublicationIdentity(packet: PublicationPacket, source: Source, assets: Assets,
+  releaseVersion: string):
   asserts packet is PublicationPacket & {
     release: { releaseVersion: string; archiveSha256: string; manifestSha256: string };
     carrier: { releaseVersion: string; archiveSha256: string; manifestSha256: string;
@@ -21,8 +22,8 @@ export function assertPublicationIdentity(packet: PublicationPacket, source: Sou
   const release = packet.release;
   const carrier = packet.carrier;
   if (packet.schemaVersion !== 'dsh-workbench.linux-release-packet.v1'
-    || release?.releaseVersion !== '0.1.0' || carrier?.releaseVersion !== '0.1.0') {
-    throw new Error('publication packet is not the first Linux release');
+    || release?.releaseVersion !== releaseVersion || carrier?.releaseVersion !== releaseVersion) {
+    throw new Error('publication packet is not the contract release');
   }
   if (typeof release.archiveSha256 !== 'string' || !digest.test(release.archiveSha256)
     || typeof release.manifestSha256 !== 'string' || !digest.test(release.manifestSha256)
@@ -137,7 +138,7 @@ export function releaseForTag(releases: ReleaseRecord[], tag: string): ReleaseRe
   return matches[0] ?? null;
 }
 
-export function advanceDraftRelease(input: { tag: string; notes: string; sourceCommit: string;
+export function advanceDraftRelease(input: { tag: string; title: string; notes: string; sourceCommit: string;
   expected: ReadonlyMap<string, { path: string; digest: string }> }, operations: {
     list: () => ReleaseRecord[];
     get: (id: number) => ReleaseRecord;
@@ -151,7 +152,7 @@ export function advanceDraftRelease(input: { tag: string; notes: string; sourceC
     release = releaseForTag(operations.list(), input.tag);
   }
   if (!release || release.tag_name !== input.tag
-    || release.name !== 'DSH Workbench 0.1.0 — Linux x64' || release.prerelease !== false
+    || release.name !== input.title || release.prerelease !== false
     || release.body !== input.notes
     || (release.target_commitish && !['main', input.sourceCommit].includes(release.target_commitish))) {
     throw new Error('release identity or reviewed notes differ');
@@ -171,7 +172,7 @@ export function advanceDraftRelease(input: { tag: string; notes: string; sourceC
   const published = operations.get(id);
   if (!published || published.id !== id || published.draft || published.immutable !== true
     || published.tag_name !== input.tag
-    || published.name !== 'DSH Workbench 0.1.0 — Linux x64'
+    || published.name !== input.title
     || published.prerelease !== false
     || !published.html_url?.endsWith(`/releases/tag/${input.tag}`)
     || published.body !== input.notes || published.assets?.length !== input.expected.size

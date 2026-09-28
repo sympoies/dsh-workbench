@@ -31,16 +31,39 @@ function nativeOnly() {
 test('publication binds the exact clean merged source and both assets', () => {
   assertPublicationIdentity(packet, { commit: 'c'.repeat(40), tree: 'd'.repeat(40),
     branch: 'main', clean: true, remoteMain: 'c'.repeat(40) },
-  { archiveSha256: digest('a'), carrierArchiveSha256: digest('f') });
+  { archiveSha256: digest('a'), carrierArchiveSha256: digest('f') }, '0.1.0');
   assert.throws(() => assertPublicationIdentity(packet, { commit: 'c'.repeat(40),
     tree: 'd'.repeat(40), branch: 'main', clean: false, remoteMain: 'c'.repeat(40) },
-  { archiveSha256: digest('a'), carrierArchiveSha256: digest('f') }), /clean/);
+  { archiveSha256: digest('a'), carrierArchiveSha256: digest('f') }, '0.1.0'), /clean/);
   assert.throws(() => assertPublicationIdentity(packet, { commit: 'c'.repeat(40),
     tree: 'd'.repeat(40), branch: 'main', clean: true, remoteMain: '1'.repeat(40) },
-  { archiveSha256: digest('a'), carrierArchiveSha256: digest('f') }), /remote main/);
+  { archiveSha256: digest('a'), carrierArchiveSha256: digest('f') }, '0.1.0'), /remote main/);
   assert.throws(() => assertPublicationIdentity(packet, { commit: 'c'.repeat(40),
     tree: 'd'.repeat(40), branch: 'main', clean: true, remoteMain: 'c'.repeat(40) },
-  { archiveSha256: digest('a'), carrierArchiveSha256: digest('0') }), /OCI carrier/);
+  { archiveSha256: digest('a'), carrierArchiveSha256: digest('0') }, '0.1.0'), /OCI carrier/);
+});
+
+test('publication binds the packet to the contract release version', () => {
+  const source = { commit: 'c'.repeat(40), tree: 'd'.repeat(40), branch: 'main', clean: true,
+    remoteMain: 'c'.repeat(40) };
+  const assets = { archiveSha256: digest('a'), carrierArchiveSha256: digest('f') };
+  const later = { ...packet, release: { ...packet.release, releaseVersion: '0.1.1' },
+    carrier: { ...packet.carrier, releaseVersion: '0.1.1' } };
+  assertPublicationIdentity(later, source, assets, '0.1.1');
+  assert.throws(() => assertPublicationIdentity(packet, source, assets, '0.1.1'), /contract release/);
+  assert.throws(() => assertPublicationIdentity({ ...later,
+    carrier: { ...later.carrier, releaseVersion: '0.1.0' } }, source, assets, '0.1.1'), /contract release/);
+  const current = releaseRecord({ name: 'DSH Workbench 0.1.1 — Linux x64', tag_name: 'v0.1.1',
+    html_url: 'https://example.invalid/releases/tag/v0.1.1' });
+  const operations = {
+    list: () => [current],
+    get: () => current,
+    createDraft: () => { throw new Error('unexpected create'); },
+    uploadMissing: () => { throw new Error('unexpected upload'); },
+    publishDraft: () => { current.draft = false; current.immutable = true; },
+  };
+  assert.equal(advanceDraftRelease({ tag: 'v0.1.1', title: 'DSH Workbench 0.1.1 — Linux x64',
+    notes: 'reviewed', sourceCommit: 'c'.repeat(40), expected: nativeOnly() }, operations).tag_name, 'v0.1.1');
 });
 
 test('public receipt is the canonical path-free packet and nothing else', () => {
@@ -118,7 +141,7 @@ test('fresh release creates one draft and publishes that exact release id', () =
       releases[0].html_url = 'https://example.invalid/releases/tag/v0.1.0';
     },
   };
-  const input = { tag: 'v0.1.0', notes: 'reviewed', sourceCommit: 'c'.repeat(40),
+  const input = { tag: 'v0.1.0', title, notes: 'reviewed', sourceCommit: 'c'.repeat(40),
     expected: nativeOnly() };
   const published = advanceDraftRelease(input, operations);
   assert.deepEqual(calls, ['create-draft', 'publish:41']);
@@ -146,7 +169,7 @@ test('publication refuses a second release or a different id for the tag', () =>
         }
       },
     };
-    assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', notes: 'reviewed',
+    assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', title, notes: 'reviewed',
       sourceCommit: 'c'.repeat(40), expected: nativeOnly() }, operations),
     /identity differs|multiple releases/);
   }
@@ -162,7 +185,7 @@ test('published release must report immutable true', () => {
       uploadMissing: () => { throw new Error('unexpected upload'); },
       publishDraft: () => { current.draft = false; current.immutable = immutable; },
     };
-    assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', notes: 'reviewed',
+    assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', title, notes: 'reviewed',
       sourceCommit: 'c'.repeat(40), expected: nativeOnly() }, operations), /identity differs/);
   }
 });
@@ -176,7 +199,7 @@ test('published release must be served at its tag URL', () => {
     uploadMissing: () => { throw new Error('unexpected upload'); },
     publishDraft: () => { current.draft = false; current.immutable = true; },
   };
-  assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', notes: 'reviewed',
+  assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', title, notes: 'reviewed',
     sourceCommit: 'c'.repeat(40), expected: nativeOnly() }, operations), /identity differs/);
 });
 
@@ -198,14 +221,14 @@ test('resume uploads only missing draft assets and refuses mismatches before pub
       calls.push(`publish:${id}`); current.draft = false; current.immutable = true;
     },
   };
-  advanceDraftRelease({ tag: 'v0.1.0', notes: 'reviewed',
+  advanceDraftRelease({ tag: 'v0.1.0', title, notes: 'reviewed',
     sourceCommit: 'c'.repeat(40), expected }, operations);
   assert.deepEqual(calls, ['upload:/private/carrier.tar.gz', 'publish:41']);
   current.draft = true;
   current.immutable = false;
   current.assets[0].digest = `sha256:${digest('0')}`;
   calls.length = 0;
-  assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', notes: 'reviewed',
+  assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', title, notes: 'reviewed',
     sourceCommit: 'c'.repeat(40), expected }, operations), /mismatched/);
   assert.deepEqual(calls, []);
 });
@@ -220,7 +243,7 @@ test('resume refuses unreviewed release title, prerelease metadata or notes', ()
     uploadMissing: () => { throw new Error('unexpected upload'); },
     publishDraft: () => { publishes++; },
   };
-  const input = { tag: 'v0.1.0', notes: 'reviewed', sourceCommit: 'c'.repeat(40),
+  const input = { tag: 'v0.1.0', title, notes: 'reviewed', sourceCommit: 'c'.repeat(40),
     expected: nativeOnly() };
   assert.throws(() => advanceDraftRelease(input, operations), /identity/);
   current.name = title;
@@ -242,7 +265,7 @@ test('notes changed during publication fail the final check', () => {
     publishDraft: () => { current.draft = false; current.immutable = true;
       current.body = 'edited after review'; },
   };
-  assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', notes: 'reviewed',
+  assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', title, notes: 'reviewed',
     sourceCommit: 'c'.repeat(40), expected: nativeOnly() }, operations), /identity differs/);
 });
 
@@ -256,7 +279,7 @@ test('a successful publish followed by a timeout can be verified on retry', () =
     publishDraft: () => { current.draft = false; current.immutable = true;
       throw new Error('simulated timeout after server committed publication'); },
   };
-  const input = { tag: 'v0.1.0', notes: 'reviewed', sourceCommit: 'c'.repeat(40),
+  const input = { tag: 'v0.1.0', title, notes: 'reviewed', sourceCommit: 'c'.repeat(40),
     expected: nativeOnly() };
   assert.throws(() => advanceDraftRelease(input, operations), /simulated timeout/);
   assert.equal(advanceDraftRelease(input, operations).immutable, true);

@@ -146,8 +146,11 @@ admin or maintain permission records explicit approval of that exact source,
 the four artifact digests, the receipt digest, and the release-notes digest in
 an unedited issue #8 comment, `release.sh publish` takes the same arguments
 with another new extraction root and the issue-comment URL. It repeats
-verification, creates a signed `v0.1.0` tag, and publishes the native archive,
-non-runnable OCI carrier, and receipt as GitHub Release assets. It finds the
+verification, creates the signed tag the contract names (`v<release.version>`),
+and publishes the native archive, non-runnable OCI carrier, and receipt as
+GitHub Release assets. The packet, asset names, notes, tag, and release title
+must all carry the contract release version, so a later release repeats the
+same gate with its own identity. It finds the
 release by listing all releases, because GitHub's tag lookup omits drafts, and
 refuses more than one release for the tag. It then uploads, publishes, and
 verifies that release by id, checking every asset digest, the release notes

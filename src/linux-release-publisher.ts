@@ -10,6 +10,12 @@ import { advanceDraftRelease, assertAuditComment, assertImmutableReleaseSetting,
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const canonicalRemote = 'https://github.com/sympoies/dsh-workbench.git';
+// The checkout is proven to be clean canonical main before publication, so its
+// contract names the release being published.
+const { version, tag } = (JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as
+  { release: { version: string; tag: string } }).release;
+const assetStem = `dsh-workbench-linux-x64-${version}`;
+const title = `DSH Workbench ${version} — Linux x64`;
 export async function publishLinuxRelease(args: string[]): Promise<void> {
   const [action, buildInputFile, layout, ociArchive, packetFile, extractionRoot,
     notesFile, auditUrl] = args;
@@ -67,15 +73,15 @@ export async function publishLinuxRelease(args: string[]): Promise<void> {
   };
   const assets = { archiveSha256: await sha256(input.outputArchive),
     carrierArchiveSha256: await sha256(ociArchive) };
-  assertPublicationIdentity(packet, source, assets);
+  assertPublicationIdentity(packet, source, assets, version);
   assertImmutableReleaseSetting(JSON.parse(gh(['api',
     'repos/sympoies/dsh-workbench/immutable-releases'])));
-  if (basename(input.outputArchive) !== 'dsh-workbench-linux-x64-0.1.0.tar.gz'
-    || basename(ociArchive) !== 'dsh-workbench-linux-x64-0.1.0.oci.tar.gz') {
+  if (basename(input.outputArchive) !== `${assetStem}.tar.gz`
+    || basename(ociArchive) !== `${assetStem}.oci.tar.gz`) {
     throw new Error('publication asset names are not canonical');
   }
-  if (!lstatSync(notesFile).isFile() || !readFileSync(notesFile, 'utf8').includes('DSH Workbench 0.1.0')) {
-    throw new Error('release notes do not identify Workbench 0.1.0');
+  if (!lstatSync(notesFile).isFile() || !readFileSync(notesFile, 'utf8').includes(`DSH Workbench ${version}`)) {
+    throw new Error(`release notes do not identify Workbench ${version}`);
   }
   command('/usr/bin/bash', [join(repo, 'scripts/check-publication.sh'), '--artifact', notesFile,
     '--artifact', packetFile]);
@@ -90,7 +96,7 @@ export async function publishLinuxRelease(args: string[]): Promise<void> {
   }
 
   if (action === 'preflight') {
-    process.stdout.write(`${JSON.stringify({ action, tag: 'v0.1.0', source: source.commit,
+    process.stdout.write(`${JSON.stringify({ action, tag, source: source.commit,
       archiveSha256: assets.archiveSha256,
       manifestSha256: packet.release.manifestSha256,
       ociManifestDigest: packet.carrier.manifestDigest,
@@ -111,7 +117,6 @@ export async function publishLinuxRelease(args: string[]): Promise<void> {
   assertAuditComment(packet, { body: audit.body, reviewerRole: reviewer.role_name,
     edited: audit.created_at !== audit.updated_at }, { notesSha256, receiptSha256 });
 
-  const tag = 'v0.1.0';
   const remoteTag = git(['ls-remote', '--tags', canonicalRemote, `refs/tags/${tag}`, `refs/tags/${tag}^{}`]);
   const tagObject = ensureSignedReleaseTag(tag, source.commit, remoteTag, {
     localExists: () => git(['tag', '--list', tag]) !== '',
@@ -130,7 +135,7 @@ export async function publishLinuxRelease(args: string[]): Promise<void> {
   }
   const temp = mkdtempSync(join(dirname(packetFile), '.publication-'));
   try {
-    const receiptAsset = join(temp, 'dsh-workbench-linux-x64-0.1.0.receipt.json');
+    const receiptAsset = join(temp, `${assetStem}.receipt.json`);
     writeFileSync(receiptAsset, receiptBytes, { flag: 'wx', mode: 0o600 });
     const expected = new Map<string, { path: string; digest: string }>([
       [basename(input.outputArchive), { path: input.outputArchive,
@@ -140,12 +145,12 @@ export async function publishLinuxRelease(args: string[]): Promise<void> {
       [basename(receiptAsset), { path: receiptAsset,
         digest: `sha256:${receiptSha256}` }],
     ]);
-    const published = advanceDraftRelease({ tag, notes: notesBytes.toString('utf8'),
+    const published = advanceDraftRelease({ tag, title, notes: notesBytes.toString('utf8'),
       sourceCommit: source.commit, expected }, {
       list: releases,
       get: releaseById,
       createDraft: () => { gh(['release', 'create', tag, input.outputArchive, ociArchive,
-        receiptAsset, '--draft', '--verify-tag', '--title', 'DSH Workbench 0.1.0 — Linux x64',
+        receiptAsset, '--draft', '--verify-tag', '--title', title,
         '--notes-file', notesFile]); },
       // Only one release can carry the tag here, so gh resolves this exact draft.
       uploadMissing: paths => { gh(['release', 'upload', tag, ...paths]); },
