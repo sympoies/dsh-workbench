@@ -260,8 +260,11 @@ test('stages the native Web plugin in the same governed workbench profile', () =
     ]);
     assert.equal(manifest.dependencies['@sympoies/dsh-workbench-web'],
       `file:artifacts/sympoies-dsh-workbench-web-${releaseVersion}.tgz`);
-    assert.match(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'),
-      /name: '@sympoies\/dsh-workbench-web'/);
+    // Registers the Web plugin, and keeps approvals asking when the installed launch
+    // runs DSH as a full host agent (danger-full-access would otherwise imply never).
+    assert.equal(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'),
+      "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"
+      + '- id: approval\n  config:\n    policy: ask\n');
     assert.deepEqual(readFileSync(join(profile, `artifacts/sympoies-dsh-workbench-web-${releaseVersion}.tgz`)),
       normalizePeerArtifact(readFileSync(webArchive)));
   } finally {

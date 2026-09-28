@@ -8,6 +8,14 @@ import { readPinnedKitJson } from './pinned-kit.ts';
 import { inspectPeerArtifact, normalizePeerArtifact } from './package-artifact.ts';
 import { materializeTuiEntry } from './launch-workbench.ts';
 
+/**
+ * The Workbench profile's own patch layer: register the Web plugin, and keep approvals
+ * asking. The installed launch runs DSH as a full host agent, whose preset would
+ * otherwise reject every approval-gated action instead of asking the operator.
+ */
+export const WORKBENCH_PROFILE_PATCH = "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"
+  + '- id: approval\n  config:\n    policy: ask\n';
+
 type Artifact = { name: string; version: string; path: string; tarball_sha256: string; artifact_sha256: string };
 type PeerReceipt = {
   schema_version: string;
@@ -218,8 +226,7 @@ expectedCliIntegrity = contract.components.dsh.package.integrity): void {
     writeFileSync(join(profile, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     writeFileSync(join(profile, 'pnpm-workspace.yaml'), workspace);
     writeFileSync(join(profile, 'cordis.yml'), '[]\n');
-    writeFileSync(join(profile, 'cordis.patch.yml'),
-      "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n");
+    writeFileSync(join(profile, 'cordis.patch.yml'), WORKBENCH_PROFILE_PATCH);
   } catch (error) {
     if (createdProfile !== undefined) {
       const current = lstatSync(profile, { throwIfNoEntry: false });

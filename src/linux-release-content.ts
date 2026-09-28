@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
+import { WORKBENCH_PROFILE_PATCH } from './combined-profile.ts';
 import { inspectPeerArtifact, inspectSemanticPeerArtifact } from './package-artifact.ts';
 import { readPinnedKitJson } from './pinned-kit.ts';
 import { verifyLinuxReleaseEnvelope } from './linux-release-manifest.ts';
@@ -339,7 +340,7 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
     ['profile/THIRD_PARTY_NOTICES.md', sourceBlob('THIRD_PARTY_NOTICES.md')],
     ['profile/patches/tui-rename.patch', sourceBlob(contract.components.tui.compatibilityPatch!.path)],
     ['profile/cordis.yml', '[]\n'],
-    ['profile/cordis.patch.yml', "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"],
+    ['profile/cordis.patch.yml', WORKBENCH_PROFILE_PATCH],
     ['profile/workbench-tui/LICENSE', sourceBlob('LICENSE')],
     ['profile/workbench-tui/src/launch-workbench.ts', sourceBlob('src/launch-workbench.ts')],
     ['profile/workbench-tui/scripts/launch-workbench-tui.ts',

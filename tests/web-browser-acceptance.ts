@@ -10,6 +10,7 @@ import { startApprovalMockLlmServer } from './approval-mock.ts';
 import headless from '@xterm/headless';
 import * as pty from 'node-pty';
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core';
+import { WORKBENCH_PROFILE_PATCH } from '../src/combined-profile.ts';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 import { workbenchIdentity } from '../web/src/identity.ts';
 import { readEvents } from './session-events.ts';
@@ -935,8 +936,7 @@ async function main(): Promise<void> {
         command(process.execPath, [join(repo, 'scripts/tui-compat.mjs')], repo));
       copyFileSync(join(repo, contract.components.tui.compatibilityPatch!.path),
         join(profile, 'patches/tui-rename.patch'));
-      writeFileSync(join(profile, 'cordis.patch.yml'),
-        "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n");
+      writeFileSync(join(profile, 'cordis.patch.yml'), WORKBENCH_PROFILE_PATCH);
     }
     const userConfig = join(fixture, 'user.npmrc');
     const globalConfig = join(fixture, 'global.npmrc');

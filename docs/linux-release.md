@@ -260,6 +260,9 @@ own Git identity and signing, GitHub CLI login, and other tool configuration
 without extra grants. In this default mode DSH passes its whole environment to
 tool commands, so they can read the owner's DeepSeek credential from the owner
 environment and every other inherited variable, as with any host agent. The
+Workbench profile keeps the DSH approval policy at `ask`, so an action that
+still requests approval, such as taking over a managed worktree, asks the
+operator instead of being rejected. The
 install-private homes still isolate runtime-kit
 setup, and the pinned hook policy, agent-docs, and state paths stay explicit.
 Isolation belongs to a container or an explicit sandbox, not to an edited
