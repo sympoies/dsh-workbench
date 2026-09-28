@@ -19,7 +19,7 @@ const title = 'DSH Workbench 0.1.0 — Linux x64';
 
 function releaseRecord(overrides: Partial<ReleaseRecord> = {}): ReleaseRecord {
   return { id: 41, tag_name: 'v0.1.0', name: title, prerelease: false, body: 'reviewed',
-    draft: true, html_url: 'https://example.invalid/release',
+    draft: true, html_url: 'https://example.invalid/releases/tag/v0.1.0',
     assets: [{ name: 'native.tar.gz', digest: `sha256:${digest('a')}` }], ...overrides };
 }
 
@@ -100,15 +100,22 @@ test('release lookup sees drafts and refuses an ambiguous tag', () => {
 test('fresh release creates one draft and publishes that exact release id', () => {
   const calls: string[] = [];
   const releases: ReleaseRecord[] = [];
+  // GitHub returns a new record per read, and a draft's URL names an untagged
+  // placeholder until publication moves it to the tag.
+  const copy = (release: ReleaseRecord) => ({ ...release, assets: [...release.assets] });
   const operations = {
-    list: () => releases,
-    get: (id: number) => releases.find(release => release.id === id)!,
-    createDraft: () => { calls.push('create-draft'); releases.push(releaseRecord()); },
+    list: () => releases.map(copy),
+    get: (id: number) => copy(releases.find(release => release.id === id)!),
+    createDraft: () => {
+      calls.push('create-draft');
+      releases.push(releaseRecord({ html_url: 'https://example.invalid/releases/tag/untagged-1' }));
+    },
     uploadMissing: () => { throw new Error('unexpected upload'); },
     publishDraft: (id: number) => {
       calls.push(`publish:${id}`);
       releases[0].draft = false;
       releases[0].immutable = true;
+      releases[0].html_url = 'https://example.invalid/releases/tag/v0.1.0';
     },
   };
   const input = { tag: 'v0.1.0', notes: 'reviewed', sourceCommit: 'c'.repeat(40),
@@ -116,6 +123,7 @@ test('fresh release creates one draft and publishes that exact release id', () =
   const published = advanceDraftRelease(input, operations);
   assert.deepEqual(calls, ['create-draft', 'publish:41']);
   assert.equal(published.immutable, true);
+  assert.equal(published.html_url, 'https://example.invalid/releases/tag/v0.1.0');
   calls.length = 0;
   assert.equal(advanceDraftRelease(input, operations).id, 41);
   assert.deepEqual(calls, []);
@@ -157,6 +165,19 @@ test('published release must report immutable true', () => {
     assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', notes: 'reviewed',
       sourceCommit: 'c'.repeat(40), expected: nativeOnly() }, operations), /identity differs/);
   }
+});
+
+test('published release must be served at its tag URL', () => {
+  const current = releaseRecord({ html_url: 'https://example.invalid/releases/tag/untagged-1' });
+  const operations = {
+    list: () => [current],
+    get: () => current,
+    createDraft: () => { throw new Error('unexpected create'); },
+    uploadMissing: () => { throw new Error('unexpected upload'); },
+    publishDraft: () => { current.draft = false; current.immutable = true; },
+  };
+  assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', notes: 'reviewed',
+    sourceCommit: 'c'.repeat(40), expected: nativeOnly() }, operations), /identity differs/);
 });
 
 test('resume uploads only missing draft assets and refuses mismatches before publication', () => {

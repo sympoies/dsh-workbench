@@ -151,8 +151,10 @@ non-runnable OCI carrier, and receipt as GitHub Release assets. It finds the
 release by listing all releases, because GitHub's tag lookup omits drafts, and
 refuses more than one release for the tag. It then uploads, publishes, and
 verifies that release by id, checking every asset digest, the release notes
-body, and `immutable: true`. If an attempt stops after tag creation, rerun
-`publish` with the same inputs: it resumes the one draft for the tag. Never
+body, `immutable: true`, and that it is served at the tag's release URL (a
+draft's URL names an untagged placeholder until publication). If an attempt
+stops after tag creation, rerun `publish` with the same inputs: it resumes the
+one draft for the tag, or verifies the already published release. Never
 move the tag or replace an asset in place.
 
 ## Linux owner installation
