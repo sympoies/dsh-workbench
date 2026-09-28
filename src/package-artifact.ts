@@ -110,9 +110,10 @@ function tarField(header: Buffer, offset: number, width: number, value: number):
   header.write(`${octal.padStart(width - 1, '0')}\0`, offset, width, 'ascii');
 }
 
-function stableEntry(entry: PeerEntry, manifest: unknown): Buffer {
-  const bytes = entry.path === 'package/package.json'
-    ? Buffer.from(`${JSON.stringify(canonicalJson(manifest))}\n`) : entry.bytes;
+function stableEntry(entry: PeerEntry): Buffer {
+  // Package manifests can contain order-sensitive conditional exports.
+  // Repack archive metadata, but never rewrite an authenticated member payload.
+  const bytes = entry.bytes;
   const header = Buffer.alloc(512);
   const pathBytes = Buffer.byteLength(entry.path);
   if (pathBytes <= 100) header.write(entry.path, 0, 'utf8');
@@ -147,10 +148,10 @@ function stableEntry(entry: PeerEntry, manifest: unknown): Buffer {
 
 /** Repack authenticated workspace content into stable bytes for a frozen lockfile. */
 export function normalizePeerArtifact(tarball: Buffer): Buffer {
-  const { entries, manifest } = parsePeerArtifact(tarball);
+  const { entries } = parsePeerArtifact(tarball);
   const tar = Buffer.concat([...entries.sort((left, right) =>
     left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
-    .map(entry => stableEntry(entry, manifest)), Buffer.alloc(1024)]);
+    .map(stableEntry), Buffer.alloc(1024)]);
   const normalized = gzipSync(tar, { level: 0 });
   const before = inspectPeerArtifact(tarball);
   const after = inspectPeerArtifact(normalized);

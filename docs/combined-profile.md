@@ -62,7 +62,9 @@ of the patched closure.
    three incompatible optional native platforms as skipped. Workbench
    deterministically repacks the authenticated workspace archives before
    staging, so gzip metadata and tar member order cannot change the frozen
-   file integrity between build hosts. Registry archives keep their exact raw
+   file integrity between build hosts. The repack preserves each package
+   member's bytes, including order-sensitive `package.json` exports. Registry
+   archives keep their exact raw
    bytes and pinned SHA-512. Local-file overrides cover only the host-compatible
    set; nonhost native dependencies keep their exact registry versions and
    integrity in the frozen lockfile.

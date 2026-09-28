@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { gzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { stageCombinedProfile, stageCombinedProfileFromPinnedKit } from '../src/combined-profile.ts';
 import { inspectPeerArtifact, normalizePeerArtifact } from '../src/package-artifact.ts';
 
@@ -175,18 +175,31 @@ test('portable profile normalizes authenticated workspace tarballs across gzip m
   }
 });
 
-test('normalized workspace tarballs ignore member order and manifest formatting', () => {
+test('normalized workspace tarballs ignore member order', () => {
   const file = tarEntry('package/lib/client.js', Buffer.from('export const same = true;'));
   const first = gzipSync(Buffer.concat([
     tarEntry('package/package.json', Buffer.from('{"name":"@deepseek-ai/cordis","version":"4.0.4"}')),
     file, Buffer.alloc(1024),
   ]));
   const second = gzipSync(Buffer.concat([
-    file, tarEntry('package/package.json', Buffer.from('{ "version": "4.0.4", "name": "@deepseek-ai/cordis" }')),
+    file, tarEntry('package/package.json', Buffer.from('{"name":"@deepseek-ai/cordis","version":"4.0.4"}')),
     Buffer.alloc(1024),
   ]));
   assert.equal(inspectPeerArtifact(first).artifactSha256, inspectPeerArtifact(second).artifactSha256);
   assert.deepEqual(normalizePeerArtifact(first), normalizePeerArtifact(second));
+});
+
+test('normalization preserves conditional export precedence in package manifests', () => {
+  const original = archive('@deepseek-ai/cordis', '4.0.4');
+  const withExports = gzipSync(Buffer.concat([
+    tarEntry('package/package.json', Buffer.from(JSON.stringify({
+      name: '@deepseek-ai/cordis', version: '4.0.4',
+      exports: { '.': { node: './node.js', default: './fallback.js' } },
+    }))), Buffer.alloc(1024),
+  ]));
+  const normalized = gunzipSync(normalizePeerArtifact(withExports)).toString('utf8');
+  assert.match(normalized, /"node":"\.\/node\.js","default":"\.\/fallback\.js"/);
+  assert.notDeepEqual(normalizePeerArtifact(withExports), normalizePeerArtifact(original));
 });
 
 test('stages the native Web plugin in the same governed workbench profile', () => {
