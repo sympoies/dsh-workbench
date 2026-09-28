@@ -59,10 +59,13 @@ of the patched closure.
    The registry input contains the five unmodified native-system 0.1.2 archives
    declared by the exact runtime-kit contract, downloaded with scripts disabled.
    All 83 archives are verified; Linux x64 stages 80 packages and reports the
-   three incompatible optional native platforms as skipped. Workbench copies
-   every verified archive but generates local-file overrides only for the
-   host-compatible set; nonhost native dependencies keep their exact registry
-   versions and integrity in the frozen lockfile.
+   three incompatible optional native platforms as skipped. Workbench
+   deterministically repacks the authenticated workspace archives before
+   staging, so gzip metadata and tar member order cannot change the frozen
+   file integrity between build hosts. Registry archives keep their exact raw
+   bytes and pinned SHA-512. Local-file overrides cover only the host-compatible
+   set; nonhost native dependencies keep their exact registry versions and
+   integrity in the frozen lockfile.
 
    `scripts/verify-combined-runtime.ts` also accepts an optional final absolute
    installed DSH CLI entry file. Use this argument with a frozen official CLI
@@ -97,8 +100,9 @@ of the patched closure.
    host is a provenance input, not the accepted runtime entry.
    It also checks the TUI archive's SHA-512
    integrity against the Workbench contract before writing any profile files.
-   It creates exactly `$DSH_HOME/profiles/workbench`, copies the verified bytes
-   into the profile, and writes only relative `file:artifacts/...` references.
+   It creates exactly `$DSH_HOME/profiles/workbench`, stages authenticated
+   canonical package content in stable tarballs, and writes only relative
+   `file:artifacts/...` references.
    Every host-compatible archive is a direct profile dependency as well as an
    override. This keeps bundle plugin owners and their scope consumers in one
    local module graph; an override alone does not prevent a missing plugin
@@ -112,12 +116,13 @@ of the patched closure.
    digest is outside the Web plugin's embedded contract identity, avoiding a
    build-hash cycle. The profile starts with the base, native Web, and
    patched TUI bundles and the Workbench Web plugin; runtime-kit is not yet installed.
-5. In that fresh profile, run pnpm `install --strict-peer-dependencies --ignore-scripts`,
-   then `dedupe --strict-peer-dependencies --ignore-scripts`, and finally
-   `install --frozen-lockfile --strict-peer-dependencies --ignore-scripts`.
-   Dedupe belongs to initial graph assembly: it converges transitive resolutions
-   before runtime-kit captures the baseline. Runtime-kit setup continues to
-   reject any later unrelated profile or lockfile mutation.
+5. Copy the reviewed
+   [Linux profile lockfile](../compatibility/linux-profile-lock.yaml) into the
+   fresh profile, then run pnpm `install --frozen-lockfile
+   --strict-peer-dependencies --ignore-scripts`. Require the lockfile bytes to
+   remain unchanged. Regenerating and deduplicating a lockfile is a separate
+   release-version preparation step, not an installation step. Runtime-kit
+   setup continues to reject any later unrelated profile or lockfile mutation.
    Use runtime-kit's documented owner launcher to preview and apply `setup
    --profile workbench --package <exact-kit-package>`. Require `doctor
    --profile workbench` to report `healthy` with no advisories. The combined

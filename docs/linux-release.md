@@ -71,6 +71,11 @@ proof or a mutable working tree alone.
 The frozen [Linux profile lockfile](../compatibility/linux-profile-lock.yaml)
 is also checked against that Git commit. CI installs from this exact lockfile
 without resolving or deduplicating a new dependency graph.
+Before creating that lockfile, Workbench verifies the runtime-kit peer-pack
+receipt and canonical package digests, then repacks workspace and Web archives
+in a deterministic tar/gzip form. Registry archives retain their pinned raw
+integrities. This prevents build-host tar metadata from changing the file
+integrities recorded by the frozen lockfile.
 The bundled compatibility contract, Web record, patch, and installer source
 must match that same commit before the verifier uses the archived contract to
 select runtime-kit provenance. The only generated installer file is the fixed
