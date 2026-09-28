@@ -124,7 +124,7 @@ function index(input: LinuxOciCarrierInput, manifestBytes: Buffer): Buffer {
 }
 
 function pack(layout: string, archive: string): void {
-  const run = spawnSync('tar', ['--format=ustar', '--sort=name', '--mtime=@0', '--owner=0',
+  const run = spawnSync('/usr/bin/tar', ['--format=ustar', '--sort=name', '--mtime=@0', '--owner=0',
     '--group=0', '--numeric-owner', '-czf', archive, '-C', layout, '.'], {
     timeout: 120_000, maxBuffer: 1024 * 1024,
   });

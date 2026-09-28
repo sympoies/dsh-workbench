@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -84,4 +84,21 @@ test('OCI carrier refuses replacement of existing outputs', () => {
     buildLinuxOciCarrier(input);
     assert.throws(() => buildLinuxOciCarrier(input), /exist|new/);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('OCI construction and verification ignore an ambient tar executable', () => {
+  const { root, input } = fixture();
+  const originalPath = process.env.PATH;
+  try {
+    const shadow = join(root, 'shadow');
+    mkdirSync(shadow, { mode: 0o700 });
+    const fakeTar = join(shadow, 'tar');
+    writeFileSync(fakeTar, '#!/bin/sh\nexit 73\n', { mode: 0o755 });
+    process.env.PATH = `${shadow}:${originalPath ?? ''}`;
+    const receipt = buildLinuxOciCarrier(input);
+    assert.equal(verifyLinuxOciCarrier(input, receipt), true);
+  } finally {
+    process.env.PATH = originalPath;
+    rmSync(root, { recursive: true, force: true });
+  }
 });
