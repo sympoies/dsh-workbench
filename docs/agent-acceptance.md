@@ -49,19 +49,25 @@ named tmux session and prints JSON:
    keeps the permission and approval policy it was created with, so every run
    needs a new session under the release being accepted.
 2. `start` the installed TUI in that directory, `prompt` with the task's
-   `prompt-1.md`, and repeat `wait` until the session is idle with one ended
-   turn.
+   `prompt-1.md`, and `wait --min-ended 1` until the session is idle.
+   The archive still shows the previous stop until DSH persists the next
+   event, so always pass the gates: `--min-ended` is the number of turns that
+   must have ended, and `--min-decided` is one more than the decided approvals
+   before your last `approve` or `reject`.
 3. At each stop, act only as the task's operator:
    - `approval-pending`: allow a request that stays within the task (the run
      checkout, its managed worktrees, and the fixture remote); reject anything
      that touches other repositories, credentials, or host configuration.
-     Record every decision with the request.
+     Record every decision with the request, then `wait` again with the raised
+     `--min-decided`.
+   - `idle`: confirm `turns.lastEnd` is `completed`.
    - `stalled` or `timeout`: capture the screen and record it. The run fails;
      do not send hints.
 4. `exit` the TUI, `start` it again with `-- --resume <session-id>`, and confirm
    with `status --session` that the same session continues. `prompt` with
-   `prompt-2.md` and `wait` until the second turn ends.
-5. Run `verify-pr` with the task's `verify.mjs`.
+   `prompt-2.md` and `wait --min-ended 2` until the second turn ends.
+5. Once the pull request's checks have finished, run `verify-pr` with the
+   task's `verify.mjs`. It reports pending checks separately from failed ones.
 6. Close the pull request without merging and delete its branch, then remove
    the run directory.
 

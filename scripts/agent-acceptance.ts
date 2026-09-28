@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { findSession, readSessionArchive, summarizeSession } from '../src/agent-session-monitor.ts';
+import { decideStop, findSession, readSessionArchive, summarizeSession } from '../src/agent-session-monitor.ts';
 
 const [command, ...rest] = process.argv.slice(2);
 const options = new Map<string, string>();
@@ -31,7 +31,10 @@ function run(executable: string, args: string[], allowFailure = false): string {
   return result.stdout ?? '';
 }
 const tmux = (...args: string[]) => run('tmux', args);
-const capture = (name: string) => tmux('capture-pane', '-p', '-t', name);
+// tmux resolves a bare name by prefix; `=name` forces the exact session and `=name:` its pane.
+const session = (name: string) => `=${name}`;
+const pane = (name: string) => `=${name}:`;
+const capture = (name: string) => tmux('capture-pane', '-p', '-t', pane(name));
 
 function summary() {
   const archive = findSession(required('dsh-home'),
@@ -47,14 +50,8 @@ async function waitForStop() {
   const minDecided = number('min-decided', 0);
   for (;;) {
     const current = summary();
-    if (current) {
-      const settled = current.approvals.decided >= minDecided;
-      if (settled && current.state === 'approval-pending') return { stop: 'approval-pending', ...current };
-      if (settled && current.state === 'idle' && current.turns.ended >= minEnded) return { stop: 'idle', ...current };
-      if (current.state === 'running' && current.lastEventTime && Date.now() - current.lastEventTime > stallMs) {
-        return { stop: 'stalled', ...current };
-      }
-    }
+    const stop = current && decideStop(current, { minEnded, minDecided, stallMs, now: Date.now() });
+    if (stop) return { stop, ...current };
     if (Date.now() > deadline) return { stop: 'timeout', ...current };
     await sleep(5_000);
   }
@@ -74,23 +71,23 @@ async function startTui() {
 
 async function exitTui() {
   const name = required('name');
-  tmux('send-keys', '-t', name, 'C-c');
+  tmux('send-keys', '-t', pane(name), 'C-c');
   await sleep(1_000);
-  tmux('send-keys', '-t', name, 'C-c');
+  tmux('send-keys', '-t', pane(name), 'C-c');
   for (let attempt = 0; attempt < 15; attempt += 1) {
     await sleep(1_000);
-    if (spawnSync('tmux', ['has-session', '-t', name]).status !== 0) return { exited: name };
+    if (spawnSync('tmux', ['has-session', '-t', session(name)]).status !== 0) return { exited: name };
   }
-  tmux('kill-session', '-t', name);
+  tmux('kill-session', '-t', session(name));
   return { exited: name, killed: true };
 }
 
 async function sendPrompt() {
   const name = required('name');
   tmux('load-buffer', '-b', 'agent-acceptance', resolve(required('file')));
-  tmux('paste-buffer', '-p', '-d', '-b', 'agent-acceptance', '-t', name);
+  tmux('paste-buffer', '-p', '-d', '-b', 'agent-acceptance', '-t', pane(name));
   await sleep(1_500);
-  tmux('send-keys', '-t', name, 'Enter');
+  tmux('send-keys', '-t', pane(name), 'Enter');
   return { prompted: name };
 }
 
@@ -108,7 +105,11 @@ function verifyPullRequest() {
   if (view.state !== 'OPEN') failures.push(`pull request is ${view.state}`);
   if (view.baseRefName !== 'main' || view.headRefName === 'main') failures.push('pull request must target main from a branch');
   if (unsigned.length) failures.push(`unverified commit signatures: ${unsigned.join(', ')}`);
-  if (!checks.length || checks.some((check: any) => check.conclusion !== 'SUCCESS')) failures.push('checks did not all succeed');
+  const passed = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
+  const failed = ['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'STALE'];
+  if (!checks.length) failures.push('no checks reported');
+  else if (checks.some((check: any) => failed.includes(check.conclusion))) failures.push('checks did not all succeed');
+  else if (checks.some((check: any) => !passed.includes(check.conclusion))) failures.push('checks are still pending');
   let verifier = { status: null as number | null, output: '' };
   const task = options.get('verifier');
   if (task) {
@@ -131,8 +132,8 @@ const commands: Record<string, () => unknown> = {
   wait: waitForStop,
   start: startTui,
   prompt: sendPrompt,
-  approve: () => { tmux('send-keys', '-t', required('name'), '1'); return { approved: true }; },
-  reject: () => { tmux('send-keys', '-t', required('name'), 'Escape'); return { rejected: true }; },
+  approve: () => { tmux('send-keys', '-t', pane(required('name')), '1'); return { approved: true }; },
+  reject: () => { tmux('send-keys', '-t', pane(required('name')), 'Escape'); return { rejected: true }; },
   capture: () => ({ screen: capture(required('name')) }),
   exit: exitTui,
   'verify-pr': verifyPullRequest,

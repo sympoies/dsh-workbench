@@ -64,6 +64,24 @@ export function summarizeSession(session: string, events: SessionEvent[]): Sessi
   };
 }
 
+export type StopGate = { minEnded: number; minDecided: number; stallMs: number; now: number };
+export type StopDecision = 'idle' | 'approval-pending' | 'stalled' | undefined;
+
+/**
+ * Decide whether a supervisor should stop waiting. The gates keep a stale snapshot from
+ * ending the wait: right after a prompt the previous turn still reads as ended, and right
+ * after an answer the approval still reads as open, until DSH persists the next event.
+ * A stall is only a running turn with no event for `stallMs` (event times are epoch ms).
+ */
+export function decideStop(summary: SessionSummary, gate: StopGate): StopDecision {
+  const settled = summary.approvals.decided >= gate.minDecided;
+  if (settled && summary.state === 'approval-pending') return 'approval-pending';
+  if (settled && summary.state === 'idle' && summary.turns.ended >= gate.minEnded) return 'idle';
+  if (summary.state === 'running' && summary.lastEventTime !== null
+    && gate.now - summary.lastEventTime > gate.stallMs) return 'stalled';
+  return undefined;
+}
+
 /** Parse decompressed Session V4 JSONL, skipping a torn final line from a live writer. */
 export function parseSessionText(text: string): SessionEvent[] {
   return text.split('\n').filter(Boolean).flatMap(line => {

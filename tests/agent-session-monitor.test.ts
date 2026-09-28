@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { findSession, parseSessionText, readSessionArchive, summarizeSession,
-  type SessionEvent } from '../src/agent-session-monitor.ts';
+import { decideStop, findSession, parseSessionText, readSessionArchive, summarizeSession,
+  type SessionEvent, type SessionSummary } from '../src/agent-session-monitor.ts';
 
 const cli = new URL('../scripts/agent-acceptance.ts', import.meta.url).pathname;
 const header = (cwd: string): SessionEvent => ({ type: 'session', cwd });
@@ -77,4 +77,23 @@ test('sessions are found by exact id, by recorded workspace, or as the newest ar
     assert.equal(waited.status, 0, waited.stderr);
     assert.equal(JSON.parse(waited.stdout).stop, 'stalled');
   } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+test('wait stops only on a fresh idle turn, a fresh approval, or a stalled running turn', () => {
+  const now = 1_790_000_000_000;
+  const at = (state: SessionSummary['state'], ended: number, decided: number, lastEventTime: number | null) =>
+    ({ state, turns: { started: ended + (state === 'running' ? 1 : 0), ended, lastEnd: 'completed' },
+      approvals: { asked: decided, decided, outcomes: [] }, lastEventTime } as unknown as SessionSummary);
+  const gate = { minEnded: 2, minDecided: 1, stallMs: 600_000, now };
+  // Right after the second prompt the first turn still reads as the latest ended turn.
+  assert.equal(decideStop(at('idle', 1, 1, now), gate), undefined);
+  assert.equal(decideStop(at('idle', 2, 1, now), gate), 'idle');
+  // Right after an answer the approval still reads as open until its decision is persisted.
+  assert.equal(decideStop(at('approval-pending', 2, 0, now), gate), undefined);
+  assert.equal(decideStop(at('approval-pending', 2, 1, now), gate), 'approval-pending');
+  // Event times are epoch milliseconds; only a running turn can stall.
+  assert.equal(decideStop(at('running', 1, 1, now - 599_000), gate), undefined);
+  assert.equal(decideStop(at('running', 1, 1, now - 601_000), gate), 'stalled');
+  assert.equal(decideStop(at('idle', 1, 1, now - 3_600_000), gate), undefined);
+  assert.equal(decideStop(at('running', 1, 1, null), gate), undefined);
 });
