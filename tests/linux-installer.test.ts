@@ -203,3 +203,20 @@ setTimeout(() => {}, 10000);\n`, { mode: 0o600 });
     assert.equal(existsSync(marker), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('runtime-kit setup failure reports only its bounded diagnostic code', () => {
+  const root = mkdtempSync(join(tmpdir(), 'workbench-setup-error-'));
+  try {
+    const failure = join(root, 'failure.cjs');
+    writeFileSync(failure, `process.stdout.write(JSON.stringify({
+  schema_version: 'cli.dsh-runtime-kit.operations.v1', ok: false,
+  error: { code: 'toolchain-incompatible', message: 'private-token-must-not-leak' }
+})); process.exit(70);\n`, { mode: 0o600 });
+    assert.throws(() => runInstallerCommand(process.execPath, [failure], root,
+      process.env, 'runtime-kit setup'), error => {
+      assert.match(String(error), /toolchain-incompatible/);
+      assert.doesNotMatch(String(error), /private-token-must-not-leak/);
+      return true;
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

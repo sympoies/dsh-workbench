@@ -173,7 +173,18 @@ export function runInstallerCommand(executable: string, args: string[], cwd: str
   environment: NodeJS.ProcessEnv, label: string, timeout = 300_000): string {
   const result = runContained(executable, args, cwd, environment, label, timeout);
   if (result.error || result.status !== 0) {
-    throw new Error(`${label} failed with status ${result.status ?? 'unknown'}`);
+    let code = '';
+    if (label.startsWith('runtime-kit ') && result.stdout.length <= 8192) {
+      try {
+        const response = JSON.parse(result.stdout) as {
+          schema_version?: string; ok?: boolean; error?: { code?: unknown };
+        };
+        if (response.schema_version === 'cli.dsh-runtime-kit.operations.v1'
+          && response.ok === false && typeof response.error?.code === 'string'
+          && /^[a-z0-9-]{1,80}$/.test(response.error.code)) code = ` (${response.error.code})`;
+      } catch { /* retain the generic failure when the response is not valid */ }
+    }
+    throw new Error(`${label} failed with status ${result.status ?? 'unknown'}${code}`);
   }
   return result.stdout;
 }
