@@ -366,8 +366,22 @@ jobs:
             outputArchive: path.join(root, 'linux-release-candidate.tar.gz'),
           }));
           NODE
-          node scripts/linux-release.mjs "$VERIFICATION_ROOT/release-build-input.json" \
-            > "$VERIFICATION_ROOT/linux-release-candidate-receipt.json"
+          ./.agents/scripts/release.sh prepare \
+            "$VERIFICATION_ROOT/release-build-input.json" \
+            "$VERIFICATION_ROOT/linux-oci-layout" \
+            "$VERIFICATION_ROOT/linux-oci-carrier.tar.gz" \
+            "$VERIFICATION_ROOT/linux-release-packet.json" \
+            > "$VERIFICATION_ROOT/linux-release-prepare-output.json"
+          node - "$VERIFICATION_ROOT" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = process.argv[2];
+          const packet = JSON.parse(fs.readFileSync(path.join(root, 'linux-release-packet.json')));
+          fs.writeFileSync(path.join(root, 'linux-release-candidate-receipt.json'),
+            JSON.stringify(packet.release));
+          console.log(`OCI artifact manifest: ${packet.carrier.manifestDigest}`);
+          console.log(`OCI carrier tar SHA-256: ${packet.carrier.carrierArchiveSha256}`);
+          NODE
           for path in compatibility installer notices license-inventory \
             runtime-kit/compatibility runtime-kit/source-build-proof.json \
             release-manifest.json profile/package.json profile/pnpm-workspace.yaml \
@@ -375,6 +389,20 @@ jobs:
             profile/workbench-tui; do
             bash scripts/check-publication.sh --artifact "$VERIFICATION_ROOT/linux-release-root/$path"
           done
+          node - "$VERIFICATION_ROOT" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const cp = require('node:child_process');
+          const root = process.argv[2];
+          const digest = JSON.parse(fs.readFileSync(path.join(root, 'linux-release-packet.json')))
+            .carrier.manifestDigest.slice(7);
+          const files = ['index.json', 'oci-layout', `blobs/sha256/${digest}`];
+          for (const file of files) {
+            const result = cp.spawnSync('bash', ['scripts/check-publication.sh', '--artifact',
+              path.join(root, 'linux-oci-layout', file)], { stdio: 'inherit' });
+            if (result.status !== 0) process.exit(result.status ?? 1);
+          }
+          NODE
           # Binary archives are authenticated by the content verifier and remain
           # subject to the separate human publication audit.
           node - "$VERIFICATION_ROOT" <<'NODE'
@@ -393,19 +421,12 @@ jobs:
         if: steps.pins.outputs.contract_status == 'accepted'
         working-directory: dsh-workbench
         run: |
-          node - "$VERIFICATION_ROOT" "$GITHUB_WORKSPACE" <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
-          const cp = require('node:child_process');
-          const [root, workspace] = process.argv.slice(2);
-          const receipt = JSON.parse(fs.readFileSync(path.join(root, 'linux-release-candidate-receipt.json')));
-          const args = ['scripts/linux-release-archive.mjs',
-            path.join(root, 'linux-release-candidate.tar.gz'), receipt.archiveSha256,
-            receipt.manifestSha256, path.join(root, 'linux-release-extracted'),
-            path.join(workspace, 'dsh-runtime-kit')];
-          const result = cp.spawnSync(process.execPath, args, { stdio: 'inherit', timeout: 120_000 });
-          if (result.status !== 0) process.exit(result.status ?? 1);
-          NODE
+          ./.agents/scripts/release.sh verify \
+            "$VERIFICATION_ROOT/release-build-input.json" \
+            "$VERIFICATION_ROOT/linux-oci-layout" \
+            "$VERIFICATION_ROOT/linux-oci-carrier.tar.gz" \
+            "$VERIFICATION_ROOT/linux-release-packet.json" \
+            "$VERIFICATION_ROOT/linux-release-extracted"
           node - "$VERIFICATION_ROOT" "$GITHUB_WORKSPACE" <<'NODE'
           const fs = require('node:fs');
           const path = require('node:path');

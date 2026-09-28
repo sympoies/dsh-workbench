@@ -44,10 +44,12 @@ the required check in GitHub before a release; a workflow that runs only after
 a direct push would be too late to protect public history.
 
 Run `scripts/check-publication.sh` from the repository root on every PR. Pass
-each generated bundle or release asset tree with `--artifact PATH`. For a
-container candidate, export its image configuration and labels to a text/JSON
-file outside the repository and pass that file as an artifact as well. Do the
-same for the release workflow log after a candidate build. The script scans
+each generated bundle or release asset tree with `--artifact PATH`. For the
+Linux OCI artifact carrier, scan `index.json`, `oci-layout`, and the manifest
+blob as text. Verify its empty config, raw archive layer, and deterministic
+carrier tar through the repository release verifier; inspect the complete
+generated layout in the human audit. Do the same for the release workflow log
+after a candidate build. The script scans
 tracked content, public names, and supplied artifact trees for selected secret,
 identity, private path, and endpoint patterns without printing matching bytes
 or pathnames. It rejects symlinks and unreadable files. Compressed archives are

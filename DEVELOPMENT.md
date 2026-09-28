@@ -21,6 +21,11 @@ private input schema and archive/content verification boundary are documented
 in [docs/linux-release.md](docs/linux-release.md). Run the content verifier
 against the same private staged root and external manifest digest before any
 installed-profile test. A successful builder result remains a candidate.
+The repository-owned `.agents/scripts/release.sh` prepares and verifies the
+Linux archive plus its OCI artifact carrier from the same clean source commit.
+The carrier has an empty OCI config and contains the raw native-install archive;
+it does not advertise a runnable container. CI exercises both the carrier
+identity and the extracted owner-installed Web/TUI profile.
 The two-phase Linux installer is `scripts/linux-install.mjs`; its private
 input, owner environment, exact apply receipt, and launch behavior are in
 [docs/linux-release.md](docs/linux-release.md). Unit tests cover plan refusal
