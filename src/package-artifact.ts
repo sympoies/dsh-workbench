@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { gunzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 
 const limits = {
   compressedBytes: 128 * 1024 * 1024,
@@ -18,6 +18,21 @@ function canonicalJson(value: unknown): unknown {
   return value;
 }
 
+function stableManifest(value: { name?: unknown; version?: unknown }): unknown {
+  const dependencyMaps = new Set(['dependencies', 'devDependencies', 'peerDependencies']);
+  return Object.fromEntries(Object.entries(value)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, child]) => {
+      if (!dependencyMaps.has(key)) return [key, child];
+      if (!child || typeof child !== 'object' || Array.isArray(child)
+        || Object.values(child).some(spec => typeof spec !== 'string')) {
+        throw new Error(`unsupported package dependency map: ${key}`);
+      }
+      return [key, Object.fromEntries(Object.entries(child)
+        .sort(([left], [right]) => left.localeCompare(right)))];
+    }));
+}
+
 function textField(header: Buffer, offset: number, length: number): string {
   const zero = header.indexOf(0, offset);
   const end = zero >= offset && zero < offset + length ? zero : offset + length;
@@ -31,9 +46,10 @@ function octalField(header: Buffer, offset: number, length: number): number {
   return Number.parseInt(value, 8);
 }
 
-/** Verify the canonical package digest defined by the pinned runtime-kit contract. */
-export function inspectPeerArtifact(tarball: Buffer): {
-  name: string; version: string; artifactSha256: string;
+type PeerEntry = { path: string; mode: number; bytes: Buffer };
+
+function parsePeerArtifact(tarball: Buffer): {
+  entries: PeerEntry[]; manifest: { name?: unknown; version?: unknown };
 } {
   if (tarball.length > limits.compressedBytes) throw new Error('peer archive exceeds limit');
   let archive: Buffer;
@@ -42,7 +58,7 @@ export function inspectPeerArtifact(tarball: Buffer): {
   } catch {
     throw new Error('invalid peer archive');
   }
-  const entries: Array<{ path: string; mode: number; bytes: Buffer }> = [];
+  const entries: PeerEntry[] = [];
   const paths = new Set<string>();
   let contentBytes = 0;
   for (let offset = 0; offset + 512 <= archive.length;) {
@@ -75,10 +91,18 @@ export function inspectPeerArtifact(tarball: Buffer): {
   } catch {
     throw new Error('invalid peer archive manifest');
   }
+  if (typeof manifest.name !== 'string' || typeof manifest.version !== 'string') {
+    throw new Error('invalid peer archive identity');
+  }
+  return { entries, manifest };
+}
+
+/** Verify the canonical package digest defined by the pinned runtime-kit contract. */
+function digestPeerEntries(entries: PeerEntry[], manifestBytes: Buffer): string {
   const digest = createHash('sha256');
   for (const entry of entries.sort((left, right) => left.path.localeCompare(right.path))) {
     const bytes = entry.path === 'package/package.json'
-      ? Buffer.from(`${JSON.stringify(canonicalJson(manifest))}\n`)
+      ? manifestBytes
       : entry.bytes;
     digest.update(entry.path);
     digest.update('\0');
@@ -88,8 +112,84 @@ export function inspectPeerArtifact(tarball: Buffer): {
     digest.update('\0');
     digest.update(bytes);
   }
-  if (typeof manifest.name !== 'string' || typeof manifest.version !== 'string') {
-    throw new Error('invalid peer archive identity');
+  return digest.digest('hex');
+}
+
+/** Legacy runtime-kit compatibility digest; nested manifest key order is ignored. */
+export function inspectPeerArtifact(tarball: Buffer): {
+  name: string; version: string; artifactSha256: string;
+} {
+  const { entries, manifest } = parsePeerArtifact(tarball);
+  const manifestBytes = Buffer.from(`${JSON.stringify(canonicalJson(manifest))}\n`);
+  return { name: manifest.name as string, version: manifest.version as string,
+    artifactSha256: digestPeerEntries(entries, manifestBytes) };
+}
+
+/** Workbench digest retaining all nested order except standard dependency maps. */
+export function inspectSemanticPeerArtifact(tarball: Buffer): string {
+  const { entries, manifest } = parsePeerArtifact(tarball);
+  const manifestBytes = Buffer.from(`${JSON.stringify(stableManifest(manifest))}\n`);
+  return digestPeerEntries(entries, manifestBytes);
+}
+
+function tarField(header: Buffer, offset: number, width: number, value: number): void {
+  const octal = value.toString(8);
+  if (octal.length > width - 1) throw new Error('normalized peer archive exceeds ustar field');
+  header.write(`${octal.padStart(width - 1, '0')}\0`, offset, width, 'ascii');
+}
+
+function stableEntry(entry: PeerEntry, manifest: unknown): Buffer {
+  // Only root fields and name-to-version dependency maps are sorted.
+  const bytes = entry.path === 'package/package.json'
+    ? Buffer.from(`${JSON.stringify(stableManifest(manifest as { name?: unknown; version?: unknown }))}\n`)
+    : entry.bytes;
+  const header = Buffer.alloc(512);
+  const pathBytes = Buffer.byteLength(entry.path);
+  if (pathBytes <= 100) header.write(entry.path, 0, 'utf8');
+  else {
+    const split = entry.path.lastIndexOf('/');
+    const prefix = entry.path.slice(0, split);
+    const name = entry.path.slice(split + 1);
+    if (split < 0 || Buffer.byteLength(prefix) > 155 || Buffer.byteLength(name) > 100) {
+      throw new Error('normalized peer path exceeds ustar limit');
+    }
+    header.write(name, 0, 'utf8');
+    header.write(prefix, 345, 'utf8');
   }
-  return { name: manifest.name, version: manifest.version, artifactSha256: digest.digest('hex') };
+  if (entry.mode !== 0o644 && entry.mode !== 0o755) {
+    throw new Error('normalized peer archive has unsupported mode');
+  }
+  tarField(header, 100, 8, entry.mode);
+  tarField(header, 108, 8, 0);
+  tarField(header, 116, 8, 0);
+  tarField(header, 124, 12, bytes.length);
+  tarField(header, 136, 12, 0);
+  header.fill(32, 148, 156);
+  header[156] = 48;
+  header.write('ustar\0', 257, 'ascii');
+  header.write('00', 263, 'ascii');
+  const checksum = header.reduce((sum, byte) => sum + byte, 0);
+  header.write(checksum.toString(8).padStart(6, '0'), 148, 'ascii');
+  header[154] = 0;
+  header[155] = 32;
+  return Buffer.concat([header, bytes, Buffer.alloc((512 - bytes.length % 512) % 512)]);
+}
+
+/** Repack authenticated workspace content into stable bytes for a frozen lockfile. */
+export function normalizePeerArtifact(tarball: Buffer): Buffer {
+  const { entries, manifest } = parsePeerArtifact(tarball);
+  const tar = Buffer.concat([...entries.sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
+    .map(entry => stableEntry(entry, manifest)), Buffer.alloc(1024)]);
+  const normalized = gzipSync(tar, { level: 0 });
+  const before = inspectPeerArtifact(tarball);
+  const after = inspectPeerArtifact(normalized);
+  const beforeSemantic = inspectSemanticPeerArtifact(tarball);
+  const afterSemantic = inspectSemanticPeerArtifact(normalized);
+  if (before.name !== after.name || before.version !== after.version
+    || before.artifactSha256 !== after.artifactSha256
+    || beforeSemantic !== afterSemantic) {
+    throw new Error('normalized peer archive changed canonical content');
+  }
+  return normalized;
 }

@@ -11,6 +11,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const script = join(root, 'scripts/contract.mjs');
 const source = join(root, 'compatibility/workbench.json');
 const webArtifactSource = join(root, 'compatibility/web-artifact.json');
+const linuxArtifactSource = join(root, 'compatibility/linux-artifacts.json');
 
 function fixture(change?: (contract: WorkbenchContract) => void) {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-workbench-contract-'));
@@ -23,6 +24,9 @@ function fixture(change?: (contract: WorkbenchContract) => void) {
   const webArtifact = JSON.parse(readFileSync(webArtifactSource, 'utf8')) as { releaseVersion: string };
   webArtifact.releaseVersion = contract.release.version;
   writeFileSync(join(compatibility, 'web-artifact.json'), JSON.stringify(webArtifact));
+  const linuxArtifact = JSON.parse(readFileSync(linuxArtifactSource, 'utf8')) as { releaseVersion: string };
+  linuxArtifact.releaseVersion = contract.release.version;
+  writeFileSync(join(compatibility, 'linux-artifacts.json'), JSON.stringify(linuxArtifact));
   copyFileSync(join(root, 'compatibility/patches/tui-rename.patch'), join(compatibility, 'patches/tui-rename.patch'));
   return { dir, path };
 }
@@ -116,6 +120,22 @@ test('changed Web artifact digest requires a new Workbench release version', () 
     const record = JSON.parse(readFileSync(recordPath, 'utf8')) as { artifactSha256: string };
     record.artifactSha256 = 'a'.repeat(64);
     writeFileSync(recordPath, JSON.stringify(record));
+    assert.match(run('compare', current.path, ['--previous', previous.path]).stderr,
+      /component tuple changed without a new Workbench release\.version/i);
+  } finally {
+    rmSync(previous.dir, { recursive: true, force: true });
+    rmSync(current.dir, { recursive: true, force: true });
+  }
+});
+
+test('changed reviewed Linux package or lock identity requires a new release version', () => {
+  const previous = fixture();
+  const current = fixture();
+  try {
+    const path = join(current.dir, 'compatibility/linux-artifacts.json');
+    const record = JSON.parse(readFileSync(path, 'utf8')) as { profileLockRawSha256: string };
+    record.profileLockRawSha256 = 'a'.repeat(64);
+    writeFileSync(path, JSON.stringify(record));
     assert.match(run('compare', current.path, ['--previous', previous.path]).stderr,
       /component tuple changed without a new Workbench release\.version/i);
   } finally {

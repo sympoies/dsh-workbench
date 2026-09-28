@@ -5,7 +5,7 @@ import { isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WorkbenchContract } from './contract-types.ts';
 import { readPinnedKitJson } from './pinned-kit.ts';
-import { inspectPeerArtifact } from './package-artifact.ts';
+import { inspectPeerArtifact, normalizePeerArtifact } from './package-artifact.ts';
 import { materializeTuiEntry } from './launch-workbench.ts';
 
 type Artifact = { name: string; version: string; path: string; tarball_sha256: string; artifact_sha256: string };
@@ -154,7 +154,7 @@ expectedCliIntegrity = contract.components.dsh.package.integrity): void {
       || canonical.artifactSha256 !== expected) {
       throw new Error('patched DSH artifact digest mismatch');
     }
-    verifiedBytes.set(name, bytes);
+    verifiedBytes.set(name, registry ? bytes : normalizePeerArtifact(bytes));
   }
   for (const name of Object.keys(publicPackages)) {
     if (!byName.has(name)) throw new Error('runtime-kit public package is outside patched DSH closure');
@@ -212,7 +212,7 @@ expectedCliIntegrity = contract.components.dsh.package.integrity): void {
         verifiedBytes.get(name)!, { flag: 'wx' });
     }
     writeFileSync(join(profile, 'artifacts', tuiFile), tuiBytes, { flag: 'wx' });
-    writeFileSync(join(profile, 'artifacts', webFile), webBytes, { flag: 'wx' });
+    writeFileSync(join(profile, 'artifacts', webFile), normalizePeerArtifact(webBytes), { flag: 'wx' });
     writeFileSync(join(profile, 'artifacts', cliFile), cliBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'patches/tui-rename.patch'), patchBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);

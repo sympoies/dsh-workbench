@@ -4,9 +4,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { gzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { stageCombinedProfile, stageCombinedProfileFromPinnedKit } from '../src/combined-profile.ts';
-import { inspectPeerArtifact } from '../src/package-artifact.ts';
+import { inspectPeerArtifact, inspectSemanticPeerArtifact, normalizePeerArtifact } from '../src/package-artifact.ts';
 
 const revision = '46a7f68b0922371ce7144b668b90e377d8e799f4';
 const releaseVersion = (JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url), 'utf8')) as
@@ -152,6 +152,92 @@ test('portable profile rejects changed native compressed bytes with rewritten re
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('portable profile normalizes authenticated workspace tarballs across gzip metadata', () => {
+  const first = fixture();
+  const second = fixture();
+  try {
+    const peer = second.receipt.data.packages[0];
+    const changed = readFileSync(peer.path);
+    changed.writeUInt32LE(123, 4);
+    writeFileSync(peer.path, changed);
+    peer.tarball_sha256 = createHash('sha256').update(changed).digest('hex');
+    const stage = (input: ReturnType<typeof fixture>) => {
+      const profile = join(input.root, 'profile');
+      stageCombinedProfile({ profile, receipt: input.receipt, kitManifest: input.kitManifest,
+        tuiArchive: input.tuiArchive, webArchive: input.webArchive, cliArchive: input.cliArchive },
+      input.tuiIntegrity, input.webDigest, input.cliIntegrity);
+      return readFileSync(join(profile, 'artifacts/deepseek-ai-cordis-4.0.4.tgz'));
+    };
+    assert.deepEqual(stage(first), stage(second));
+  } finally {
+    rmSync(first.root, { recursive: true, force: true });
+    rmSync(second.root, { recursive: true, force: true });
+  }
+});
+
+test('normalized workspace tarballs ignore member order and inert manifest order', () => {
+  const file = tarEntry('package/lib/client.js', Buffer.from('export const same = true;'));
+  const first = gzipSync(Buffer.concat([
+    tarEntry('package/package.json', Buffer.from('{"name":"@deepseek-ai/cordis","version":"4.0.4"}')),
+    file, Buffer.alloc(1024),
+  ]));
+  const second = gzipSync(Buffer.concat([
+    file, tarEntry('package/package.json', Buffer.from('{ "version": "4.0.4", "name": "@deepseek-ai/cordis" }')),
+    Buffer.alloc(1024),
+  ]));
+  assert.equal(inspectPeerArtifact(first).artifactSha256, inspectPeerArtifact(second).artifactSha256);
+  assert.deepEqual(normalizePeerArtifact(first), normalizePeerArtifact(second));
+});
+
+test('normalization preserves conditional export precedence in package manifests', () => {
+  const original = archive('@deepseek-ai/cordis', '4.0.4');
+  const withExports = gzipSync(Buffer.concat([
+    tarEntry('package/package.json', Buffer.from(JSON.stringify({
+      name: '@deepseek-ai/cordis', version: '4.0.4',
+      exports: { '.': { node: './node.js', default: './fallback.js' } },
+    }))), Buffer.alloc(1024),
+  ]));
+  const normalized = gunzipSync(normalizePeerArtifact(withExports)).toString('utf8');
+  assert.match(normalized, /"node":"\.\/node\.js","default":"\.\/fallback\.js"/);
+  assert.notDeepEqual(normalizePeerArtifact(withExports), normalizePeerArtifact(original));
+});
+
+test('semantic peer identity retains unknown nested manifest-map order', () => {
+  const packed = (first: string, second: string) => gzipSync(Buffer.concat([
+    tarEntry('package/package.json', Buffer.from(JSON.stringify({
+      name: '@deepseek-ai/cordis', version: '4.0.4',
+      customPolicy: { [first]: first === 'strict' ? './strict.js' : './fallback.js',
+        [second]: second === 'strict' ? './strict.js' : './fallback.js' },
+    }))), Buffer.alloc(1024),
+  ]));
+  const before = packed('strict', 'default');
+  const reversed = packed('default', 'strict');
+  assert.equal(inspectPeerArtifact(before).artifactSha256,
+    inspectPeerArtifact(reversed).artifactSha256);
+  assert.notEqual(inspectSemanticPeerArtifact(before), inspectSemanticPeerArtifact(reversed));
+  const normalized = normalizePeerArtifact(before);
+  assert.equal(inspectSemanticPeerArtifact(normalized), inspectSemanticPeerArtifact(before));
+  assert.match(gunzipSync(normalized).toString('utf8'),
+    /"strict":"\.\/strict\.js","default":"\.\/fallback\.js"/);
+});
+
+test('normalization converges package-name dependency maps without changing specs', () => {
+  const packed = (reverse: boolean) => gzipSync(Buffer.concat([
+    tarEntry('package/package.json', Buffer.from(JSON.stringify({
+      name: '@deepseek-ai/cordis', version: '4.0.4',
+      peerDependencies: reverse
+        ? { beta: '^2.0.0', alpha: '^1.0.0' }
+        : { alpha: '^1.0.0', beta: '^2.0.0' },
+    }))), Buffer.alloc(1024),
+  ]));
+  const first = packed(false);
+  const second = packed(true);
+  assert.equal(inspectSemanticPeerArtifact(first), inspectSemanticPeerArtifact(second));
+  assert.deepEqual(normalizePeerArtifact(first), normalizePeerArtifact(second));
+  assert.match(gunzipSync(normalizePeerArtifact(second)).toString('utf8'),
+    /"alpha":"\^1\.0\.0","beta":"\^2\.0\.0"/);
+});
+
 test('stages the native Web plugin in the same governed workbench profile', () => {
   const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
@@ -177,7 +263,7 @@ test('stages the native Web plugin in the same governed workbench profile', () =
     assert.match(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'),
       /name: '@sympoies\/dsh-workbench-web'/);
     assert.deepEqual(readFileSync(join(profile, `artifacts/sympoies-dsh-workbench-web-${releaseVersion}.tgz`)),
-      readFileSync(webArchive));
+      normalizePeerArtifact(readFileSync(webArchive)));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -215,7 +301,7 @@ test('stages a portable profile from the authenticated runtime-kit patched recei
     assert.match(workspace, /patchedDependencies:/);
     assert.match(workspace, /'@deepseek-ai\/dsh-sandbox': 'file:artifacts\/deepseek-ai-dsh-sandbox-0\.1\.7-rc\.1\.tgz'/);
     assert.deepEqual(readFileSync(join(profile, 'artifacts/deepseek-ai-dsh-sandbox-0.1.7-rc.1.tgz')),
-      readFileSync(receipt.data.packages[1].path));
+      normalizePeerArtifact(readFileSync(receipt.data.packages[1].path)));
     assert.match(readFileSync(join(profile, 'cordis.yml'), 'utf8'), /^\[\]\n$/);
   } finally {
     rmSync(root, { recursive: true, force: true });

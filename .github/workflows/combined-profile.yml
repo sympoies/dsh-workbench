@@ -191,6 +191,9 @@ jobs:
             "$VERIFICATION_ROOT/$WEB_FILE" \
             "$VERIFICATION_ROOT/$CLI_FILE" \
             "$VERIFICATION_ROOT/dsh-home"
+      - name: Verify source-bound semantic identities before frozen installation
+        working-directory: dsh-workbench
+        run: node scripts/verify-staged-semantic-peers.ts "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
       - name: Install exact DSH/Web/TUI graph with strict frozen peers
         env:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
@@ -199,10 +202,18 @@ jobs:
           # Runtime-kit's contained DSH command omits PNPM_HOME; use its store now.
           unset PNPM_HOME
           test "$(npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm --version)" = "$WORKBENCH_PNPM"
-          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --strict-peer-dependencies --ignore-scripts
-          # Normalize fresh transitive resolutions before runtime-kit owns its mutation.
-          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm dedupe --strict-peer-dependencies --ignore-scripts
+          cp "$GITHUB_WORKSPACE/dsh-workbench/compatibility/linux-profile-lock.yaml" pnpm-lock.yaml
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
+          cmp pnpm-lock.yaml "$GITHUB_WORKSPACE/dsh-workbench/compatibility/linux-profile-lock.yaml"
+      - name: Freeze pre-setup profile input for release assembly
+        run: |
+          node - "$VERIFICATION_ROOT/dsh-home/profiles/workbench" "$VERIFICATION_ROOT/release-profile-input" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const [from, to] = process.argv.slice(2);
+          fs.cpSync(from, to, { recursive: true, errorOnExist: true,
+            filter: entry => path.basename(entry) !== 'node_modules' });
+          NODE
       - name: Prepare exact profile toolchain and packaged runtime-kit
         working-directory: dsh-runtime-kit
         env:
@@ -224,8 +235,10 @@ jobs:
           import { createHash } from 'node:crypto';
           import { mkdirSync, readFileSync, copyFileSync, writeFileSync } from 'node:fs';
           import { join, basename } from 'node:path';
+          import { inspectPeerArtifact } from './src/package-artifact.ts';
           const root = process.argv[2];
           const contract = JSON.parse(readFileSync('compatibility/workbench.json'));
+          const kit = JSON.parse(readFileSync('../dsh-runtime-kit/compatibility/dsh.json'));
           const cli = contract.components.dsh.package;
           const host = join(root, 'portable-host');
           const artifacts = join(host, 'artifacts');
@@ -242,10 +255,17 @@ jobs:
             || staged.data.packages.length !== 80) throw new Error('Verified patched closure required');
           let workspace = 'overrides:\n';
           for (const row of receipt.data.packages) {
-            // Copy the bytes already authenticated by both independent stagers.
+            // The reviewed repack changes tar bytes while retaining the pinned package content.
             const source = join(root, 'dsh-home/profiles/workbench/artifacts', basename(row.path));
             const archive = readFileSync(source);
-            if (createHash('sha256').update(archive).digest('hex') !== row.tarball_sha256) {
+            const registry = kit.registry_workspace_artifacts?.[row.name];
+            if (registry && (createHash('sha256').update(archive).digest('hex') !== row.tarball_sha256
+              || `sha512-${createHash('sha512').update(archive).digest('base64')}` !== registry.integrity)) {
+              throw new Error('Registry archive drift');
+            }
+            const artifact = inspectPeerArtifact(archive);
+            if (artifact.name !== row.name || artifact.version !== row.version
+              || artifact.artifactSha256 !== row.artifact_sha256) {
               throw new Error('Staged archive drift');
             }
             copyFileSync(source, join(artifacts, basename(row.path)));
@@ -323,6 +343,95 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             stage=manifest
           done
+      - name: Build and authenticate the Linux candidate archive
+        working-directory: dsh-workbench
+        env:
+          NILS_ARCHIVE: ${{ steps.nils.outputs.archive }}
+        run: |
+          node - "$VERIFICATION_ROOT" "$GITHUB_WORKSPACE" "$NILS_ARCHIVE" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const [root, workspace, nilsArchive] = process.argv.slice(2);
+          const kitTarball = fs.readFileSync(path.join(root, 'runtime-kit-tarball-name'), 'utf8').trim();
+          fs.writeFileSync(path.join(root, 'release-build-input.json'), JSON.stringify({
+            frozenProfile: path.join(root, 'release-profile-input'),
+            runtimeKitRepo: path.join(workspace, 'dsh-runtime-kit'),
+            runtimeKitPackage: path.join(root, kitTarball),
+            nilsArchive: path.join(root, nilsArchive),
+            profileLicenseInventory: path.join(root, 'profile-production-license-inventory.json'),
+            cliLicenseInventory: path.join(root, 'host-production-license-inventory.json'),
+            outputRoot: path.join(root, 'linux-release-root'),
+            outputArchive: path.join(root, 'linux-release-candidate.tar.gz'),
+          }));
+          NODE
+          node scripts/linux-release.mjs "$VERIFICATION_ROOT/release-build-input.json" \
+            > "$VERIFICATION_ROOT/linux-release-candidate-receipt.json"
+          for path in compatibility installer notices license-inventory \
+            runtime-kit/compatibility runtime-kit/source-build-proof.json \
+            release-manifest.json profile/package.json profile/pnpm-workspace.yaml \
+            profile/pnpm-lock.yaml profile/cordis.yml profile/cordis.patch.yml \
+            profile/workbench-tui; do
+            bash scripts/check-publication.sh --artifact "$VERIFICATION_ROOT/linux-release-root/$path"
+          done
+          # Binary archives are authenticated by the content verifier and remain
+          # subject to the separate human publication audit.
+          node - "$VERIFICATION_ROOT" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = process.argv[2];
+          const receipt = JSON.parse(fs.readFileSync(path.join(root, 'linux-release-candidate-receipt.json')));
+          const contract = require('./compatibility/workbench.json');
+          const kit = require('../dsh-runtime-kit/compatibility/dsh.json');
+          if (receipt.releaseVersion !== contract.release.version
+            || receipt.peerArchives !== Object.keys(kit.workspace_artifacts).length) process.exit(1);
+          console.log(`Linux release candidate manifest SHA-256: ${receipt.manifestSha256}`);
+          console.log(`Linux release candidate archive SHA-256: ${receipt.archiveSha256}`);
+          NODE
+      - name: Verify and install the exact candidate archive bytes
+        working-directory: dsh-workbench
+        run: |
+          node - "$VERIFICATION_ROOT" "$GITHUB_WORKSPACE" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const cp = require('node:child_process');
+          const [root, workspace] = process.argv.slice(2);
+          const receipt = JSON.parse(fs.readFileSync(path.join(root, 'linux-release-candidate-receipt.json')));
+          const args = ['scripts/linux-release-archive.mjs',
+            path.join(root, 'linux-release-candidate.tar.gz'), receipt.archiveSha256,
+            receipt.manifestSha256, path.join(root, 'linux-release-extracted'),
+            path.join(workspace, 'dsh-runtime-kit')];
+          const result = cp.spawnSync(process.execPath, args, { stdio: 'inherit', timeout: 120_000 });
+          if (result.status !== 0) process.exit(result.status ?? 1);
+          NODE
+          node - "$VERIFICATION_ROOT" "$GITHUB_WORKSPACE" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const cp = require('node:child_process');
+          const [root, workspace] = process.argv.slice(2);
+          const receipt = JSON.parse(fs.readFileSync(path.join(root, 'linux-release-candidate-receipt.json')));
+          const result = cp.spawnSync(process.execPath,
+            ['tests/linux-release-content-mutations.ts', path.join(root, 'linux-release-extracted'),
+              receipt.manifestSha256, path.join(workspace, 'dsh-runtime-kit')],
+            { stdio: 'inherit', timeout: 180_000 });
+          if (result.status !== 0) process.exit(result.status ?? 1);
+          NODE
+          install -d -m 0700 "$VERIFICATION_ROOT/release-installed/dsh-home/profiles"
+          cp -a "$VERIFICATION_ROOT/linux-release-extracted/profile" \
+            "$VERIFICATION_ROOT/release-installed/dsh-home/profiles/workbench"
+          unset PNPM_HOME
+          pnpm --dir "$VERIFICATION_ROOT/release-installed/dsh-home/profiles/workbench" \
+            install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
+          install -d -m 0700 "$VERIFICATION_ROOT/release-installed/kit-package"
+          tar -xzf "$VERIFICATION_ROOT/linux-release-extracted/runtime-kit/package.tgz" \
+            -C "$VERIFICATION_ROOT/release-installed/kit-package" --no-same-owner
+          node scripts/verify-combined-runtime.ts \
+            "$VERIFICATION_ROOT/release-installed/kit-package/package" \
+            "$GITHUB_WORKSPACE/deepseek-harness" \
+            "$VERIFICATION_ROOT/release-installed/dsh-home" \
+            "$VERIFICATION_ROOT/release-installed/runtime-root" \
+            "$VERIFICATION_ROOT/linux-release-extracted/nils/bin" \
+            "$WORKBENCH_BROWSER_BIN" \
+            "$VERIFICATION_ROOT/release-installed/dsh-home/profiles/workbench/node_modules/@deepseek-ai/dsh/lib/bin.js"
       - name: Prepare real TTY acceptance dependencies
         working-directory: dsh-workbench
         run: |
@@ -385,4 +494,39 @@ jobs:
             --browser-bin "$WORKBENCH_BROWSER_BIN" \
             --installed-dsh-home "$VERIFICATION_ROOT/dsh-home" \
             --runtime-env-file "$VERIFICATION_ROOT/workbench-verification/terminal-environment.json" \
+            "${browser_args[@]}"
+      - name: Exercise Web and TUI from the extracted candidate installation
+        working-directory: dsh-workbench
+        run: |
+          node - "$VERIFICATION_ROOT/release-installed" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = process.argv[2];
+          const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+          const profile = path.join(root, 'dsh-home/profiles/workbench');
+          const cli = path.join(profile, 'node_modules/@deepseek-ai/dsh/lib/bin.js');
+          const kit = path.join(root, 'kit-package/package');
+          const runtime = path.join(root, 'runtime-root');
+          const launcher = path.join(kit, 'dist/bin/dsh-runtime-kit-launch.js');
+          for (const [name, args] of [
+            ['web-bin', [process.execPath, launcher, '--runtime-root', runtime, '--', process.execPath, cli]],
+            ['tui-bin', [process.execPath, path.join(profile, 'workbench-tui/scripts/launch-workbench-tui.ts'),
+              kit, runtime, cli, '--']],
+          ]) {
+            fs.writeFileSync(path.join(root, name), `#!/bin/sh\nexec ${args.map(quote).join(' ')} "$@"\n`,
+              { mode: 0o700, flag: 'wx' });
+          }
+          NODE
+          node tests/finish-line-host-probe.ts
+          pnpm test:tui:terminal \
+            --dsh-bin "$VERIFICATION_ROOT/release-installed/tui-bin" \
+            --installed-dsh-home "$VERIFICATION_ROOT/release-installed/dsh-home" \
+            --runtime-env-file "$VERIFICATION_ROOT/release-installed/workbench-verification/terminal-environment.json"
+          browser_args=(--ci-no-browser-sandbox)
+          pnpm test:web:browser \
+            --dsh-bin "$VERIFICATION_ROOT/release-installed/web-bin" \
+            --tui-bin "$VERIFICATION_ROOT/release-installed/tui-bin" \
+            --browser-bin "$WORKBENCH_BROWSER_BIN" \
+            --installed-dsh-home "$VERIFICATION_ROOT/release-installed/dsh-home" \
+            --runtime-env-file "$VERIFICATION_ROOT/release-installed/workbench-verification/terminal-environment.json" \
             "${browser_args[@]}"

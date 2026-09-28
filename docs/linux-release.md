@@ -46,6 +46,72 @@ private installed-unit receipt. CI must retain and install the same archive
 bytes intended for publication. None of those steps is supplied by the
 envelope verifier alone; it cannot assert an installed or released product.
 
+The Linux candidate builder is `node scripts/linux-release.mjs
+/absolute/private/build-input.json`. Its private input file has exactly these
+absolute paths: `frozenProfile`, `runtimeKitRepo`, `runtimeKitPackage`,
+`nilsArchive`, `profileLicenseInventory`, `cliLicenseInventory`, `outputRoot`,
+and `outputArchive`. Both outputs must be new. The frozen profile is the
+pre-setup, strictly installed profile, including its lockfile but excluding
+`node_modules`. The runtime-kit package must be built from the contract-pinned
+source checkout. The two inventories come from the installed production
+profile and CLI host. Neither private input file nor local receipt belongs in
+the release asset.
+
+The builder requires a clean Workbench source checkout and the pinned
+runtime-kit Git tree. It rebuilds runtime-kit from an isolated archive of that
+tree and compares the canonical package contents with the supplied package.
+The resulting source-build proof is included and indexed in the candidate.
+The reviewed [`linux-artifacts.json`](../compatibility/linux-artifacts.json)
+binds this release version to the runtime-kit package's canonical digest and
+the frozen workspace and lockfile raw digests. Changing any of those identities
+requires a new Workbench release version. The content verifier resolves this
+record and profile source files from the Git commit/tree named by the
+externally authenticated release manifest, instead of trusting the bundled
+proof or a mutable working tree alone.
+The frozen [Linux profile lockfile](../compatibility/linux-profile-lock.yaml)
+is also checked against that Git commit. CI installs from this exact lockfile
+without resolving or deduplicating a new dependency graph.
+Before creating that lockfile, Workbench verifies the runtime-kit peer-pack
+receipt and canonical package digests, then repacks workspace and Web archives
+in a deterministic tar/gzip form. Non-manifest member bytes remain unchanged;
+the package manifest canonicalization sorts only root fields and the standard
+`dependencies`, `devDependencies`, and `peerDependencies` name-to-version maps;
+all other nested object order is retained. The
+source-bound Linux artifact record pins an additional order-preserving semantic
+digest for every non-registry peer and the Web archive; the legacy runtime-kit
+canonical digest remains the separate compatibility identity.
+Registry archives retain their pinned raw
+integrities. This prevents build-host tar metadata from changing the file
+integrities recorded by the frozen lockfile.
+The bundled compatibility contract, Web record, patch, and installer source
+must match that same commit before the verifier uses the archived contract to
+select runtime-kit provenance. The only generated installer file is the fixed
+module-type package manifest.
+It assembles the closed profile file set, kit, nils binaries,
+notices, and license inventories; then it runs the independently loaded
+envelope and content checks on the new private output before archiving it. The
+content check compares all 83 peer packages with the pinned runtime-kit
+compatibility record, verifies the exact profile dependencies and peer-closure
+bundle, checks official DSH/TUI SHA-512 identities and the reviewed Web
+canonical digest, and compares the seven nils executables with the pinned
+release archive. The JSON printed by the builder contains the external
+manifest and archive SHA-256 values for a candidate receipt. Human publication
+review still checks the source-to-bundle proof and all generated artifacts.
+
+The builder and content checker do not install or accept a product. The
+installer must independently use the authenticated archive bytes, verify the
+external archive and manifest digests before consuming any bundled code, and
+retain an owner-private receipt for the exact installed snapshot.
+
+`scripts/linux-release-archive.mjs` authenticates the archive's external
+SHA-256 before extracting a bounded regular-file ustar payload into a new
+private root, then runs the detached manifest and content checks. The Linux CI
+profile job extracts these same archive bytes and repeats frozen installation,
+runtime-kit setup/doctor, Linux host probe, and installed Web/TUI handoff from
+that extracted snapshot. CI candidate artifacts are still subject to the
+publication audit; the archive and binary contents cannot pass the text-only
+publication scanner by themselves.
+
 The first publication still requires the complete
 [human source, artifact, license and receipt audit](publication.md). Native
 reduced macOS remains a later [#48](https://github.com/sympoies/dsh-workbench/issues/48)
