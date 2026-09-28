@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { inspectPeerBundle, validateFrozenProfileManifest,
+import { inspectPeerBundle, reviewedInstallerSourcePaths, validateFrozenProfileManifest,
   validatePeerSemanticRecord } from '../src/linux-release-content.ts';
+import { WORKBENCH_PROFILE_PATCH } from '../src/combined-profile.ts';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 
 const source = fileURLToPath(new URL('..', import.meta.url));
@@ -79,4 +80,23 @@ test('semantic peer record requires one pinned identity per non-registry package
     [rows[0], { ...rows[1], version: '2.0.0' }]]) {
     assert.throws(() => validatePeerSemanticRecord(invalid, kit), /semantic identity set/);
   }
+});
+
+test('shipped installer sources import only other shipped installer sources', () => {
+  const shipped = new Set<string>(reviewedInstallerSourcePaths);
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  for (const path of reviewedInstallerSourcePaths) {
+    const source = readFileSync(join(repo, path), 'utf8');
+    for (const match of source.matchAll(/(?:from|import)\s*\(?\s*'(\.{1,2}\/[^']+)'/g)) {
+      const target = join(path, '..', match[1]);
+      assert.ok(shipped.has(target), `${path} imports ${target}, which the release does not ship`);
+    }
+  }
+});
+
+test('the release content check expects the staged profile patch bytes', () => {
+  const source = readFileSync(new URL('../src/linux-release-content.ts', import.meta.url), 'utf8');
+  const literal = source.match(/\['profile\/cordis\.patch\.yml', ("[^"]*"\n\s*\+ '[^']*')\]/);
+  assert.ok(literal, 'profile patch expectation not found');
+  assert.equal(new Function(`return ${literal[1]};`)(), WORKBENCH_PROFILE_PATCH);
 });
