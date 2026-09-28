@@ -4,7 +4,7 @@
     "version": "0.1.0",
     "tag": "v0.1.0"
   },
-  "status": "candidate",
+  "status": "accepted",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",
@@ -94,12 +94,22 @@
       ]
     },
     "web": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36382287752"
+        }
+      ]
     },
     "handoff": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36382613741"
+        }
+      ]
     }
   }
 }
