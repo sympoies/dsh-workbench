@@ -166,6 +166,10 @@ move the tag or replace an asset in place.
 the source revision named by the release manifest, after checking the external
 archive and manifest SHA-256 values. The source checkout, runtime-kit source
 checkout, archive, and owner inputs must be controlled by the installing user.
+The install root must be new, and every directory above it must be owned by the
+installing user or root and not writable by other users unless it is sticky,
+because runtime-kit refuses to run owner tools below such an ancestor; planning
+checks this before any installation work.
 The input is an owner-private JSON file with exactly these fields:
 
 ```json

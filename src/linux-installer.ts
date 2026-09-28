@@ -112,6 +112,17 @@ export function planLinuxInstall(input: LinuxInstallInput): LinuxInstallPlan {
     || realpathSync(parent) !== parent || (parentStat.mode & 0o022) !== 0) {
     throw new Error('install root parent is not owner controlled');
   }
+  // runtime-kit only runs executables whose every ancestor is owned by the
+  // user or root and not writable by others (sticky directories excepted), so
+  // refuse such a root here instead of failing after installation work starts.
+  for (let directory = dirname(parent); ; directory = dirname(directory)) {
+    const stat = lstatSync(directory);
+    const trustedOwner = stat.uid === process.getuid?.() || stat.uid === 0;
+    if (!trustedOwner || ((stat.mode & 0o022) !== 0 && (stat.mode & 0o1000) === 0)) {
+      throw new Error('install root ancestor is writable by other users');
+    }
+    if (directory === dirname(directory)) break;
+  }
   const owner = readOwnerEnvironment(input.ownerEnvironmentFile);
   const stable = {
     schemaVersion: 'dsh-workbench.linux-install-plan.v1' as const,
