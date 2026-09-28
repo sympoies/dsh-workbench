@@ -4,7 +4,7 @@
     "version": "0.1.1",
     "tag": "v0.1.1"
   },
-  "status": "candidate",
+  "status": "accepted",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",
@@ -71,7 +71,7 @@
         "path": "compatibility/patches/tui-rename.patch",
         "sha256": "0ec0a9edda2712df50a16b7dae6beb530283c78474070d053c5a894d29eb380f"
       },
-      "status": "candidate"
+      "status": "accepted"
     }
   },
   "acceptance": {
@@ -85,16 +85,31 @@
       ]
     },
     "tui": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36437868830"
+        }
+      ]
     },
     "web": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36439691635"
+        }
+      ]
     },
     "handoff": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36443105642"
+        }
+      ]
     }
   }
 }

@@ -255,7 +255,12 @@ Install a newer or previous accepted version into a separate fresh root and
 verify it before switching an owner-controlled service entry. Do not replace
 the active root in place. Preserve the session home and its backup as a
 separate owner operation; this installer creates a new empty home and does not
-migrate user sessions. Stop the old owner and follow the session-copy and
+migrate user sessions. To move sessions from an existing home, stop every
+writer of that home, keep a complete copy as the rollback source, and copy only
+its `sessions/` directory into the new install's `dsh-home` before the first
+launch; Web rebuilds its projection cache. Continuing a session writes a new V4
+generation, so roll back by restoring the whole pre-upgrade copy for the old
+binary, never by pointing the old binary at the migrated home. Stop the old owner and follow the session-copy and
 rollback acceptance procedure before changing a production service target.
 
 `scripts/linux-release-archive.mjs` authenticates the archive's external
