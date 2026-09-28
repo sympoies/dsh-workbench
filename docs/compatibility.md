@@ -18,14 +18,17 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.2` Linux x64 contract is a **candidate**. It keeps every
+The current `v0.1.2` Linux x64 contract is **accepted for compatibility**. It keeps every
 `v0.1.1` source, package, and patch pin. The installed launch now runs DSH as a
 full host agent that keeps the machine's tool configuration, and the Workbench
 profile keeps the approval policy at `ask`; see
 [the Linux release runbook](linux-release.md). The new release version gives
 the Web identity, Web artifact, Linux profile lock, and Linux artifact record
-new values, and the TUI, Web, and cross-interface handoff gates need current
-evidence before the contract can be accepted.
+new values. Three distinct current-version Linux profile runs supplied the
+[TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36481063825), [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36483645255), and
+[cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36483672331) evidence; the
+runtime-kit pin and its evidence are unchanged. Deployments are accepted
+separately by the [agent delivery acceptance](agent-acceptance.md).
 
 The `v0.1.1` Linux x64 contract was **accepted for compatibility**. It keeps every
 `v0.1.0` source and package pin and extends the reviewed
