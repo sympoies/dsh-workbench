@@ -238,6 +238,7 @@ jobs:
           import { inspectPeerArtifact } from './src/package-artifact.ts';
           const root = process.argv[2];
           const contract = JSON.parse(readFileSync('compatibility/workbench.json'));
+          const kit = JSON.parse(readFileSync('../dsh-runtime-kit/compatibility/dsh.json'));
           const cli = contract.components.dsh.package;
           const host = join(root, 'portable-host');
           const artifacts = join(host, 'artifacts');
@@ -257,6 +258,11 @@ jobs:
             // The reviewed repack changes tar bytes while retaining the pinned package content.
             const source = join(root, 'dsh-home/profiles/workbench/artifacts', basename(row.path));
             const archive = readFileSync(source);
+            const registry = kit.registry_workspace_artifacts?.[row.name];
+            if (registry && (createHash('sha256').update(archive).digest('hex') !== row.tarball_sha256
+              || `sha512-${createHash('sha512').update(archive).digest('base64')}` !== registry.integrity)) {
+              throw new Error('Registry archive drift');
+            }
             const artifact = inspectPeerArtifact(archive);
             if (artifact.name !== row.name || artifact.version !== row.version
               || artifact.artifactSha256 !== row.artifact_sha256) {
