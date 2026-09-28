@@ -19,6 +19,8 @@ function fixture(change?: (contract: WorkbenchContract) => void) {
   mkdirSync(join(compatibility, 'patches'), { recursive: true });
   const path = join(compatibility, 'workbench.json');
   const contract = JSON.parse(readFileSync(source, 'utf8')) as WorkbenchContract;
+  // Synthetic accepted contract for schema tests while the source may be a candidate.
+  accept(contract);
   change?.(contract);
   writeFileSync(path, JSON.stringify(contract));
   const webArtifact = JSON.parse(readFileSync(webArtifactSource, 'utf8')) as { releaseVersion: string };
@@ -49,7 +51,7 @@ function run(command: string, path: string, extra: string[] = []) {
   });
 }
 
-test('accepted Linux contract is valid and can be activated', () => {
+test('current Linux contract is valid and only an accepted fixture can be activated', () => {
   const check = run('check', source);
   assert.equal(check.status, 0, check.stderr);
   assert.equal(check.stdout, 'Contract valid.\n');
@@ -58,8 +60,14 @@ test('accepted Linux contract is valid and can be activated', () => {
   assert.equal(printed.status, 0, printed.stderr);
   assert.equal(printed.stdout, `${JSON.stringify(JSON.parse(readFileSync(source, 'utf8')))}\n`);
   assert.equal(printed.stderr, '');
-  const activation = run('require-accepted', source);
-  assert.equal(activation.status, 0, activation.stderr);
+  const { dir, path } = fixture();
+  try {
+    const activation = run('require-accepted', path);
+    assert.equal(activation.status, 0, activation.stderr);
+    const current = JSON.parse(readFileSync(source, 'utf8')) as WorkbenchContract;
+    const currentActivation = run('require-accepted', source);
+    assert.equal(currentActivation.status === 0, current.status === 'accepted');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('a candidate contract cannot be activated', () => {
@@ -259,8 +267,8 @@ test('runtime Node baseline cannot fall below the pinned runtime-kit requirement
 test('a product-only release can advance the Workbench version', () => {
   const { dir, path } = fixture(contract => {
     const match = /^(.*-rc\.)(\d+)$/.exec(contract.release.version);
-    assert.ok(match);
-    contract.release.version = `${match[1]}${Number(match[2]) + 1}`;
+    contract.release.version = match ? `${match[1]}${Number(match[2]) + 1}`
+      : contract.release.version.replace(/\.(\d+)$/, (_, patch: string) => `.${Number(patch) + 1}`);
     contract.release.tag = `v${contract.release.version}`;
   });
   try {

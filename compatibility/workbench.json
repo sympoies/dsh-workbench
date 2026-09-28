@@ -1,10 +1,10 @@
 {
   "schemaVersion": 3,
   "release": {
-    "version": "0.1.0-rc.13",
-    "tag": "v0.1.0-rc.13"
+    "version": "0.1.0",
+    "tag": "v0.1.0"
   },
-  "status": "accepted",
+  "status": "candidate",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",
@@ -94,22 +94,12 @@
       ]
     },
     "web": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36353719094"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "handoff": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36357463622"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     }
   }
 }

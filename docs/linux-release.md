@@ -103,6 +103,86 @@ installer must independently use the authenticated archive bytes, verify the
 external archive and manifest digests before consuming any bundled code, and
 retain an owner-private receipt for the exact installed snapshot.
 
+## Linux owner installation
+
+`scripts/linux-install.mjs` has separate `plan` and `apply` actions. Run it from
+the source revision named by the release manifest, after checking the external
+archive and manifest SHA-256 values. The source checkout, runtime-kit source
+checkout, archive, and owner inputs must be controlled by the installing user.
+The input is an owner-private JSON file with exactly these fields:
+
+```json
+{
+  "schemaVersion": "dsh-workbench.linux-install-input.v1",
+  "archivePath": "/absolute/path/to/release.tar.gz",
+  "archiveSha256": "<64 lowercase hex characters from the external release receipt>",
+  "manifestSha256": "<64 lowercase hex characters from the external release receipt>",
+  "runtimeKitRepo": "/absolute/path/to/pinned/runtime-kit/source",
+  "pnpmExecutable": "/absolute/path/to/owner-reviewed/pnpm.cjs",
+  "pnpmSha256": "<64 lowercase hex characters of that exact executable>",
+  "pnpmPackageRoot": "/absolute/path/to/owner-reviewed/pnpm-package",
+  "pnpmPackageSha256": "<64 lowercase hex characters of the complete pnpm package tree>",
+  "installRoot": "/absolute/path/to/new/private/install",
+  "ownerEnvironmentFile": "/absolute/path/to/private/owner-environment.json"
+}
+```
+
+The owner environment file is mode 0600, single-link, and contains only
+explicit network settings and secret-file references. Each referenced secret
+file is also owner-private. No secret value belongs in the install input,
+receipt, release archive, or tracked source. The initial schema is:
+
+```json
+{
+  "schemaVersion": "dsh-workbench.owner-environment.v1",
+  "environment": { "DEEPSEEK_BASE_URL": "https://example.invalid/v1" },
+  "secretFiles": { "DEEPSEEK_API_KEY": "/absolute/private/key-file" }
+}
+```
+
+`HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` are the other supported plain
+environment keys. Omit unused keys and references. The launchers discard
+ambient values for these keys and read the owner file at launch, so rotation
+does not require changing the installed release. An empty secret reference
+map does not inherit a caller's API key.
+The pnpm package is a trusted owner input: plan binds the canonical entrypoint,
+its SHA-256, and the complete package tree digest. Apply rechecks these bytes
+before invoking pnpm through the current Node binary. The current Node must
+meet the contract baseline, and the package must be the reviewed pnpm version
+in the contract. A matching version string printed by an arbitrary PATH
+command is not sufficient.
+
+Run `node scripts/linux-install.mjs plan /absolute/private/input.json`, review
+the returned target and digests, then pass its exact `planDigest` to
+`node scripts/linux-install.mjs apply /absolute/private/input.json <planDigest>`.
+Planning writes nothing. Apply requires a fresh install root, rechecks the
+input and archive, extracts and verifies the complete source-bound payload,
+requires its own clean checkout to match the manifest's builder commit/tree,
+performs a strict frozen profile installation, probes Linux finish-line
+support, and requires digest-bound runtime-kit setup and a healthy doctor.
+Failure removes only the newly created root. The private
+`installed-unit-receipt.json` records immutable identities, probe results,
+the approved plan and owner-configuration digests, and launcher paths;
+`productAccepted: false` means that installation alone is
+not a product acceptance verdict. Keep the receipt outside public logs and
+review it before owner activation.
+
+`bin/workbench-web` and `bin/workbench-tui` are the installed launchers. Both
+use the same private DSH home and runtime-kit owner; the TUI launcher accepts
+an explicit `--resume <session-id>` through the Workbench TUI entry. Launch
+from the intended canonical Git workspace. A live session owner prevents
+takeover. After a crash, the pinned Linux host must prove the old owner died,
+clean up its work, rotate authority, and invalidate old validation evidence
+before the other interface resumes. A pending Bash request is never
+implicitly approved by recovery.
+
+Install a newer or previous accepted version into a separate fresh root and
+verify it before switching an owner-controlled service entry. Do not replace
+the active root in place. Preserve the session home and its backup as a
+separate owner operation; this installer creates a new empty home and does not
+migrate user sessions. Stop the old owner and follow the session-copy and
+rollback acceptance procedure before changing a production service target.
+
 `scripts/linux-release-archive.mjs` authenticates the archive's external
 SHA-256 before extracting a bounded regular-file ustar payload into a new
 private root, then runs the detached manifest and content checks. The Linux CI

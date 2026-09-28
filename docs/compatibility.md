@@ -18,7 +18,16 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The Linux x64 component graph for `v0.1.0-rc.13` is **accepted for compatibility**.
+The current `v0.1.0` Linux x64 contract is a **candidate** for the first
+distributable release. It retains the accepted rc.13 DSH, TUI, and runtime-kit
+source pins, but changes the Workbench/Web release identity and adds a portable
+owner installer. Its Web and handoff evidence must be rerun against this exact
+identity before promotion. Candidate CI exercises the native installed profile;
+only an accepted contract may build the source-bound release archive and run
+the final archive installation gate. A passing candidate check does not itself
+accept or publish a product.
+
+The earlier Linux x64 component graph for `v0.1.0-rc.13` was **accepted for compatibility**.
 This records the pinned graph and its installed-profile acceptance; no Workbench
 release, portable installer, OCI image, or owner deployment is published by
 that status. Those remain separate [#9](https://github.com/sympoies/dsh-workbench/issues/9)

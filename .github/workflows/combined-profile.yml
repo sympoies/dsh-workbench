@@ -44,6 +44,7 @@ jobs:
             const cli=c.components.dsh.package;
             const outputs={
               kit_commit:c.components.runtimeKit.source.commit,
+              contract_status:c.status,
               dsh_commit:c.components.dsh.source.commit,
               dsh_pnpm:c.components.dsh.toolchain.pnpm,
               workbench_pnpm:c.runtime.pnpm,
@@ -344,6 +345,7 @@ jobs:
             stage=manifest
           done
       - name: Build and authenticate the Linux candidate archive
+        if: steps.pins.outputs.contract_status == 'accepted'
         working-directory: dsh-workbench
         env:
           NILS_ARCHIVE: ${{ steps.nils.outputs.archive }}
@@ -388,6 +390,7 @@ jobs:
           console.log(`Linux release candidate archive SHA-256: ${receipt.archiveSha256}`);
           NODE
       - name: Verify and install the exact candidate archive bytes
+        if: steps.pins.outputs.contract_status == 'accepted'
         working-directory: dsh-workbench
         run: |
           node - "$VERIFICATION_ROOT" "$GITHUB_WORKSPACE" <<'NODE'
@@ -496,6 +499,7 @@ jobs:
             --runtime-env-file "$VERIFICATION_ROOT/workbench-verification/terminal-environment.json" \
             "${browser_args[@]}"
       - name: Exercise Web and TUI from the extracted candidate installation
+        if: steps.pins.outputs.contract_status == 'accepted'
         working-directory: dsh-workbench
         run: |
           node - "$VERIFICATION_ROOT/release-installed" <<'NODE'
@@ -530,3 +534,25 @@ jobs:
             --installed-dsh-home "$VERIFICATION_ROOT/release-installed/dsh-home" \
             --runtime-env-file "$VERIFICATION_ROOT/release-installed/workbench-verification/terminal-environment.json" \
             "${browser_args[@]}"
+      - name: Plan, apply and accept the portable owner installation
+        if: steps.pins.outputs.contract_status == 'accepted'
+        working-directory: dsh-workbench
+        run: |
+          node scripts/verify-owner-install.ts \
+            "$VERIFICATION_ROOT" \
+            "$GITHUB_WORKSPACE/dsh-runtime-kit" \
+            "$VERIFICATION_ROOT/linux-release-candidate-receipt.json" \
+            "$VERIFICATION_ROOT/workbench-toolchain/node_modules/pnpm/bin/pnpm.cjs" \
+            "$WORKBENCH_BROWSER_BIN" \
+            > "$VERIFICATION_ROOT/owner-install-acceptance.json"
+          node - "$VERIFICATION_ROOT/owner-install-acceptance.json" \
+            "$VERIFICATION_ROOT/linux-release-candidate-receipt.json" <<'NODE'
+          const fs = require('node:fs');
+          const accepted = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const build = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          if (accepted.schemaVersion !== 'dsh-workbench.owner-install-acceptance.v1'
+            || accepted.result !== 'passed'
+            || accepted.archiveSha256 !== build.archiveSha256
+            || accepted.manifestSha256 !== build.manifestSha256) process.exit(1);
+          console.log(`Owner-installed Linux acceptance passed for archive ${accepted.archiveSha256}`);
+          NODE

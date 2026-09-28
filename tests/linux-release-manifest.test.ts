@@ -38,6 +38,17 @@ function fixture(): { root: string; manifest: LinuxReleaseManifest; write: () =>
   }
   add('installer/package.json', '{"type":"module"}\n');
   const contract = JSON.parse(readFileSync(join(root, 'compatibility/workbench.json'), 'utf8'));
+  // Unit fixtures model an accepted payload; the tracked candidate remains pending.
+  contract.status = 'accepted';
+  for (const [name, gate] of Object.entries(contract.acceptance) as Array<[string, {
+    status: string; evidence: Array<{ platform: string; url: string }> }]>) {
+    gate.status = 'passed';
+    if (gate.evidence.length === 0) {
+      gate.evidence = [{ platform: 'linux-x64',
+        url: `https://github.com/sympoies/dsh-workbench/pull/${name === 'web' ? 901 : 902}` }];
+    }
+  }
+  writeFileSync(join(root, 'compatibility/workbench.json'), `${JSON.stringify(contract)}\n`);
   const dshPath = `profile/artifacts/${contract.components.dsh.package.name.slice(1).replace('/', '-')}-${contract.components.dsh.package.version}.tgz`;
   const tuiPath = `profile/artifacts/${contract.components.tui.package.name.slice(1).replace('/', '-')}-${contract.components.tui.package.version}.tgz`;
   const webPath = `profile/artifacts/sympoies-dsh-workbench-web-${contract.release.version}.tgz`;

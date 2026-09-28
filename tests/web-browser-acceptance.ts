@@ -13,11 +13,15 @@ import { chromium, type Browser, type Locator, type Page } from 'playwright-core
 import type { WorkbenchContract } from '../src/contract-types.ts';
 import { workbenchIdentity } from '../web/src/identity.ts';
 import { readEvents } from './session-events.ts';
+import { configureOwnerBackend } from './owner-backend.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
 const installedHome = process.argv.includes('--installed-dsh-home') ? option('--installed-dsh-home') : undefined;
 const runtimeEnvFile = process.argv.includes('--runtime-env-file') ? option('--runtime-env-file') : undefined;
+const ownerEnvFile = process.argv.includes('--owner-environment-file')
+  ? option('--owner-environment-file') : undefined;
+if (ownerEnvFile && !installedHome) throw new Error('Owner environment fixture requires an installed home');
 assert.equal(Boolean(installedHome), Boolean(runtimeEnvFile),
   'Installed home and runtime environment file must be provided together');
 if (installedHome) assert.equal(readFileSync(join(installedHome, '.workbench-terminal-acceptance'), 'utf8'),
@@ -178,6 +182,7 @@ function visibleScreen(screen: InstanceType<typeof headless.Terminal>): string {
 
 function startTui(dsh: string, fixture: string, home: string, agents: string, workspace: string,
   baseURL: string, apiKey: string, args: string[] = []) {
+  configureOwnerBackend(ownerEnvFile, baseURL, apiKey);
   const child = pty.spawn(dsh, ['--profile', tuiProfile, ...args], {
     name: 'xterm-256color', cols: 80, rows: 24, cwd: workspace,
     env: { ...runtimeEnvironment, ...managerEnvironment, PATH: `${dirname(dsh)}:${process.env.PATH ?? ''}`, HOME: home, DSH_HOME: home,
@@ -529,6 +534,7 @@ async function checkWebWriterContention(dsh: string, fixture: string, home: stri
 
 async function startHost(binary: string, home: string, agents: string, workspace: string,
   baseURL: string, apiKey: string) {
+  configureOwnerBackend(ownerEnvFile, baseURL, apiKey);
   const child = spawn(binary, ['--profile', webProfile, '--host', '127.0.0.1', '--no-open', '--port', '0'], {
     cwd: workspace,
     env: {
