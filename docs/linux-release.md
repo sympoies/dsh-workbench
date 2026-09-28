@@ -135,6 +135,26 @@ archive. The exact final archive, OCI layout/configuration, asset bytes,
 notices, license inventories, CI logs, and private installation receipts need
 the [first-publication human audit](publication.md) before publication.
 
+On the final clean `main` revision, run `release.sh preflight` with the same
+build input, OCI layout, OCI tarball, packet, a new extraction root, and the
+private release-notes file. It rechecks both assets, their source identity,
+canonical GitHub `main`, enabled immutable-release protection, and the extracted
+contents without publishing. The packet must be exactly the canonical path-free
+receipt that `prepare` writes; it and the notes pass the publication scanner,
+and preflight prints the receipt and notes digests. After a human reviewer with
+admin or maintain permission records explicit approval of that exact source,
+the four artifact digests, the receipt digest, and the release-notes digest in
+an unedited issue #8 comment, `release.sh publish` takes the same arguments
+with another new extraction root and the issue-comment URL. It repeats
+verification, creates a signed `v0.1.0` tag, and publishes the native archive,
+non-runnable OCI carrier, and receipt as GitHub Release assets. It finds the
+release by listing all releases, because GitHub's tag lookup omits drafts, and
+refuses more than one release for the tag. It then uploads, publishes, and
+verifies that release by id, checking every asset digest, the release notes
+body, and `immutable: true`. If an attempt stops after tag creation, rerun
+`publish` with the same inputs: it resumes the one draft for the tag. Never
+move the tag or replace an asset in place.
+
 ## Linux owner installation
 
 `scripts/linux-install.mjs` has separate `plan` and `apply` actions. Run it from
@@ -182,7 +202,10 @@ its SHA-256, and the complete package tree digest. Apply rechecks these bytes
 before invoking pnpm through the current Node binary. The current Node must
 meet the contract baseline, and the package must be the reviewed pnpm version
 in the contract. A matching version string printed by an arbitrary PATH
-command is not sufficient. The frozen install uses a new private package-manager
+command is not sufficient. The install root and every ancestor must satisfy
+runtime-kit's trusted-executable ownership and write-permission rules; a
+group-writable output directory is unsuitable even when the install root itself
+is private. The frozen install uses a new private package-manager
 home, store, and distinct empty user/global npm configuration files, ignores pnpmfile hooks, and does not inherit
 caller package-manager or Node execution settings. Only proxy settings named in
 the private owner environment are passed to pnpm. Registry packages are still
