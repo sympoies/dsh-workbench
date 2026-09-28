@@ -199,10 +199,9 @@ jobs:
           # Runtime-kit's contained DSH command omits PNPM_HOME; use its store now.
           unset PNPM_HOME
           test "$(npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm --version)" = "$WORKBENCH_PNPM"
-          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --strict-peer-dependencies --ignore-scripts
-          # Normalize fresh transitive resolutions before runtime-kit owns its mutation.
-          npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm dedupe --strict-peer-dependencies --ignore-scripts
+          cp "$GITHUB_WORKSPACE/dsh-workbench/compatibility/linux-profile-lock.yaml" pnpm-lock.yaml
           npm exec --yes --package "pnpm@$WORKBENCH_PNPM" -- pnpm install --frozen-lockfile --strict-peer-dependencies --ignore-scripts
+          cmp pnpm-lock.yaml "$GITHUB_WORKSPACE/dsh-workbench/compatibility/linux-profile-lock.yaml"
       - name: Freeze pre-setup profile input for release assembly
         run: |
           node - "$VERIFICATION_ROOT/dsh-home/profiles/workbench" "$VERIFICATION_ROOT/release-profile-input" <<'NODE'

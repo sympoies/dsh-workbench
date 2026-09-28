@@ -35,6 +35,15 @@ const sourceRoot = fileURLToPath(new URL('..', import.meta.url));
 const integrity = (bytes: Buffer): string => `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
 const artifactName = (name: string, version: string): string =>
   `${name.slice(1).replace('/', '-')}-${version}.tgz`;
+export const reviewedCompatibilitySourcePaths = [
+  'compatibility/workbench.json', 'compatibility/web-artifact.json',
+  'compatibility/linux-artifacts.json', 'compatibility/patches/tui-rename.patch',
+] as const;
+export const reviewedInstallerSourcePaths = [
+  'scripts/contract.mjs', 'src/contract.ts', 'src/contract-types.ts',
+  'src/linux-release-manifest.ts', 'src/linux-release-content.ts',
+  'src/pinned-kit.ts', 'src/package-artifact.ts',
+] as const;
 type LinuxArtifactsRecord = {
   schemaVersion: string; releaseVersion: string;
   runtimeKitPackageCanonicalSha256: string;
@@ -150,6 +159,19 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
   }
   const sourceBlob = (path: string): Buffer => builderGit(manifest.builderSource.commit,
     ['show', `${manifest.builderSource.commit}:${path}`]);
+  for (const path of reviewedCompatibilitySourcePaths) {
+    if (!readFileSync(join(root, path)).equals(sourceBlob(path))) {
+      throw new Error(`release file differs from reviewed builder source: ${path}`);
+    }
+  }
+  for (const path of reviewedInstallerSourcePaths) {
+    if (!readFileSync(join(root, 'installer', path)).equals(sourceBlob(path))) {
+      throw new Error(`release installer differs from reviewed builder source: ${path}`);
+    }
+  }
+  if (!readFileSync(join(root, 'installer/package.json')).equals(Buffer.from('{"type":"module"}\n'))) {
+    throw new Error('release installer differs from reviewed builder source: package.json');
+  }
   const contract = JSON.parse(readFileSync(join(root, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
   const reviewedArtifactsBytes = sourceBlob('compatibility/linux-artifacts.json');
   if (!readFileSync(join(root, 'compatibility/linux-artifacts.json')).equals(reviewedArtifactsBytes)) {
@@ -163,8 +185,9 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
       .every(value => /^[a-f0-9]{64}$/.test(value))) {
     throw new Error('reviewed Linux artifact record is invalid');
   }
-  const dshKit = readPinnedKitJson(kitRepo, 'compatibility/dsh.json') as DshCompatibility;
-  const nilsKit = readPinnedKitJson(kitRepo, 'compatibility/nils-cli.json') as NilsCompatibility;
+  const kitPin = contract.components.runtimeKit.source;
+  const dshKit = readPinnedKitJson(kitRepo, 'compatibility/dsh.json', '/usr/bin/git', kitPin) as DshCompatibility;
+  const nilsKit = readPinnedKitJson(kitRepo, 'compatibility/nils-cli.json', '/usr/bin/git', kitPin) as NilsCompatibility;
   sameJson(JSON.parse(readFileSync(join(root, 'runtime-kit/compatibility/dsh.json'), 'utf8')),
     dshKit, 'DSH compatibility');
   sameJson(JSON.parse(readFileSync(join(root, 'runtime-kit/compatibility/nils-cli.json'), 'utf8')),
@@ -284,6 +307,10 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
     || hash(readFileSync(join(root, 'profile/pnpm-lock.yaml')))
       !== reviewedArtifacts.profileLockRawSha256) {
     throw new Error('frozen profile workspace or lock differs from reviewed artifact record');
+  }
+  if (!readFileSync(join(root, 'profile/pnpm-lock.yaml'))
+    .equals(sourceBlob('compatibility/linux-profile-lock.yaml'))) {
+    throw new Error('frozen profile lock differs from reviewed builder source');
   }
   const exactFiles: Array<[string, string | Buffer]> = [
     ['profile/LICENSE', sourceBlob('LICENSE')],

@@ -68,6 +68,13 @@ requires a new Workbench release version. The content verifier resolves this
 record and profile source files from the Git commit/tree named by the
 externally authenticated release manifest, instead of trusting the bundled
 proof or a mutable working tree alone.
+The frozen [Linux profile lockfile](../compatibility/linux-profile-lock.yaml)
+is also checked against that Git commit. CI installs from this exact lockfile
+without resolving or deduplicating a new dependency graph.
+The bundled compatibility contract, Web record, patch, and installer source
+must match that same commit before the verifier uses the archived contract to
+select runtime-kit provenance. The only generated installer file is the fixed
+module-type package manifest.
 It assembles the closed profile file set, kit, nils binaries,
 notices, and license inventories; then it runs the independently loaded
 envelope and content checks on the new private output before archiving it. The

@@ -41,3 +41,22 @@ esac
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('pinned kit can read a historical contract pin independently of the active checkout', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-workbench-historical-kit-'));
+  const git = join(root, 'git');
+  const historical = { commit: 'a'.repeat(40), tree: 'b'.repeat(40) };
+  mkdirSync(join(root, 'repo'));
+  writeFileSync(git, `#!/bin/sh
+case "$1 $2" in
+  'rev-parse ${historical.commit}^'{tree}) printf '%s\\n' '${historical.tree}' ;;
+  'show ${historical.commit}:compatibility/dsh.json') printf '%s\\n' '{"repository":"historical"}' ;;
+  *) exit 9 ;;
+esac
+`);
+  chmodSync(git, 0o755);
+  try {
+    assert.equal((readPinnedKitJson(join(root, 'repo'), 'compatibility/dsh.json', git,
+      historical) as { repository: string }).repository, 'historical');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

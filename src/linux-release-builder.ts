@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import type { WorkbenchContract } from './contract-types.ts';
 import { inspectPeerArtifact } from './package-artifact.ts';
 import { readPinnedKitJson } from './pinned-kit.ts';
-import { expectedProfilePaths, verifyLinuxReleaseContents } from './linux-release-content.ts';
+import { expectedProfilePaths, reviewedCompatibilitySourcePaths,
+  reviewedInstallerSourcePaths, verifyLinuxReleaseContents } from './linux-release-content.ts';
 import type { LinuxReleaseFile, LinuxReleaseManifest, LinuxReleaseRole } from './linux-release-manifest.ts';
 import { workbenchIdentity } from '../web/src/identity.ts';
 
@@ -222,6 +223,10 @@ export function buildLinuxRelease(input: LinuxReleaseBuildInput): {
     throw new Error('release outputs cannot contain one another');
   }
   const builderSource = sourceRevision();
+  if (!readFileSync(join(input.frozenProfile, 'pnpm-lock.yaml'))
+    .equals(sourceBlob(builderSource.commit, 'compatibility/linux-profile-lock.yaml'))) {
+    throw new Error('frozen profile lock differs from reviewed builder source');
+  }
   licenseInventory(input.profileLicenseInventory);
   licenseInventory(input.cliLicenseInventory);
   const nils = readPinnedKitJson(input.runtimeKitRepo, kitRecordPath) as {
@@ -239,14 +244,10 @@ export function buildLinuxRelease(input: LinuxReleaseBuildInput): {
     mkdirSync(input.outputRoot, { mode: 0o700 });
     madeRoot = true;
     chmodSync(input.outputRoot, 0o700);
-    for (const path of ['compatibility/workbench.json', 'compatibility/web-artifact.json',
-      'compatibility/linux-artifacts.json',
-      'compatibility/patches/tui-rename.patch']) {
+    for (const path of reviewedCompatibilitySourcePaths) {
       write(input.outputRoot, path, sourceBlob(builderSource.commit, path));
     }
-    for (const path of ['scripts/contract.mjs', 'src/contract.ts', 'src/contract-types.ts',
-      'src/linux-release-manifest.ts', 'src/linux-release-content.ts', 'src/pinned-kit.ts',
-      'src/package-artifact.ts']) write(input.outputRoot, `installer/${path}`,
+    for (const path of reviewedInstallerSourcePaths) write(input.outputRoot, `installer/${path}`,
         sourceBlob(builderSource.commit, path));
     write(input.outputRoot, 'installer/package.json', '{"type":"module"}\n');
     copyProfile(input.outputRoot, input.frozenProfile, expectedProfilePaths(contract, dshKit));

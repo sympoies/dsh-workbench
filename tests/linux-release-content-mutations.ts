@@ -22,6 +22,15 @@ try {
     && file.path.endsWith('.tgz') && !original.archives.some(archive => archive.path === file.path));
   if (!peer) throw new Error('release fixture has no patched peer archive');
   const changes: Array<{ label: string; path: string; mutate: (bytes: Buffer) => Buffer; error: RegExp }> = [
+    { label: 'reviewed contract source', path: 'compatibility/workbench.json',
+      mutate: bytes => Buffer.concat([bytes, Buffer.from(' ')]),
+      error: /reviewed builder source/ },
+    { label: 'reviewed Web record source', path: 'compatibility/web-artifact.json',
+      mutate: bytes => Buffer.concat([bytes, Buffer.from(' ')]),
+      error: /reviewed builder source/ },
+    { label: 'reviewed installer source', path: 'installer/src/contract.ts',
+      mutate: bytes => Buffer.concat([bytes, Buffer.from('\n// changed installer\n')]),
+      error: /reviewed builder source/ },
     { label: 'profile lifecycle', path: 'profile/package.json', mutate: bytes => {
       const value = JSON.parse(bytes.toString('utf8')) as Record<string, unknown>;
       value.scripts = { preinstall: 'unreviewed-code' };
@@ -52,6 +61,7 @@ try {
     if (!file) throw new Error('mutation target is not indexed');
     file.size = lstatSync(path).size;
     file.rawSha256 = sha256(modified);
+    if (change.path === manifest.contractPath) manifest.contractRawSha256 = file.rawSha256;
     const manifestBytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
     writeFileSync(join(root, 'release-manifest.json'), manifestBytes);
     assert.throws(() => verifyLinuxReleaseContents(root, sha256(manifestBytes), kitRepo),
