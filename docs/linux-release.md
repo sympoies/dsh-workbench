@@ -151,14 +151,15 @@ before invoking pnpm through the current Node binary. The current Node must
 meet the contract baseline, and the package must be the reviewed pnpm version
 in the contract. A matching version string printed by an arbitrary PATH
 command is not sufficient. The frozen install uses a new private package-manager
-home and empty npm configuration, ignores pnpmfile hooks, and does not inherit
+home, store, and empty npm configuration, ignores pnpmfile hooks, and does not inherit
 caller package-manager or Node execution settings. Only proxy settings named in
 the private owner environment are passed to pnpm. Registry packages are still
 fetched according to the frozen lockfile; this release does not bundle every
 registry archive for offline installation. Runtime-kit setup keeps that same
 private package-manager home and uses owner-root entrypoints for the current
-Node's npm and exact pinned pnpm, so DSH plugin activation cannot switch stores
-midway through the installation.
+Node's npm and exact pinned pnpm. Those entrypoints reassert the private npm
+configuration even when runtime-kit filters child environments, and pnpm
+always receives the same explicit private store and ignored pnpmfile setting.
 
 Run `node scripts/linux-install.mjs plan /absolute/private/input.json`, review
 the returned target and digests, then pass its exact `planDigest` to

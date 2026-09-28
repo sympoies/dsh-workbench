@@ -220,7 +220,8 @@ export function preparePnpmEnvironment(root: string, owner: OwnerEnvironment): N
   const home = join(root, 'package-manager-home');
   const configHome = join(root, 'package-manager-config');
   const cacheHome = join(root, 'package-manager-cache');
-  for (const path of [home, configHome, cacheHome]) mkdirSync(path, { mode: 0o700 });
+  const store = join(root, 'package-manager-store');
+  for (const path of [home, configHome, cacheHome, store]) mkdirSync(path, { mode: 0o700 });
   const npmrc = join(configHome, 'npmrc');
   writeFileSync(npmrc, '', { flag: 'wx', mode: 0o600 });
   const environment: NodeJS.ProcessEnv = {
@@ -299,6 +300,27 @@ function setupRuntime(root: string, kitPackage: string, config: Record<string, s
 
 function shellQuote(value: string): string { return `'${value.replaceAll("'", "'\\''")}'`; }
 
+/** Reassert package-manager boundaries after runtime-kit constructs a minimal child environment. */
+export function writePackageManagerShims(binDir: string, node: string, pnpm: string,
+  environment: NodeJS.ProcessEnv): void {
+  const npmrc = environment.NPM_CONFIG_USERCONFIG;
+  if (!npmrc || npmrc !== environment.NPM_CONFIG_GLOBALCONFIG) {
+    throw new Error('private package-manager configuration is unavailable');
+  }
+  const store = join(dirname(binDir), 'package-manager-store');
+  const exports = `export NPM_CONFIG_USERCONFIG=${shellQuote(npmrc)} NPM_CONFIG_GLOBALCONFIG=${shellQuote(npmrc)}\n`
+    + `export npm_config_userconfig=${shellQuote(npmrc)} npm_config_globalconfig=${shellQuote(npmrc)}\n`;
+  for (const [name, command] of [
+    ['npm', [join(dirname(node), 'npm')]],
+    ['pnpm', [node, pnpm, '--ignore-pnpmfile', '--store-dir', store]],
+  ] as const) {
+    const tool = join(binDir, name);
+    writeFileSync(tool, `#!/bin/sh\n${exports}exec ${command.map(shellQuote).join(' ')} "$@"\n`,
+      { flag: 'wx', mode: 0o700 });
+    chmodSync(tool, 0o700);
+  }
+}
+
 export type LinuxInstallReceipt = {
   schemaVersion: 'dsh-workbench.linux-installed-unit.v1';
   releaseVersion: string;
@@ -353,13 +375,15 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       throw new Error('owner environment changed before frozen install');
     }
     const pnpmEnvironment = preparePnpmEnvironment(root, pnpmOwner.config);
-    const pnpmVersion = runInstallerCommand(process.execPath, [input.pnpmExecutable, '--version'],
+    const pnpmVersion = runInstallerCommand(process.execPath, [input.pnpmExecutable,
+      '--ignore-pnpmfile', '--store-dir', join(root, 'package-manager-store'), '--version'],
       root, pnpmEnvironment, 'pnpm version').trim();
     if (pnpmVersion !== contract.runtime.pnpm) throw new Error('pnpm version differs from contract');
     if (ownerPackageTreeSha256(input.pnpmPackageRoot, input.pnpmExecutable)
       !== input.pnpmPackageSha256) throw new Error('pnpm package changed before frozen install');
     runInstallerCommand(process.execPath, [input.pnpmExecutable, '--dir', profile, 'install', '--frozen-lockfile',
-      '--strict-peer-dependencies', '--ignore-scripts', '--ignore-pnpmfile'],
+      '--strict-peer-dependencies', '--ignore-scripts', '--ignore-pnpmfile',
+      '--store-dir', join(root, 'package-manager-store')],
     root, pnpmEnvironment, 'frozen profile install');
     if (!readFileSync(join(profile, 'pnpm-lock.yaml'))
       .equals(readFileSync(join(releaseRoot, 'profile/pnpm-lock.yaml')))) {
@@ -393,15 +417,7 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${shellQuote(dshCli)} "$@"\n`,
       { flag: 'wx', mode: 0o700 });
     chmodSync(dshDirectBin, 0o700);
-    for (const [name, command] of [
-      ['npm', [join(dirname(process.execPath), 'npm')]],
-      ['pnpm', [process.execPath, input.pnpmExecutable]],
-    ] as const) {
-      const tool = join(binDir, name);
-      writeFileSync(tool, `#!/bin/sh\nexec ${command.map(shellQuote).join(' ')} "$@"\n`,
-        { flag: 'wx', mode: 0o700 });
-      chmodSync(tool, 0o700);
-    }
+    writePackageManagerShims(binDir, process.execPath, input.pnpmExecutable, pnpmEnvironment);
     const config = {
       schemaVersion: 'dsh-workbench.linux-launch.v1',
       ownerEnvironmentFile: input.ownerEnvironmentFile,

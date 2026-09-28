@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import test from 'node:test';
 import { applyLinuxInstall, nodeMeetsBaseline, planLinuxInstall, preparePnpmEnvironment,
-  runInstallerCommand,
+  runInstallerCommand, writePackageManagerShims,
   type LinuxInstallInput } from '../src/linux-installer.ts';
 import { hashOwnerFile, ownerPackageTreeSha256 } from '../src/linux-owner-input.ts';
 
@@ -167,6 +167,33 @@ test('frozen pnpm installation receives no ambient executable configuration', ()
     else process.env.NPM_CONFIG_GLOBAL_PNPMFILE = previous;
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('runtime pnpm shim restores private config and store after runtime-kit filters the environment', () => {
+  const root = mkdtempSync(join(tmpdir(), 'workbench-pnpm-shim-'));
+  try {
+    const bin = join(root, 'bin');
+    mkdirSync(bin);
+    const pnpm = join(root, 'pnpm.cjs');
+    writeFileSync(pnpm, 'process.stdout.write(JSON.stringify({args:process.argv.slice(2),env:{user:process.env.NPM_CONFIG_USERCONFIG,global:process.env.NPM_CONFIG_GLOBALCONFIG}}))\n');
+    const owner = { schemaVersion: 'dsh-workbench.owner-environment.v1' as const,
+      environment: {}, secretFiles: {} };
+    const environment = preparePnpmEnvironment(root, owner);
+    writePackageManagerShims(bin, process.execPath, pnpm, environment);
+    const run = spawnSync(join(bin, 'pnpm'), ['install', '--offline'], {
+      encoding: 'utf8', env: {
+        PATH: '/usr/bin:/bin', NPM_CONFIG_USERCONFIG: '/dev/null',
+        NPM_CONFIG_GLOBALCONFIG: join(root, 'hostile-global.npmrc'),
+      },
+    });
+    assert.equal(run.status, 0, run.stderr);
+    const observed = JSON.parse(run.stdout);
+    assert.deepEqual(observed.args, ['--ignore-pnpmfile', '--store-dir',
+      join(root, 'package-manager-store'), 'install', '--offline']);
+    assert.equal(observed.env.user, environment.NPM_CONFIG_USERCONFIG);
+    assert.equal(observed.env.global, environment.NPM_CONFIG_GLOBALCONFIG);
+    assert.match(readFileSync(join(bin, 'npm'), 'utf8'), /NPM_CONFIG_GLOBALCONFIG/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('install entrypoint refuses unsafe input path before planning', () => {
