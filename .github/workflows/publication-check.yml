@@ -36,7 +36,7 @@ jobs:
       - name: Verify pinned combined profile staging
         run: node --test tests/combined-profile.test.ts tests/pinned-kit.test.ts
       - name: Verify Linux release envelope and content parser
-        run: node --test tests/linux-release-manifest.test.ts tests/linux-release-content.test.ts tests/linux-release-archive.test.ts tests/linux-installer.test.ts tests/linux-installed-launch.test.ts
+        run: node --test tests/linux-release-manifest.test.ts tests/linux-release-content.test.ts tests/linux-release-archive.test.ts tests/linux-release-paths.test.ts tests/linux-oci-carrier.test.ts tests/linux-installer.test.ts tests/linux-installed-launch.test.ts
       - name: Scan tracked source
         run: bash scripts/check-publication.sh
       - name: Verify scan behavior

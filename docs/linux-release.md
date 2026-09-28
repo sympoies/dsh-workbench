@@ -103,6 +103,38 @@ installer must independently use the authenticated archive bytes, verify the
 external archive and manifest digests before consuming any bundled code, and
 retain an owner-private receipt for the exact installed snapshot.
 
+## OCI release carrier
+
+The first Linux OCI artifact is a distribution carrier for the same verified
+archive, not a runnable Web or TUI container. Its OCI image manifest uses the
+custom artifact type `application/vnd.sympoies.dsh-workbench.release.v1`, an
+empty OCI config, and one raw archive layer. The annotations bind the Workbench
+version, producing source commit and tree, and external release-manifest
+SHA-256. The layer descriptor binds the raw archive SHA-256 and size. There is
+no entrypoint, command, image platform, runtime configuration, or container
+finish-line claim. Consumers still install natively through the Linux owner
+installer after authenticating the external release receipt.
+
+The repository-owned `.agents/scripts/release.sh` has `prepare` and `verify`
+actions. Invoke it through `agent-run exec --cwd "$repo_root" --
+./.agents/scripts/release.sh ...` in an owner environment. `prepare` takes the
+private build-input JSON described above, a new private OCI layout directory,
+a new OCI-layout tar.gz path, and a new private packet receipt path. It builds
+the Linux archive from the clean source commit, constructs the OCI artifact,
+verifies the carrier, and writes a path-free packet with both SHA-256 identities.
+`verify` takes those four inputs plus a new private extraction root. It checks
+the OCI layout and deterministic tar against the packet, authenticates the
+embedded Linux archive, then verifies its source-bound contents. The OCI
+tarball and Linux archive are separate release assets; retain the packet's
+digests outside those assets. A carrier can be copied into an OCI registry as
+an artifact, but no container execution support is implied.
+
+Preparing and verifying the packet does not create a signed tag or publish a
+GitHub Release. Only the final merged source can produce the publication
+archive. The exact final archive, OCI layout/configuration, asset bytes,
+notices, license inventories, CI logs, and private installation receipts need
+the [first-publication human audit](publication.md) before publication.
+
 ## Linux owner installation
 
 `scripts/linux-install.mjs` has separate `plan` and `apply` actions. Run it from
