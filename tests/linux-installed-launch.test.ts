@@ -22,6 +22,11 @@ test('installed Web and TUI launch replace their process and use only private ow
       url: process.env.DEEPSEEK_BASE_URL ?? null,
       agentSession: process.env.AGENT_SESSION_TEST ?? null,
       dshHome: process.env.DSH_HOME ?? null,
+      permissionMode: process.env.DSH_PERMISSION_MODE ?? null,
+      configHome: process.env.XDG_CONFIG_HOME ?? null,
+      stateHome: process.env.XDG_STATE_HOME ?? null,
+      codexHome: process.env.CODEX_HOME ?? null,
+      claudeConfigDir: process.env.CLAUDE_CONFIG_DIR ?? null,
     }));\n`, { mode: 0o600 });
     mkdirSync(join(kitPackage, 'dist/bin'), { recursive: true });
     copyFileSync(fakeEntry, join(kitPackage, 'dist/bin/dsh-runtime-kit-launch.js'));
@@ -41,9 +46,15 @@ test('installed Web and TUI launch replace their process and use only private ow
       agentHookBin: join(root, 'agent-hook'), agentDocsBin: join(root, 'agent-docs'),
       dshDirectBin: join(root, 'dsh-direct'),
     }), { mode: 0o600 });
+    // The installed launch is a full host agent: the owner's machine tools keep their own
+    // configuration homes, and DSH runs without its file sandbox unless the caller chooses a mode.
+    const machineHomes = { XDG_CONFIG_HOME: join(root, 'machine-config'),
+      XDG_STATE_HOME: join(root, 'machine-state'), CODEX_HOME: join(root, 'machine-codex'),
+      CLAUDE_CONFIG_DIR: join(root, 'machine-claude') };
     for (const face of ['web', 'tui']) {
+      const { DSH_PERMISSION_MODE: _inheritedMode, ...base } = process.env;
       const result = spawnSync(process.execPath, [launch, configPath, face, '--dump-config'], {
-        env: { ...process.env, DEEPSEEK_API_KEY: 'inherited-key',
+        env: { ...base, ...machineHomes, DEEPSEEK_API_KEY: 'inherited-key',
           DEEPSEEK_BASE_URL: 'https://inherited.invalid', AGENT_SESSION_TEST: 'outer-agent' },
         encoding: 'utf8', timeout: 10_000,
       });
@@ -54,7 +65,17 @@ test('installed Web and TUI launch replace their process and use only private ow
       assert.equal(observed.url, 'https://example.invalid/v1');
       assert.equal(observed.agentSession, null);
       assert.equal(observed.dshHome, join(root, 'dsh-home'));
+      assert.equal(observed.permissionMode, 'danger-full-access');
+      assert.equal(observed.configHome, machineHomes.XDG_CONFIG_HOME);
+      assert.equal(observed.stateHome, machineHomes.XDG_STATE_HOME);
+      assert.equal(observed.codexHome, machineHomes.CODEX_HOME);
+      assert.equal(observed.claudeConfigDir, machineHomes.CLAUDE_CONFIG_DIR);
       assert.equal(observed.args.at(-1), '--dump-config');
+      const chosen = spawnSync(process.execPath, [launch, configPath, face, '--dump-config'], {
+        env: { ...base, DSH_PERMISSION_MODE: 'workspace-write' }, encoding: 'utf8', timeout: 10_000,
+      });
+      assert.equal(chosen.status, 0, chosen.stderr);
+      assert.equal(JSON.parse(chosen.stdout).permissionMode, 'workspace-write');
     }
     for (const face of ['web', 'tui']) {
       for (const args of [['--profile', 'other'], ['--profile=other'],
