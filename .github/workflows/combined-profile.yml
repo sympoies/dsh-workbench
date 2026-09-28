@@ -191,6 +191,9 @@ jobs:
             "$VERIFICATION_ROOT/$WEB_FILE" \
             "$VERIFICATION_ROOT/$CLI_FILE" \
             "$VERIFICATION_ROOT/dsh-home"
+      - name: Verify source-bound semantic identities before frozen installation
+        working-directory: dsh-workbench
+        run: node scripts/verify-staged-semantic-peers.ts "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
       - name: Install exact DSH/Web/TUI graph with strict frozen peers
         env:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
