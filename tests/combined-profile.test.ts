@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { stageCombinedProfile, stageCombinedProfileFromPinnedKit } from '../src/combined-profile.ts';
-import { inspectPeerArtifact, normalizePeerArtifact } from '../src/package-artifact.ts';
+import { inspectPeerArtifact, inspectSemanticPeerArtifact, normalizePeerArtifact } from '../src/package-artifact.ts';
 
 const revision = '46a7f68b0922371ce7144b668b90e377d8e799f4';
 const releaseVersion = (JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url), 'utf8')) as
@@ -200,6 +200,25 @@ test('normalization preserves conditional export precedence in package manifests
   const normalized = gunzipSync(normalizePeerArtifact(withExports)).toString('utf8');
   assert.match(normalized, /"node":"\.\/node\.js","default":"\.\/fallback\.js"/);
   assert.notDeepEqual(normalizePeerArtifact(withExports), normalizePeerArtifact(original));
+});
+
+test('semantic peer identity retains unknown nested manifest-map order', () => {
+  const packed = (first: string, second: string) => gzipSync(Buffer.concat([
+    tarEntry('package/package.json', Buffer.from(JSON.stringify({
+      name: '@deepseek-ai/cordis', version: '4.0.4',
+      customPolicy: { [first]: first === 'strict' ? './strict.js' : './fallback.js',
+        [second]: second === 'strict' ? './strict.js' : './fallback.js' },
+    }))), Buffer.alloc(1024),
+  ]));
+  const before = packed('strict', 'default');
+  const reversed = packed('default', 'strict');
+  assert.equal(inspectPeerArtifact(before).artifactSha256,
+    inspectPeerArtifact(reversed).artifactSha256);
+  assert.notEqual(inspectSemanticPeerArtifact(before), inspectSemanticPeerArtifact(reversed));
+  const normalized = normalizePeerArtifact(before);
+  assert.equal(inspectSemanticPeerArtifact(normalized), inspectSemanticPeerArtifact(before));
+  assert.match(gunzipSync(normalized).toString('utf8'),
+    /"strict":"\.\/strict\.js","default":"\.\/fallback\.js"/);
 });
 
 test('stages the native Web plugin in the same governed workbench profile', () => {

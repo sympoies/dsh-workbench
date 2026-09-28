@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { inspectPeerBundle, validateFrozenProfileManifest } from '../src/linux-release-content.ts';
+import { inspectPeerBundle, validateFrozenProfileManifest,
+  validatePeerSemanticRecord } from '../src/linux-release-content.ts';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 
 const source = fileURLToPath(new URL('..', import.meta.url));
@@ -56,4 +57,26 @@ test('frozen profile rejects lifecycle code and changed Web/TUI bundles', () => 
   assert.throws(() => validateFrozenProfileManifest({ ...profile,
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } },
   }, dependencies, contract), /reviewed configuration/);
+});
+
+test('semantic peer record requires one pinned identity per non-registry package', () => {
+  const digest = 'a'.repeat(64);
+  const kit = {
+    workspace_artifacts: {
+      '@deepseek-ai/alpha': { version: '1.0.0', artifact_sha256: digest },
+      '@deepseek-ai/beta': { version: '1.0.0', artifact_sha256: digest },
+      '@deepseek-ai/native': { version: '1.0.0', artifact_sha256: digest },
+    },
+    registry_workspace_artifacts: { '@deepseek-ai/native': { integrity: 'sha512-fixture' } },
+  } as unknown as Parameters<typeof validatePeerSemanticRecord>[1];
+  const rows = [
+    { name: '@deepseek-ai/alpha', version: '1.0.0', semanticSha256: digest },
+    { name: '@deepseek-ai/beta', version: '1.0.0', semanticSha256: digest },
+  ];
+  assert.equal(validatePeerSemanticRecord(rows, kit).size, 2);
+  for (const invalid of [rows.slice(0, 1), [rows[0], rows[0]],
+    [{ ...rows[0], semanticSha256: 'bad' }, rows[1]],
+    [rows[0], { ...rows[1], version: '2.0.0' }]]) {
+    assert.throws(() => validatePeerSemanticRecord(invalid, kit), /semantic identity set/);
+  }
 });

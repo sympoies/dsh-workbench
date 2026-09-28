@@ -73,12 +73,25 @@ function readLinuxArtifacts(contractPath: string, contract: WorkbenchContract): 
   try { record = object(JSON.parse(readFileSync(path, 'utf8')), 'Linux artifact record'); }
   catch { fail('Linux artifact record cannot be read'); }
   exactKeys(record, ['schemaVersion', 'releaseVersion', 'runtimeKitPackageCanonicalSha256',
-    'profileWorkspaceRawSha256', 'profileLockRawSha256'], 'Linux artifact record');
-  if (record.schemaVersion !== 'dsh-workbench.linux-artifacts.v1'
+    'profileWorkspaceRawSha256', 'profileLockRawSha256', 'webSemanticSha256',
+    'peerSemanticArtifacts'], 'Linux artifact record');
+  if (record.schemaVersion !== 'dsh-workbench.linux-artifacts.v2'
     || record.releaseVersion !== contract.release.version
-    || !['runtimeKitPackageCanonicalSha256', 'profileWorkspaceRawSha256', 'profileLockRawSha256']
-      .every(key => typeof record[key] === 'string' && /^[a-f0-9]{64}$/.test(record[key] as string))) {
+    || !['runtimeKitPackageCanonicalSha256', 'profileWorkspaceRawSha256', 'profileLockRawSha256',
+      'webSemanticSha256']
+      .every(key => typeof record[key] === 'string' && /^[a-f0-9]{64}$/.test(record[key] as string))
+    || !Array.isArray(record.peerSemanticArtifacts) || record.peerSemanticArtifacts.length === 0) {
     fail('Linux artifact record does not match Workbench contract');
+  }
+  const names: string[] = [];
+  for (const row of record.peerSemanticArtifacts) {
+    exactKeys(row, ['name', 'version', 'semanticSha256'], 'Linux peer semantic identity');
+    names.push(string(row.name, 'Linux peer name'));
+    string(row.version, 'Linux peer version');
+    match(row.semanticSha256, /^[a-f0-9]{64}$/, 'Linux peer semantic digest');
+  }
+  if (JSON.stringify(names) !== JSON.stringify([...new Set(names)].sort())) {
+    fail('Linux peer semantic identities must be sorted and unique');
   }
   return record;
 }

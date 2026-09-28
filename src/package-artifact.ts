@@ -18,15 +18,9 @@ function canonicalJson(value: unknown): unknown {
   return value;
 }
 
-function stableManifest(value: unknown, preserveOrder = false): unknown {
-  if (Array.isArray(value)) return value.map(child => stableManifest(child, preserveOrder));
-  if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value);
-    if (!preserveOrder) entries.sort(([left], [right]) => left.localeCompare(right));
-    return Object.fromEntries(entries.map(([key, child]) => [key, stableManifest(child,
-      preserveOrder || ['exports', 'imports', 'typesVersions', 'browser'].includes(key))]));
-  }
-  return value;
+function rootSortedManifest(value: { name?: unknown; version?: unknown }): unknown {
+  return Object.fromEntries(Object.entries(value)
+    .sort(([left], [right]) => left.localeCompare(right)));
 }
 
 function textField(header: Buffer, offset: number, length: number): string {
@@ -94,14 +88,11 @@ function parsePeerArtifact(tarball: Buffer): {
 }
 
 /** Verify the canonical package digest defined by the pinned runtime-kit contract. */
-export function inspectPeerArtifact(tarball: Buffer): {
-  name: string; version: string; artifactSha256: string;
-} {
-  const { entries, manifest } = parsePeerArtifact(tarball);
+function digestPeerEntries(entries: PeerEntry[], manifestBytes: Buffer): string {
   const digest = createHash('sha256');
   for (const entry of entries.sort((left, right) => left.path.localeCompare(right.path))) {
     const bytes = entry.path === 'package/package.json'
-      ? Buffer.from(`${JSON.stringify(canonicalJson(manifest))}\n`)
+      ? manifestBytes
       : entry.bytes;
     digest.update(entry.path);
     digest.update('\0');
@@ -111,8 +102,24 @@ export function inspectPeerArtifact(tarball: Buffer): {
     digest.update('\0');
     digest.update(bytes);
   }
+  return digest.digest('hex');
+}
+
+/** Legacy runtime-kit compatibility digest; nested manifest key order is ignored. */
+export function inspectPeerArtifact(tarball: Buffer): {
+  name: string; version: string; artifactSha256: string;
+} {
+  const { entries, manifest } = parsePeerArtifact(tarball);
+  const manifestBytes = Buffer.from(`${JSON.stringify(canonicalJson(manifest))}\n`);
   return { name: manifest.name as string, version: manifest.version as string,
-    artifactSha256: digest.digest('hex') };
+    artifactSha256: digestPeerEntries(entries, manifestBytes) };
+}
+
+/** Workbench digest retaining all nested manifest-map ordering. */
+export function inspectSemanticPeerArtifact(tarball: Buffer): string {
+  const { entries, manifest } = parsePeerArtifact(tarball);
+  const manifestBytes = Buffer.from(`${JSON.stringify(rootSortedManifest(manifest))}\n`);
+  return digestPeerEntries(entries, manifestBytes);
 }
 
 function tarField(header: Buffer, offset: number, width: number, value: number): void {
@@ -122,10 +129,10 @@ function tarField(header: Buffer, offset: number, width: number, value: number):
 }
 
 function stableEntry(entry: PeerEntry, manifest: unknown): Buffer {
-  // Normalize inert manifest formatting while preserving condition order in
-  // exports/imports and other resolution maps. Other member bytes are unchanged.
+  // Only root manifest field order is normalized; all nested maps retain order.
   const bytes = entry.path === 'package/package.json'
-    ? Buffer.from(`${JSON.stringify(stableManifest(manifest))}\n`) : entry.bytes;
+    ? Buffer.from(`${JSON.stringify(rootSortedManifest(manifest as { name?: unknown; version?: unknown }))}\n`)
+    : entry.bytes;
   const header = Buffer.alloc(512);
   const pathBytes = Buffer.byteLength(entry.path);
   if (pathBytes <= 100) header.write(entry.path, 0, 'utf8');
@@ -167,8 +174,11 @@ export function normalizePeerArtifact(tarball: Buffer): Buffer {
   const normalized = gzipSync(tar, { level: 0 });
   const before = inspectPeerArtifact(tarball);
   const after = inspectPeerArtifact(normalized);
+  const beforeSemantic = inspectSemanticPeerArtifact(tarball);
+  const afterSemantic = inspectSemanticPeerArtifact(normalized);
   if (before.name !== after.name || before.version !== after.version
-    || before.artifactSha256 !== after.artifactSha256) {
+    || before.artifactSha256 !== after.artifactSha256
+    || beforeSemantic !== afterSemantic) {
     throw new Error('normalized peer archive changed canonical content');
   }
   return normalized;

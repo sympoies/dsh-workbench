@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
-import { inspectPeerArtifact } from './package-artifact.ts';
+import { inspectPeerArtifact, inspectSemanticPeerArtifact } from './package-artifact.ts';
 import { readPinnedKitJson } from './pinned-kit.ts';
 import { verifyLinuxReleaseEnvelope } from './linux-release-manifest.ts';
 import type { WorkbenchContract } from './contract-types.ts';
@@ -48,6 +48,8 @@ type LinuxArtifactsRecord = {
   schemaVersion: string; releaseVersion: string;
   runtimeKitPackageCanonicalSha256: string;
   profileWorkspaceRawSha256: string; profileLockRawSha256: string;
+  webSemanticSha256: string;
+  peerSemanticArtifacts: Array<{ name: string; version: string; semanticSha256: string }>;
 };
 
 function builderGit(commit: string, args: string[]): Buffer {
@@ -104,6 +106,20 @@ export function validateFrozenProfileManifest(profile: unknown,
       !== JSON.stringify([...dependencies.entries()].sort())) {
     throw new Error('frozen profile manifest differs from reviewed configuration');
   }
+}
+
+/** Require a source-bound semantic identity for every non-registry peer. */
+export function validatePeerSemanticRecord(rows: unknown, kit: DshCompatibility): Map<string, string> {
+  const expectedNames = Object.keys(kit.workspace_artifacts)
+    .filter(name => !kit.registry_workspace_artifacts?.[name]).sort();
+  if (!Array.isArray(rows)
+    || JSON.stringify(rows.map(row => row?.name)) !== JSON.stringify(expectedNames)
+    || rows.some(row => !row || row.version !== kit.workspace_artifacts[row.name]?.version
+      || typeof row.semanticSha256 !== 'string'
+      || !/^[a-f0-9]{64}$/.test(row.semanticSha256))) {
+    throw new Error('reviewed peer semantic identity set is incomplete or invalid');
+  }
+  return new Map(rows.map(row => [row.name, row.semanticSha256]));
 }
 
 function sameJson(left: unknown, right: unknown, name: string): void {
@@ -178,10 +194,11 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
     throw new Error('Linux artifact record differs from reviewed builder source');
   }
   const reviewedArtifacts = JSON.parse(reviewedArtifactsBytes.toString('utf8')) as LinuxArtifactsRecord;
-  if (reviewedArtifacts.schemaVersion !== 'dsh-workbench.linux-artifacts.v1'
+  if (reviewedArtifacts.schemaVersion !== 'dsh-workbench.linux-artifacts.v2'
     || reviewedArtifacts.releaseVersion !== contract.release.version
     || ![reviewedArtifacts.runtimeKitPackageCanonicalSha256,
-      reviewedArtifacts.profileWorkspaceRawSha256, reviewedArtifacts.profileLockRawSha256]
+      reviewedArtifacts.profileWorkspaceRawSha256, reviewedArtifacts.profileLockRawSha256,
+      reviewedArtifacts.webSemanticSha256]
       .every(value => /^[a-f0-9]{64}$/.test(value))) {
     throw new Error('reviewed Linux artifact record is invalid');
   }
@@ -202,6 +219,7 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
     || nilsKit.validated_release !== manifest.nilsRelease.version) {
     throw new Error('pinned compatibility records have the wrong identity');
   }
+  const peerSemantic = validatePeerSemanticRecord(reviewedArtifacts.peerSemanticArtifacts, dshKit);
   const kitPackage = join(root, manifest.runtimeKit.packagePath);
   const kitManifest = JSON.parse(tarMember(kitPackage, 'package/package.json').toString('utf8')) as {
     name?: string; version?: string;
@@ -257,6 +275,7 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
   if (webIdentity.name !== '@sympoies/dsh-workbench-web'
     || webIdentity.version !== contract.release.version
     || webIdentity.artifactSha256 !== webRecord.artifactSha256
+    || inspectSemanticPeerArtifact(web) !== reviewedArtifacts.webSemanticSha256
     || manifest.archives.find(archive => archive.path === `profile/artifacts/${webName}`)?.canonicalSha256
       !== webIdentity.artifactSha256) {
     throw new Error('Web archive differs from reviewed identity');
@@ -284,6 +303,7 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
     const registry = dshKit.registry_workspace_artifacts?.[name];
     if (found.name !== name || found.version !== entry.version
       || found.artifactSha256 !== canonical
+      || (!registry && inspectSemanticPeerArtifact(bytes) !== peerSemantic.get(name))
       || (registry && integrity(bytes) !== registry.integrity)
       || !closure.get(file)?.equals(bytes)) {
       throw new Error(`peer archive differs from pinned closure: ${name}`);
