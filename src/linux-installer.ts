@@ -14,8 +14,6 @@ import { hashOwnerFile, ownerPackageTreeSha256, readOwnerEnvironment, readOwnerF
 const sourceRoot = fileURLToPath(new URL('..', import.meta.url));
 const contract = JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url), 'utf8')) as WorkbenchContract;
 const digest = /^[a-f0-9]{64}$/;
-const managedEnvironment = new Set(['DEEPSEEK_BASE_URL', 'DEEPSEEK_API_KEY',
-  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY']);
 const sha256 = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex');
 
 export type LinuxInstallInput = {
@@ -190,10 +188,12 @@ export function runInstallerCommand(executable: string, args: string[], cwd: str
 }
 
 function runtimeEnvironment(root: string, config: Record<string, string>,
-  owner: OwnerEnvironment): NodeJS.ProcessEnv {
-  const environment: NodeJS.ProcessEnv = { ...process.env };
-  for (const key of Object.keys(environment)) {
-    if (key.startsWith('AGENT_SESSION_') || managedEnvironment.has(key)) delete environment[key];
+  owner: OwnerEnvironment, pnpmEnvironment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = { ...pnpmEnvironment,
+    PATH: `${dirname(config.dshDirectBin)}:${dirname(process.execPath)}:/usr/bin:/bin`,
+  };
+  for (const key of ['XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'] as const) {
+    if (process.env[key]) environment[key] = process.env[key];
   }
   Object.assign(environment, owner.environment);
   Object.assign(environment, {
@@ -268,10 +268,10 @@ function verifyInstallerSource(commit: string, tree: string): void {
 }
 
 function setupRuntime(root: string, kitPackage: string, config: Record<string, string>,
-  owner: OwnerEnvironment): string {
+  owner: OwnerEnvironment, pnpmEnvironment: NodeJS.ProcessEnv): string {
   const launcher = join(kitPackage, 'dist/bin/dsh-runtime-kit-launch.js');
   const cli = join(kitPackage, 'dist/bin/dsh-runtime-kit.js');
-  const environment = runtimeEnvironment(root, config, owner);
+  const environment = runtimeEnvironment(root, config, owner, pnpmEnvironment);
   const call = (action: string, extra: string[]): Record<string, unknown> => {
     const output = runInstallerCommand(process.execPath,
       [launcher, '--runtime-root', config.runtimeRoot, '--', process.execPath,
@@ -393,6 +393,15 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${shellQuote(dshCli)} "$@"\n`,
       { flag: 'wx', mode: 0o700 });
     chmodSync(dshDirectBin, 0o700);
+    for (const [name, command] of [
+      ['npm', [join(dirname(process.execPath), 'npm')]],
+      ['pnpm', [process.execPath, input.pnpmExecutable]],
+    ] as const) {
+      const tool = join(binDir, name);
+      writeFileSync(tool, `#!/bin/sh\nexec ${command.map(shellQuote).join(' ')} "$@"\n`,
+        { flag: 'wx', mode: 0o700 });
+      chmodSync(tool, 0o700);
+    }
     const config = {
       schemaVersion: 'dsh-workbench.linux-launch.v1',
       ownerEnvironmentFile: input.ownerEnvironmentFile,
@@ -418,7 +427,7 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       throw new Error('owner environment changed after the install plan');
     }
     const owner = refreshedOwner.config;
-    const runtimeKitPlanDigest = setupRuntime(root, kitPackage, config, owner);
+    const runtimeKitPlanDigest = setupRuntime(root, kitPackage, config, owner, pnpmEnvironment);
     const launcher = (face: 'web' | 'tui'): string => {
       const path = join(binDir, `workbench-${face}`);
       writeFileSync(path,

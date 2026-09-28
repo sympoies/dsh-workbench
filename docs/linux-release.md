@@ -155,7 +155,10 @@ home and empty npm configuration, ignores pnpmfile hooks, and does not inherit
 caller package-manager or Node execution settings. Only proxy settings named in
 the private owner environment are passed to pnpm. Registry packages are still
 fetched according to the frozen lockfile; this release does not bundle every
-registry archive for offline installation.
+registry archive for offline installation. Runtime-kit setup keeps that same
+private package-manager home and uses owner-root entrypoints for the current
+Node's npm and exact pinned pnpm, so DSH plugin activation cannot switch stores
+midway through the installation.
 
 Run `node scripts/linux-install.mjs plan /absolute/private/input.json`, review
 the returned target and digests, then pass its exact `planDigest` to
