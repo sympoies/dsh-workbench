@@ -1,0 +1,1 @@
+Now deliver the report subcommand you committed as a pull request against main, following the repository rules. Make sure CI passes on the pull request and its commits are signed. Do not merge it. Report the pull request URL when you are done.
