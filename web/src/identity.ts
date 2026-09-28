@@ -2,8 +2,8 @@
 export const workbenchIdentity = {
   "schemaVersion": 2,
   "release": {
-    "version": "0.1.0",
-    "tag": "v0.1.0"
+    "version": "0.1.1",
+    "tag": "v0.1.1"
   },
   "runtime": {
     "node": ">=24.3.0",
@@ -67,9 +67,9 @@ export const workbenchIdentity = {
       },
       "compatibilityPatch": {
         "path": "compatibility/patches/tui-rename.patch",
-        "sha256": "9d813c148446ff5bebe02e820aa6a419e9e27606917a9daa7a3e0bd7a331598e"
+        "sha256": "0ec0a9edda2712df50a16b7dae6beb530283c78474070d053c5a894d29eb380f"
       }
     }
   },
-  "graphDigest": "sha256:f8b41ad41896fb0840e74221351f02d06768fd4801711405e5611043b65014af"
+  "graphDigest": "sha256:4926f1015767871cc366e5ecd34b93dcd8861091d1cd726b168427dbf73a8ffd"
 } as const;

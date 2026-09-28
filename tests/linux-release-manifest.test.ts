@@ -40,12 +40,14 @@ function fixture(): { root: string; manifest: LinuxReleaseManifest; write: () =>
   const contract = JSON.parse(readFileSync(join(root, 'compatibility/workbench.json'), 'utf8'));
   // Unit fixtures model an accepted payload; the tracked candidate remains pending.
   contract.status = 'accepted';
-  for (const [name, gate] of Object.entries(contract.acceptance) as Array<[string, {
-    status: string; evidence: Array<{ platform: string; url: string }> }]>) {
+  for (const component of Object.values(contract.components) as Array<{ status: string }>) {
+    component.status = 'accepted';
+  }
+  for (const [index, gate] of (Object.values(contract.acceptance) as Array<{
+    status: string; evidence: Array<{ platform: string; url: string }> }>).entries()) {
     gate.status = 'passed';
     if (gate.evidence.length === 0) {
-      gate.evidence = [{ platform: 'linux-x64',
-        url: `https://github.com/sympoies/dsh-workbench/pull/${name === 'web' ? 901 : 902}` }];
+      gate.evidence = [{ platform: 'linux-x64', url: `https://github.com/sympoies/dsh-workbench/pull/${901 + index}` }];
     }
   }
   writeFileSync(join(root, 'compatibility/workbench.json'), `${JSON.stringify(contract)}\n`);

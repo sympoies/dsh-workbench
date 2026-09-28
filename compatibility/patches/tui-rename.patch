@@ -82,7 +82,7 @@ index c31d6e6..cb0cffd 100644
          const frame = zstdCompressSync(Buffer.from(JSON.stringify(event) + '\n', 'utf8'));
          appendFileSync(file, frame);
 diff --git a/lib/types/dsh-adapter/plugin.js b/lib/types/dsh-adapter/plugin.js
-index dcc87bd..29a2231 100644
+index dcc87bd..4cd8252 100644
 --- a/lib/types/dsh-adapter/plugin.js
 +++ b/lib/types/dsh-adapter/plugin.js
 @@ -1318,7 +1318,7 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
@@ -94,6 +94,88 @@ index dcc87bd..29a2231 100644
          // Badge-flip push (P-4): React does not know the session log appended —
          // a source-badge verdict that only flips inside getSnapshot() surfaces
          // solely when something else re-renders. Feed the session firehose to
+@@ -1516,50 +1516,11 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
+         },
+         // Only a `dsh --profile <name>` launch has a profile installation for
+         // `/update` to act on; source checkouts and `--config` overlays get the
+-        // unavailable notice instead.
++        // unavailable notice instead. A DSH Workbench profile is a pinned,
++        // reviewed graph, so its TUI never updates itself: `/update` reports
++        // that the installation owner upgrades by installing a newer release.
+         onUpdate: profile === undefined ? undefined : () => {
+-            if (exited || updateRequested)
+-                return;
+-            // Confirm the target version before tearing the TUI down: on an
+-            // already-latest install, an unconditional update+restart would churn
+-            // the process and then trip the "version did not advance" warning.
+-            void resolveTuiUpdateTarget().then((target) => {
+-                if (exited || updateRequested)
+-                    return;
+-                if (target.kind === 'latest') {
+-                    notifyChannel(t('update-already-latest', { current: target.current }), { color: 'warning' });
+-                    return;
+-                }
+-                if (target.kind === 'unknown') {
+-                    notifyChannel(t('update-check-failed'));
+-                }
+-                else {
+-                    // 0.7.0/0.7.1 hard-inject tuiWorkspaces at the code level; under
+-                    // an older global launcher patch (no service row) that is a
+-                    // permanent boot deadlock (issues #183/#307, the exact report
+-                    // "pending (waiting for service: tuiWorkspaces)"). A stale mirror
+-                    // pinning /update onto that range must be refused, not installed.
+-                    if (isBootDeadlockTarget(target.latest)) {
+-                        notifyChannel(t('update-refused-deadlock', {
+-                            latest: target.latest,
+-                            authoritative: target.authoritative ?? target.latest,
+-                        }), { color: 'warning' });
+-                        return;
+-                    }
+-                    if (target.authoritative !== undefined) {
+-                        notifyChannel(t('update-mirror-lag', { latest: target.latest, authoritative: target.authoritative }));
+-                    }
+-                    updateTargetVersion = target.latest;
+-                }
+-                if (isStandaloneRuntime()) {
+-                    notifyChannel(t('update-standalone-starting'));
+-                }
+-                else {
+-                    notifyChannel(t('update-starting'));
+-                }
+-                updateRequested = true;
+-                handleExit();
+-            });
++            notifyChannel(t('update-managed'), { color: 'warning' });
+         },
+     });
+     // Freeze the fullscreen decision only NOW, right before the tree mounts:
+diff --git a/lib/types/i18n.d.ts b/lib/types/i18n.d.ts
+index dd26d31..eb33c63 100644
+--- a/lib/types/i18n.d.ts
++++ b/lib/types/i18n.d.ts
+@@ -1631,6 +1631,10 @@ declare const dict: {
+         readonly zh: "需要时可在 cordis.yml 挂载对应 hooks 插件。";
+         readonly en: "Mount the matching hooks plugin in cordis.yml when needed.";
+     };
++    readonly 'update-managed': {
++        readonly zh: "此 TUI 属于固定版本的 DSH Workbench 安装，不会自行更新；请安装新的 Workbench 版本。";
++        readonly en: "This TUI belongs to a pinned DSH Workbench installation and does not update itself. Install a newer Workbench release instead.";
++    };
+     readonly 'update-unavailable': {
+         readonly zh: "当前运行方式不支持自动更新（需经 dsh --profile 启动），请在终端执行 dsh plugin --profile <name> update @deepseek-harness-tui/dsh-tui";
+         readonly en: "Automatic update is unavailable in this launch mode (needs dsh --profile). Run dsh plugin --profile <name> update @deepseek-harness-tui/dsh-tui in a terminal.";
+diff --git a/lib/types/i18n.js b/lib/types/i18n.js
+index 007f640..9963da0 100644
+--- a/lib/types/i18n.js
++++ b/lib/types/i18n.js
+@@ -471,6 +471,7 @@ const dict = {
+     'plan-mode-off-desc': { zh: '退出计划模式，恢复正常执行', en: 'Exit plan mode, back to normal execution' },
+     'hooks-not-mounted': { zh: 'DSH hooks（dsh-hooks-claude / dsh-hooks-codex）未在本 leaf 挂载。', en: 'DSH hooks (dsh-hooks-claude / dsh-hooks-codex) are not mounted in this leaf.' },
+     'hooks-mount-hint': { zh: '需要时可在 cordis.yml 挂载对应 hooks 插件。', en: 'Mount the matching hooks plugin in cordis.yml when needed.' },
++    'update-managed': { zh: '此 TUI 属于固定版本的 DSH Workbench 安装，不会自行更新；请安装新的 Workbench 版本。', en: 'This TUI belongs to a pinned DSH Workbench installation and does not update itself. Install a newer Workbench release instead.' },
+     'update-unavailable': { zh: '当前运行方式不支持自动更新（需经 dsh --profile 启动），请在终端执行 dsh plugin --profile <name> update @deepseek-harness-tui/dsh-tui', en: 'Automatic update is unavailable in this launch mode (needs dsh --profile). Run dsh plugin --profile <name> update @deepseek-harness-tui/dsh-tui in a terminal.' },
+     'update-working': { zh: '当前回合仍在运行，请等待完成后再更新 TUI。', en: 'The current turn is still running. Wait for it to finish before updating the TUI.' },
+     'update-starting': { zh: '正在更新 @deepseek-harness-tui/dsh-tui，完成后会自动重启并恢复当前会话……', en: 'Updating @deepseek-harness-tui/dsh-tui. The TUI will restart and resume this session when finished…' },
 diff --git a/lib/types/screens/Chat.js b/lib/types/screens/Chat.js
 index 53a80a9..91cfc76 100644
 --- a/lib/types/screens/Chat.js
@@ -126,3 +208,51 @@ index 53a80a9..91cfc76 100644
                                      } }) })) : btw !== null ? (_jsx(Box, { flexDirection: "column", marginTop: 1, children: _jsx(BtwPanel, { question: btw.question, answer: btw.answer, error: btw.error, streaming: !btw.done, onClose: closeBtw, onCopy: () => {
                                          void setClipboard(btw.answer ?? '').then(raw => { if (raw)
                                              writeRaw?.(raw); });
+diff --git a/lib/types/update.js b/lib/types/update.js
+index f5edd1f..672d369 100644
+--- a/lib/types/update.js
++++ b/lib/types/update.js
+@@ -11,6 +11,11 @@ import { DATA_DIR } from './utils/paths.js';
+ // the compiled copy at lib/types/utils/shellQuote.js.
+ export { shellQuote };
+ const PACKAGE_NAME = '@deepseek-harness-tui/dsh-tui';
++// DSH Workbench installs this TUI inside a pinned, reviewed profile. Updating
++// it in place would drift the accepted graph, so every self-update entry point
++// refuses and the owner installs a newer Workbench release instead.
++const MANAGED_INSTALLATION = true;
++const MANAGED_INSTALLATION_MESSAGE = 'dsh-tui: this TUI belongs to a pinned DSH Workbench installation and does not update itself; install a newer Workbench release instead.\n';
+ const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
+ const GITHUB_REPO = 'ccch1mneyyy/dsh-TUI';
+ const UPDATE_CHECK_TIMEOUT_MS = 4000;
+@@ -803,6 +808,9 @@ export async function resolveTuiUpdateTarget() {
+  * or blocks the interactive TUI.
+  */
+ export async function checkForTuiUpdate() {
++    // A pinned DSH Workbench profile has no self-update target to advertise.
++    if (MANAGED_INSTALLATION)
++        return undefined;
+     const target = await resolveTuiUpdateTarget();
+     return target.kind === 'update'
+         ? {
+@@ -1403,6 +1411,10 @@ export async function updateTui(profile, targetVersion) {
+     // process then compares new-vs-new and false-alarms "version did not
+     // advance" on every successful update (issue #307's screenshots).
+     const updatedFrom = installedTuiVersion() ?? '';
++    if (MANAGED_INSTALLATION) {
++        process.stderr.write(MANAGED_INSTALLATION_MESSAGE);
++        return { code: 1, updatedFrom };
++    }
+     if (isStandaloneRuntime()) {
+         const target = await resolveTuiUpdateTarget();
+         const latestVersion = targetVersion ?? (target.kind === 'update' ? target.latest : undefined);
+@@ -1570,6 +1582,10 @@ export async function updateTuiAndRestart(sessionId, profile, targetVersion) {
+  * @returns Process exit code: 0 on success or already-latest, 1 otherwise.
+  */
+ export async function cliUpdate(profile) {
++    if (MANAGED_INSTALLATION) {
++        process.stderr.write(MANAGED_INSTALLATION_MESSAGE);
++        return 1;
++    }
+     const target = await resolveTuiUpdateTarget();
+     if (target.kind === 'latest') {
+         process.stdout.write(`dsh-tui: already the latest version (${target.current}).\n`);
