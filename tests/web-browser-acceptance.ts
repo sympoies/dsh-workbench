@@ -188,7 +188,8 @@ function startTui(dsh: string, fixture: string, home: string, agents: string, wo
     env: { ...runtimeEnvironment, ...managerEnvironment, PATH: `${dirname(dsh)}:${process.env.PATH ?? ''}`, HOME: home, DSH_HOME: home,
       DSH_AGENTS_HOME: agents, XDG_CONFIG_HOME: runtimeEnvironment.XDG_CONFIG_HOME ?? join(fixture, 'config'),
       LANG: 'en_US.UTF-8', TERM: 'xterm-256color',
-      DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_BASE_URL: `${baseURL}/v1`, DEEPSEEK_API_KEY: apiKey },
+      DSH_TELEMETRY_DISABLED: '1', DSH_PERMISSION_MODE: 'workspace-write',
+      DEEPSEEK_BASE_URL: `${baseURL}/v1`, DEEPSEEK_API_KEY: apiKey },
   });
   const screen = new headless.Terminal({ cols: 80, rows: 24, scrollback: 1_000, allowProposedApi: true });
   child.onData(chunk => { screen.write(chunk); });
@@ -545,6 +546,8 @@ async function startHost(binary: string, home: string, agents: string, workspace
       DSH_HOME: home,
       DSH_AGENTS_HOME: agents,
       DSH_TELEMETRY_DISABLED: '1',
+      // Exercise DSH approval surfaces; the installed launch otherwise runs as a full host agent.
+      DSH_PERMISSION_MODE: 'workspace-write',
       DEEPSEEK_BASE_URL: `${baseURL}/v1`,
       DEEPSEEK_API_KEY: apiKey,
     },

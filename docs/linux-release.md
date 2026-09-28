@@ -251,6 +251,17 @@ implicitly approved by recovery. The installed launchers reject DSH profile
 overlays and default-profile initialization flags, so launch arguments cannot
 replace the accepted graph.
 
+An installed launch is a full host agent, like the owner's other coding
+agents. DSH runs with its file sandbox disabled
+(`DSH_PERMISSION_MODE=danger-full-access`) unless the caller sets a mode, and
+the launchers keep the caller's `XDG_CONFIG_HOME`, `XDG_STATE_HOME`,
+`CODEX_HOME`, and `CLAUDE_CONFIG_DIR`. The agent therefore uses the machine's
+own Git identity and signing, GitHub CLI login, and other tool configuration
+without extra grants. The install-private homes still isolate runtime-kit
+setup, and the pinned hook policy, agent-docs, and state paths stay explicit.
+Isolation belongs to a container or an explicit sandbox, not to an edited
+process environment.
+
 Install a newer or previous accepted version into a separate fresh root and
 verify it before switching an owner-controlled service entry. Do not replace
 the active root in place. Preserve the session home and its backup as a

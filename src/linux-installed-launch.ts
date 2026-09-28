@@ -41,12 +41,12 @@ for (const key of Object.keys(environment)) {
   }
 }
 Object.assign(environment, owner.config.environment, owner.secrets);
+// A native install is a full host agent, like the owner's other agents: it keeps the
+// machine's tool configuration homes and runs DSH without its file sandbox unless the
+// caller chooses a mode. Isolation belongs to a container, not to this environment.
+environment.DSH_PERMISSION_MODE ??= 'danger-full-access';
 Object.assign(environment, {
   DSH_HOME: config.dshHome,
-  CODEX_HOME: config.codexHome,
-  CLAUDE_CONFIG_DIR: config.claudeConfigDir,
-  XDG_CONFIG_HOME: config.configHome,
-  XDG_STATE_HOME: config.stateHome,
   DSH_RUNTIME_KIT_DSH_BIN: config.dshDirectBin,
   DSH_RUNTIME_KIT_AGENT_HOOK_BIN: config.agentHookBin,
   DSH_RUNTIME_KIT_AGENT_HOOK_CONFIG: config.hookConfig,

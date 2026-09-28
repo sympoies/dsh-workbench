@@ -136,6 +136,8 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       ...runtimeEnvironment,
       DSH_HOME: home,
       DSH_TELEMETRY_DISABLED: '1',
+      // Exercise DSH approval surfaces; the installed launch otherwise runs as a full host agent.
+      DSH_PERMISSION_MODE: 'workspace-write',
       DEEPSEEK_BASE_URL: `${baseURL}/v1`,
       DEEPSEEK_API_KEY: apiKey,
       LANG: 'en_US.UTF-8',
