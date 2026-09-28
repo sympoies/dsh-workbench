@@ -151,7 +151,7 @@ before invoking pnpm through the current Node binary. The current Node must
 meet the contract baseline, and the package must be the reviewed pnpm version
 in the contract. A matching version string printed by an arbitrary PATH
 command is not sufficient. The frozen install uses a new private package-manager
-home, store, and empty npm configuration, ignores pnpmfile hooks, and does not inherit
+home, store, and distinct empty user/global npm configuration files, ignores pnpmfile hooks, and does not inherit
 caller package-manager or Node execution settings. Only proxy settings named in
 the private owner environment are passed to pnpm. Registry packages are still
 fetched according to the frozen lockfile; this release does not bundle every

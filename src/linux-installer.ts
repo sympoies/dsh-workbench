@@ -222,17 +222,19 @@ export function preparePnpmEnvironment(root: string, owner: OwnerEnvironment): N
   const cacheHome = join(root, 'package-manager-cache');
   const store = join(root, 'package-manager-store');
   for (const path of [home, configHome, cacheHome, store]) mkdirSync(path, { mode: 0o700 });
-  const npmrc = join(configHome, 'npmrc');
-  writeFileSync(npmrc, '', { flag: 'wx', mode: 0o600 });
+  const userNpmrc = join(configHome, 'user.npmrc');
+  const globalNpmrc = join(configHome, 'global.npmrc');
+  writeFileSync(userNpmrc, '', { flag: 'wx', mode: 0o600 });
+  writeFileSync(globalNpmrc, '', { flag: 'wx', mode: 0o600 });
   const environment: NodeJS.ProcessEnv = {
     HOME: home,
     PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
     XDG_CONFIG_HOME: configHome,
     XDG_CACHE_HOME: cacheHome,
-    NPM_CONFIG_USERCONFIG: npmrc,
-    NPM_CONFIG_GLOBALCONFIG: npmrc,
-    npm_config_userconfig: npmrc,
-    npm_config_globalconfig: npmrc,
+    NPM_CONFIG_USERCONFIG: userNpmrc,
+    NPM_CONFIG_GLOBALCONFIG: globalNpmrc,
+    npm_config_userconfig: userNpmrc,
+    npm_config_globalconfig: globalNpmrc,
     CI: 'true',
   };
   for (const name of ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'] as const) {
@@ -303,13 +305,14 @@ function shellQuote(value: string): string { return `'${value.replaceAll("'", "'
 /** Reassert package-manager boundaries after runtime-kit constructs a minimal child environment. */
 export function writePackageManagerShims(binDir: string, node: string, pnpm: string,
   environment: NodeJS.ProcessEnv): void {
-  const npmrc = environment.NPM_CONFIG_USERCONFIG;
-  if (!npmrc || npmrc !== environment.NPM_CONFIG_GLOBALCONFIG) {
+  const userNpmrc = environment.NPM_CONFIG_USERCONFIG;
+  const globalNpmrc = environment.NPM_CONFIG_GLOBALCONFIG;
+  if (!userNpmrc || !globalNpmrc || userNpmrc === globalNpmrc) {
     throw new Error('private package-manager configuration is unavailable');
   }
   const store = join(dirname(binDir), 'package-manager-store');
-  const exports = `export NPM_CONFIG_USERCONFIG=${shellQuote(npmrc)} NPM_CONFIG_GLOBALCONFIG=${shellQuote(npmrc)}\n`
-    + `export npm_config_userconfig=${shellQuote(npmrc)} npm_config_globalconfig=${shellQuote(npmrc)}\n`;
+  const exports = `export NPM_CONFIG_USERCONFIG=${shellQuote(userNpmrc)} NPM_CONFIG_GLOBALCONFIG=${shellQuote(globalNpmrc)}\n`
+    + `export npm_config_userconfig=${shellQuote(userNpmrc)} npm_config_globalconfig=${shellQuote(globalNpmrc)}\n`;
   for (const [name, command] of [
     ['npm', [join(dirname(node), 'npm')]],
     ['pnpm', [node, pnpm, '--ignore-pnpmfile', '--store-dir', store]],

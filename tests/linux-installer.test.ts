@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync,
   symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import test from 'node:test';
 import { applyLinuxInstall, nodeMeetsBaseline, planLinuxInstall, preparePnpmEnvironment,
   runInstallerCommand, writePackageManagerShims,
@@ -160,7 +160,8 @@ test('frozen pnpm installation receives no ambient executable configuration', ()
     assert.equal(environment.PNPM_HOME, undefined);
     assert.equal(environment.HTTPS_PROXY, 'http://proxy.example.invalid:8080');
     assert.equal(readFileSync(environment.NPM_CONFIG_USERCONFIG!, 'utf8'), '');
-    assert.equal(environment.NPM_CONFIG_GLOBALCONFIG, environment.NPM_CONFIG_USERCONFIG);
+    assert.notEqual(environment.NPM_CONFIG_GLOBALCONFIG, environment.NPM_CONFIG_USERCONFIG);
+    assert.equal(readFileSync(environment.NPM_CONFIG_GLOBALCONFIG!, 'utf8'), '');
     assert.ok(environment.HOME?.startsWith(root));
   } finally {
     if (previous === undefined) delete process.env.NPM_CONFIG_GLOBAL_PNPMFILE;
@@ -192,7 +193,13 @@ test('runtime pnpm shim restores private config and store after runtime-kit filt
       join(root, 'package-manager-store'), 'install', '--offline']);
     assert.equal(observed.env.user, environment.NPM_CONFIG_USERCONFIG);
     assert.equal(observed.env.global, environment.NPM_CONFIG_GLOBALCONFIG);
-    assert.match(readFileSync(join(bin, 'npm'), 'utf8'), /NPM_CONFIG_GLOBALCONFIG/);
+    const npm = spawnSync(join(bin, 'npm'), ['--version'], {
+      encoding: 'utf8', env: {
+        PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, NPM_CONFIG_USERCONFIG: '/dev/null',
+        NPM_CONFIG_GLOBALCONFIG: join(root, 'hostile-global.npmrc'),
+      },
+    });
+    assert.equal(npm.status, 0, npm.stderr);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
