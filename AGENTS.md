@@ -28,3 +28,8 @@ portable installation, and acceptance evidence.
 - Keep the canonical current contract or runbook up to date before adding a
   historical devlog entry.
 - Build new source on non-default branches and deliver it through review.
+- Before finishing, handing off, or abandoning work, reduce the `agent-out`
+  run directory to receipts, trimmed logs, and identity records. Delete
+  dependency trees, build output, source clones, superseded installed trees,
+  and isolated homes; see
+  [run artifact retention](DEVELOPMENT.md#run-artifact-retention).
