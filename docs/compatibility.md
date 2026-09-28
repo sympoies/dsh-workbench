@@ -207,6 +207,8 @@ components marked accepted and distinct public evidence links for runtime-kit,
 TUI, Web, and cross-interface handoff on every declared target platform. A
 local schema check alone does not establish that upstream packages match the
 recorded hashes; the release build and installation must verify those bytes.
+The [Linux release envelope](linux-release.md) defines the separate
+externally authenticated payload-file check before installation.
 Schema 3 adds the TUI patch identity; the compare gate reads schema 1 and 2
 candidates only as previous releases.
 

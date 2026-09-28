@@ -35,6 +35,8 @@ jobs:
         run: node --test tests/third-party-notices.test.ts tests/license-inventory.test.ts
       - name: Verify pinned combined profile staging
         run: node --test tests/combined-profile.test.ts tests/pinned-kit.test.ts
+      - name: Verify Linux release envelope
+        run: node --test tests/linux-release-manifest.test.ts
       - name: Scan tracked source
         run: bash scripts/check-publication.sh
       - name: Verify scan behavior

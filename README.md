@@ -26,6 +26,8 @@ The [contract guide](docs/compatibility.md) explains the release identity and
 the accepted compatibility gate.
 The [combined candidate profile procedure](docs/combined-profile.md) records
 the exact patched DSH, TUI, and runtime-kit assembly order.
+The [Linux release envelope](docs/linux-release.md) defines the authenticated
+payload check that the portable builder and installer must use.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for contributor workflow and
 [docs/devlog/README.md](docs/devlog/README.md) for durable development
