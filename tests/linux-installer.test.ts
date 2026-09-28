@@ -89,6 +89,14 @@ test('Linux install planning refuses a stale archive, existing target, or unsafe
     mkdirSync(installRoot);
     assert.throws(() => planLinuxInstall(input), /install root already exists/);
     rmSync(installRoot, { recursive: true });
+    // runtime-kit refuses executables under a shared writable ancestor, so a
+    // private parent below one must fail at planning instead of mid-apply.
+    const shared = join(parent, 'shared');
+    mkdirSync(join(shared, 'owner'), { recursive: true, mode: 0o700 });
+    chmodSync(shared, 0o775);
+    assert.throws(() => planLinuxInstall({ ...input, installRoot: join(shared, 'owner', 'installed') }),
+      /install root ancestor is writable by other users/);
+    chmodSync(shared, 0o700);
     writeFileSync(ownerConfig, JSON.stringify({
       schemaVersion: 'dsh-workbench.owner-environment.v1',
       environment: { DSH_RUNTIME_KIT_AGENT_HOOK_BIN: '/tmp/fake' }, secretFiles: {},
