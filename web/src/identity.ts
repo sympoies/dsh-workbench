@@ -2,8 +2,8 @@
 export const workbenchIdentity = {
   "schemaVersion": 2,
   "release": {
-    "version": "0.1.1",
-    "tag": "v0.1.1"
+    "version": "0.1.2",
+    "tag": "v0.1.2"
   },
   "runtime": {
     "node": ">=24.3.0",
@@ -71,5 +71,5 @@ export const workbenchIdentity = {
       }
     }
   },
-  "graphDigest": "sha256:4926f1015767871cc366e5ecd34b93dcd8861091d1cd726b168427dbf73a8ffd"
+  "graphDigest": "sha256:b670e40465ad86de7a43fad210cefad163af856470bad0d02a8ad0d15f001d35"
 } as const;
