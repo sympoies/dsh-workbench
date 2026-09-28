@@ -18,9 +18,19 @@ function canonicalJson(value: unknown): unknown {
   return value;
 }
 
-function rootSortedManifest(value: { name?: unknown; version?: unknown }): unknown {
+function stableManifest(value: { name?: unknown; version?: unknown }): unknown {
+  const dependencyMaps = new Set(['dependencies', 'devDependencies', 'peerDependencies']);
   return Object.fromEntries(Object.entries(value)
-    .sort(([left], [right]) => left.localeCompare(right)));
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, child]) => {
+      if (!dependencyMaps.has(key)) return [key, child];
+      if (!child || typeof child !== 'object' || Array.isArray(child)
+        || Object.values(child).some(spec => typeof spec !== 'string')) {
+        throw new Error(`unsupported package dependency map: ${key}`);
+      }
+      return [key, Object.fromEntries(Object.entries(child)
+        .sort(([left], [right]) => left.localeCompare(right)))];
+    }));
 }
 
 function textField(header: Buffer, offset: number, length: number): string {
@@ -115,10 +125,10 @@ export function inspectPeerArtifact(tarball: Buffer): {
     artifactSha256: digestPeerEntries(entries, manifestBytes) };
 }
 
-/** Workbench digest retaining all nested manifest-map ordering. */
+/** Workbench digest retaining all nested order except standard dependency maps. */
 export function inspectSemanticPeerArtifact(tarball: Buffer): string {
   const { entries, manifest } = parsePeerArtifact(tarball);
-  const manifestBytes = Buffer.from(`${JSON.stringify(rootSortedManifest(manifest))}\n`);
+  const manifestBytes = Buffer.from(`${JSON.stringify(stableManifest(manifest))}\n`);
   return digestPeerEntries(entries, manifestBytes);
 }
 
@@ -129,9 +139,9 @@ function tarField(header: Buffer, offset: number, width: number, value: number):
 }
 
 function stableEntry(entry: PeerEntry, manifest: unknown): Buffer {
-  // Only root manifest field order is normalized; all nested maps retain order.
+  // Only root fields and name-to-version dependency maps are sorted.
   const bytes = entry.path === 'package/package.json'
-    ? Buffer.from(`${JSON.stringify(rootSortedManifest(manifest as { name?: unknown; version?: unknown }))}\n`)
+    ? Buffer.from(`${JSON.stringify(stableManifest(manifest as { name?: unknown; version?: unknown }))}\n`)
     : entry.bytes;
   const header = Buffer.alloc(512);
   const pathBytes = Buffer.byteLength(entry.path);

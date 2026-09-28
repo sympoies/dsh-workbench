@@ -74,7 +74,9 @@ without resolving or deduplicating a new dependency graph.
 Before creating that lockfile, Workbench verifies the runtime-kit peer-pack
 receipt and canonical package digests, then repacks workspace and Web archives
 in a deterministic tar/gzip form. Non-manifest member bytes remain unchanged;
-the package manifest canonicalization preserves all nested object order. The
+the package manifest canonicalization sorts only root fields and the standard
+`dependencies`, `devDependencies`, and `peerDependencies` name-to-version maps;
+all other nested object order is retained. The
 source-bound Linux artifact record pins an additional order-preserving semantic
 digest for every non-registry peer and the Web archive; the legacy runtime-kit
 canonical digest remains the separate compatibility identity.

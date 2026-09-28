@@ -221,6 +221,23 @@ test('semantic peer identity retains unknown nested manifest-map order', () => {
     /"strict":"\.\/strict\.js","default":"\.\/fallback\.js"/);
 });
 
+test('normalization converges package-name dependency maps without changing specs', () => {
+  const packed = (reverse: boolean) => gzipSync(Buffer.concat([
+    tarEntry('package/package.json', Buffer.from(JSON.stringify({
+      name: '@deepseek-ai/cordis', version: '4.0.4',
+      peerDependencies: reverse
+        ? { beta: '^2.0.0', alpha: '^1.0.0' }
+        : { alpha: '^1.0.0', beta: '^2.0.0' },
+    }))), Buffer.alloc(1024),
+  ]));
+  const first = packed(false);
+  const second = packed(true);
+  assert.equal(inspectSemanticPeerArtifact(first), inspectSemanticPeerArtifact(second));
+  assert.deepEqual(normalizePeerArtifact(first), normalizePeerArtifact(second));
+  assert.match(gunzipSync(normalizePeerArtifact(second)).toString('utf8'),
+    /"alpha":"\^1\.0\.0","beta":"\^2\.0\.0"/);
+});
+
 test('stages the native Web plugin in the same governed workbench profile', () => {
   const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {

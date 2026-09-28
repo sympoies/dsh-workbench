@@ -63,8 +63,9 @@ of the patched closure.
    deterministically repacks the authenticated workspace archives before
    staging, so gzip metadata and tar member order cannot change the frozen
    file integrity between build hosts. The repack keeps non-manifest member
-   bytes and every nested `package.json` map unchanged while canonicalizing
-   manifest whitespace and root-field order. The release record separately
+   bytes and every custom `package.json` map unchanged while canonicalizing
+   manifest whitespace, root-field order, and the three standard name-to-version
+   dependency maps. The release record separately
    pins each peer's order-preserving semantic digest. Registry
    archives keep their exact raw
    bytes and pinned SHA-512. Local-file overrides cover only the host-compatible
