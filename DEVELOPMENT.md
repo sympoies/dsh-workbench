@@ -16,6 +16,11 @@ experimental warning. The `.mjs` files in `scripts/` are thin CLI entrypoints:
 `src/tui-compat.ts`, `web-metadata.mjs` delegates to `src/web-metadata.ts`, and
 `combined-profile.mjs` delegates to `src/combined-profile.ts`.
 Keep new CLI wrappers equally thin, with their logic in typechecked TypeScript.
+The Linux release candidate builder is `scripts/linux-release.mjs`; its
+private input schema and archive/content verification boundary are documented
+in [docs/linux-release.md](docs/linux-release.md). Run the content verifier
+against the same private staged root and external manifest digest before any
+installed-profile test. A successful builder result remains a candidate.
 Install the exact development toolchain with
 `pnpm install --frozen-lockfile --strict-peer-dependencies`, then run `pnpm typecheck` and
 `pnpm test`. The root lockfile pins development tools; the separate

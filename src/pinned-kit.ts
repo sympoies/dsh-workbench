@@ -33,7 +33,8 @@ function readGit(args: string[], cwd: string, gitExecutable = git): string {
 }
 
 /** Resolve only the runtime-kit commit and tree pinned by Workbench. */
-export function readPinnedKitJson(kitRepo: string, file: 'compatibility/dsh.json', gitExecutable = git): unknown {
+export function readPinnedKitJson(kitRepo: string,
+  file: 'compatibility/dsh.json' | 'compatibility/nils-cli.json', gitExecutable = git): unknown {
   const pin = contract.components.runtimeKit.source;
   const tree = readGit(['rev-parse', `${pin.commit}^{tree}`], kitRepo, gitExecutable).trim();
   if (tree !== pin.tree) throw new Error('runtime-kit Git tree does not match Workbench contract');

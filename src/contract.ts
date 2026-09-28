@@ -66,6 +66,23 @@ function readWebArtifact(contractPath: string, contract: WorkbenchContract, opti
   return record.artifactSha256 as string;
 }
 
+function readLinuxArtifacts(contractPath: string, contract: WorkbenchContract): Record<string, unknown> | null {
+  const path = join(dirname(contractPath), 'linux-artifacts.json');
+  if (!existsSync(path)) return null;
+  let record: Record<string, unknown>;
+  try { record = object(JSON.parse(readFileSync(path, 'utf8')), 'Linux artifact record'); }
+  catch { fail('Linux artifact record cannot be read'); }
+  exactKeys(record, ['schemaVersion', 'releaseVersion', 'runtimeKitPackageCanonicalSha256',
+    'profileWorkspaceRawSha256', 'profileLockRawSha256'], 'Linux artifact record');
+  if (record.schemaVersion !== 'dsh-workbench.linux-artifacts.v1'
+    || record.releaseVersion !== contract.release.version
+    || !['runtimeKitPackageCanonicalSha256', 'profileWorkspaceRawSha256', 'profileLockRawSha256']
+      .every(key => typeof record[key] === 'string' && /^[a-f0-9]{64}$/.test(record[key] as string))) {
+    fail('Linux artifact record does not match Workbench contract');
+  }
+  return record;
+}
+
 function nodeFloor(value: unknown, name: string): number[] {
   const found = /^>=(\d+)\.(\d+)\.(\d+)$/.exec(string(value, name));
   if (!found) fail(`${name} must be a minimum Node version`);
@@ -226,13 +243,17 @@ try {
   const contract = read(options.contract);
   validate(contract, options.contract);
   const webArtifactDigest = readWebArtifact(options.contract, contract);
+  const linuxArtifacts = readLinuxArtifacts(options.contract, contract);
   if (command === 'require-accepted' && contract.status !== 'accepted') fail('candidate contract cannot be activated');
   if (command === 'compare') {
     const previous = read(options.previous!);
     validate(previous, options.previous!, { previous: true });
     const previousWebArtifactDigest = readWebArtifact(options.previous!, previous, true);
+    const previousLinuxArtifacts = readLinuxArtifacts(options.previous!, previous);
     const changed = JSON.stringify(tuple(contract, webArtifactDigest)) !==
-      JSON.stringify(tuple(previous, previousWebArtifactDigest));
+      JSON.stringify(tuple(previous, previousWebArtifactDigest))
+      || (previousLinuxArtifacts !== null
+        && JSON.stringify(linuxArtifacts) !== JSON.stringify(previousLinuxArtifacts));
     if (changed && contract.release.version === previous.release.version) fail('component tuple changed without a new Workbench release.version');
     if (contract.release.version !== previous.release.version && compareVersions(contract.release.version, previous.release.version) <= 0) {
       fail('new Workbench release.version must advance');

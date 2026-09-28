@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "dsh-workbench.linux-artifacts.v1",
+  "releaseVersion": "0.1.0-rc.13",
+  "runtimeKitPackageCanonicalSha256": "68378d21614be85fae64715cef5572b458a0a1f284aef76397f5e96b2089b3e8",
+  "profileWorkspaceRawSha256": "b541bd0a80fbfe23ef012a9142183dcd8441c5db250bebf4252ea7c684bc4dfb",
+  "profileLockRawSha256": "977bc25c33eb332880bd4103346af0fdcc7cd4eb9f9557be9b19568e4d714894"
+}
