@@ -215,8 +215,21 @@ Test the upgrade on another copy and verify exact IDs and history before any
 deployment change. To roll back, stop both interfaces and restore the whole
 pre-upgrade home with the old binary; do not point an older binary at a home
 that has published V4 generations or merge selected files from two homes.
-The portable installer still needs its own copy-based migration and rollback
-acceptance under [#9](https://github.com/sympoies/dsh-workbench/issues/9).
+An owner acceptance on 2026-09-28 applied this procedure to a real existing
+home from DSH 0.1.6: 34 Session archives, all header version 0, five of whose
+recorded workspaces no longer existed. Only a complete copy was used; the
+original home was never opened by Workbench and stayed byte-identical. After
+its `sessions/` directory was copied into a fresh installed Workbench 0.1.0
+home, the installed Web listed all 34 exact IDs with their recorded workspaces
+and left every archive unchanged. The installed TUI resumed version 0 sessions
+by exact ID, sent the prior exchanges with the next model request, and wrote a
+V4 generation beside the untouched version 0 archive under the same ID; Web
+reopened the continued session. A session whose workspace is gone opened as
+read-only history without an active editor and without recreating the path.
+The Web sidebar showed only one of the five missing-workspace sessions, although
+the session list API returned all five. The restored pre-upgrade copy matched
+the original byte for byte. Per-session evidence stays in the owner's private
+record.
 
 Portable installation, owner path mapping, copy-only upgrade and rollback,
 publication, and deployment are separate release gates under
