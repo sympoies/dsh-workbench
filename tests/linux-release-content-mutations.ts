@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cpSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { verifyLinuxReleaseContents } from '../src/linux-release-content.ts';
 import type { LinuxReleaseManifest } from '../src/linux-release-manifest.ts';
@@ -15,6 +15,7 @@ const parent = mkdtempSync(join(dirname(source), 'release-content-mutations-'));
 const root = join(parent, 'candidate');
 try {
   cpSync(source, root, { recursive: true, errorOnExist: true });
+  chmodSync(root, 0o700);
   verifyLinuxReleaseContents(root, manifestSha256, kitRepo);
   const originalManifest = readFileSync(join(root, 'release-manifest.json'));
   const original = JSON.parse(originalManifest.toString('utf8')) as LinuxReleaseManifest;
