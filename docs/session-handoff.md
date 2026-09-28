@@ -32,9 +32,8 @@ Runtime update commands must not silently change a pinned install.
 The Workbench-scoped TUI patch makes `/rename` resumable in a real TTY. Native
 Web opens the renamed session with its authoritative title and history in the
 automated Linux browser acceptance. The installed Linux compatibility handoff
-gate has passed; portable owner installation and path mapping remain under
-[#7](https://github.com/sympoies/dsh-workbench/issues/7) and
-[#9](https://github.com/sympoies/dsh-workbench/issues/9).
+gate has passed, and the portable owner installation is delivered. Recorded
+workspace paths are not remapped; see [Workspace boundary](#workspace-boundary).
 
 This topology requires stopping Web service for a Web-to-TUI handoff. It does
 not offer simultaneous Web and TUI editing or per-session Web writer release.
@@ -42,6 +41,26 @@ The official Web Host held a session lock even after the tab viewing that
 session closed, provided another Web tab kept the Host active. A single DSH
 Host with two clients would require a separate TUI integration design and is
 not required for the first milestone.
+
+## Workspace boundary
+
+DSH records the canonical absolute path of the workspace where each session
+started, and only a workspace at that path can continue the session. Workbench
+adds no workspace policy of its own:
+
+- The installer takes no workspace roots. The TUI starts a session in the
+  directory where it is launched. Native Web's directory picker can browse and
+  choose any directory the operating-system account can read. The account's
+  file permissions are the boundary, as for a TUI launched in that directory.
+  Web binds only the address the deployment chooses, with no public default,
+  and requires its launch token.
+- Workbench does not remap recorded paths. A session whose workspace was
+  moved, renamed, or recorded on another host opens as read-only history
+  without an active editor, and the missing path is not recreated.
+- Workbench never rewrites a session archive to change its recorded path.
+  Continuing sessions across hosts or paths needs a path-mapping capability in
+  upstream DSH first; adopting it would be a new Workbench release, not an
+  owner-side edit.
 
 ## Reproduce with disposable state
 
@@ -205,8 +224,8 @@ session's settled title and history, then returns to the first for the
 remaining handoff scenarios. After the second directory is moved away, a cold
 Web Host still lists the old session identity; selecting it does not expose an
 active editor. This checks a missing local path, not a different OS account or
-a remote filesystem permission boundary. The portable installation owner must
-still bind the permitted workspace roots and verify its own path mapping.
+a remote filesystem permission boundary; the
+[workspace boundary](#workspace-boundary) states what Workbench does not map.
 
 Treat a V2-to-V4 continuation as a one-way format upgrade. Before trying a
 future installer against an existing home, stop both writers and make a
@@ -231,8 +250,8 @@ the session list API returned all five. The restored pre-upgrade copy matched
 the original byte for byte. Per-session evidence stays in the owner's private
 record.
 
-Portable installation, owner path mapping, copy-only upgrade and rollback,
-publication, and deployment are separate release gates under
+Portable installation, copy-only upgrade and rollback, and publication passed
+their release gates under
 [#7](https://github.com/sympoies/dsh-workbench/issues/7),
 [#9](https://github.com/sympoies/dsh-workbench/issues/9), and
 [#8](https://github.com/sympoies/dsh-workbench/issues/8).

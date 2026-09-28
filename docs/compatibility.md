@@ -136,8 +136,8 @@ the patched profile. It also exercised the stopped-session title writer and
 another exact-ID restart. The native Web browser acceptance now opens a
 TUI-renamed Session V4 archive under the same ID and verifies its title,
 prompt, and answer before and after a Web Host restart. The installed Linux
-cross-interface gate passed below; owner path mapping remains under
-[#7](https://github.com/sympoies/dsh-workbench/issues/7).
+cross-interface gate passed below. Workbench does not remap recorded workspace
+paths ([workspace boundary](session-handoff.md#workspace-boundary)).
 
 Workbench `v0.1.0-rc.4` narrows the first release's acceptance targets to
 Linux x64 and macOS arm64. Linux arm64 and macOS x64 may be evaluated for a

@@ -59,8 +59,8 @@ SHA-256 in [the browser CI contract](../compatibility/browser-ci.json); the
 browser acceptance verifies the Playwright package and Chromium revision, then
 checks the archive digest before extracting and executing it. The installed
 Linux compatibility handoff gate also covers crash recovery, fresh Bash
-decisions after takeover, and distinct canonical workspaces. Portable installer
-graph mismatch rejection and owner path mapping remain release work under
-[#5](https://github.com/sympoies/dsh-workbench/issues/5),
-[#7](https://github.com/sympoies/dsh-workbench/issues/7), and
-[#9](https://github.com/sympoies/dsh-workbench/issues/9).
+decisions after takeover, and distinct canonical workspaces. The portable
+installer rejects a graph mismatch
+([#5](https://github.com/sympoies/dsh-workbench/issues/5)). Recorded workspace
+paths are not remapped
+([workspace boundary](session-handoff.md#workspace-boundary)).
