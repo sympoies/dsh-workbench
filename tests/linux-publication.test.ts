@@ -55,6 +55,14 @@ test('public receipt is the canonical path-free packet and nothing else', () => 
       checkout: '/private/source' } } }), /receipt fields/);
   assert.throws(() => canonicalPublicationReceipt({ ...packet,
     release: { ...packet.release, files: -1 } }), /receipt fields/);
+  assert.throws(() => canonicalPublicationReceipt({ ...packet,
+    release: { ...packet.release, peerArchives: 0 } }), /receipt fields/);
+  assert.throws(() => canonicalPublicationReceipt({ ...packet,
+    carrier: { ...packet.carrier, installRoot: '/private/install' } }), /receipt fields/);
+  assert.throws(() => canonicalPublicationReceipt({ ...packet,
+    carrier: { ...packet.carrier, schemaVersion: 'other' } }), /receipt fields/);
+  assert.throws(() => canonicalPublicationReceipt({ ...packet,
+    carrier: { ...packet.carrier, indexSha256: '/private/index.json' } }), /receipt fields/);
 });
 
 test('draft asset review rejects mismatches and identifies only missing assets for safe resume', () => {
@@ -111,6 +119,29 @@ test('fresh release creates one draft and publishes that exact release id', () =
   calls.length = 0;
   assert.equal(advanceDraftRelease(input, operations).id, 41);
   assert.deepEqual(calls, []);
+});
+
+test('publication refuses a second release or a different id for the tag', () => {
+  for (const variant of ['second-release', 'different-id']) {
+    const releases = [releaseRecord()];
+    const operations = {
+      list: () => releases,
+      get: (id: number) => variant === 'different-id' && !releases[0].draft
+        ? { ...releases[0], id: id + 1 } : releases[0],
+      createDraft: () => { throw new Error('unexpected create'); },
+      uploadMissing: () => { throw new Error('unexpected upload'); },
+      publishDraft: () => {
+        releases[0].draft = false;
+        releases[0].immutable = true;
+        if (variant === 'second-release') {
+          releases.push(releaseRecord({ id: 42, draft: false, immutable: true }));
+        }
+      },
+    };
+    assert.throws(() => advanceDraftRelease({ tag: 'v0.1.0', notes: 'reviewed',
+      sourceCommit: 'c'.repeat(40), expected: nativeOnly() }, operations),
+    /identity differs|multiple releases/);
+  }
 });
 
 test('published release must report immutable true', () => {
