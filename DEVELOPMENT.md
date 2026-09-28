@@ -28,7 +28,8 @@ it does not advertise a runnable container. CI exercises both the carrier
 identity and the extracted owner-installed Web/TUI profile.
 The same entrypoint has a read-only publication `preflight` and a `publish`
 action gated on the exact issue #8 human audit. The publisher checks merged
-source and asset identities before creating the signed tag and GitHub Release.
+source, asset, and public receipt identities and the approving reviewer's
+repository permission before creating the signed tag and GitHub Release.
 The two-phase Linux installer is `scripts/linux-install.mjs`; its private
 input, owner environment, exact apply receipt, and launch behavior are in
 [docs/linux-release.md](docs/linux-release.md). Unit tests cover plan refusal

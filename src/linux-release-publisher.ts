@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReadStream, copyFileSync, lstatSync, mkdtempSync, readFileSync,
-  rmSync } from 'node:fs';
+import { createReadStream, lstatSync, mkdtempSync, readFileSync, rmSync,
+  writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { advanceDraftRelease, assertAuditComment, assertImmutableReleaseSetting,
-  ensureSignedReleaseTag,
+  canonicalPublicationReceipt, ensureSignedReleaseTag,
   assertPublicationIdentity, type ReleaseRecord } from './linux-publication.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
@@ -42,16 +42,21 @@ export async function publishLinuxRelease(args: string[]): Promise<void> {
   function gh(args: string[]): string { return command('/usr/bin/gh', args[0] === 'api' ? args :
     [...args, '-R', 'sympoies/dsh-workbench'], 2_000_000,
   args[0] === 'release' && ['create', 'upload'].includes(args[1] ?? '') ? 1_800_000 : 300_000); }
-  function releaseAt(tag: string): any | null {
-    const result = spawnSync('/usr/bin/gh', ['api',
-      `repos/sympoies/dsh-workbench/releases/tags/${tag}`],
-    { cwd: repo, encoding: 'utf8', timeout: 30_000, maxBuffer: 2_000_000 });
-    if (result.status === 0) return JSON.parse(result.stdout);
-    if (result.status === 1 && /HTTP 404/.test(result.stderr)) return null;
-    throw new Error('GitHub release lookup failed');
+  function releases(): ReleaseRecord[] {
+    return (JSON.parse(gh(['api', '--paginate', '--slurp',
+      'repos/sympoies/dsh-workbench/releases?per_page=100'])) as ReleaseRecord[][]).flat();
+  }
+  function releaseById(id: number): ReleaseRecord {
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('GitHub release id is invalid');
+    return JSON.parse(gh(['api', `repos/sympoies/dsh-workbench/releases/${id}`]));
   }
 
   const packet = json(packetFile);
+  const receiptBytes = canonicalPublicationReceipt(packet);
+  if (readFileSync(packetFile, 'utf8') !== receiptBytes) {
+    throw new Error('publication packet is not the canonical path-free receipt');
+  }
+  const receiptSha256 = createHash('sha256').update(receiptBytes).digest('hex');
   const input = json(buildInputFile);
   const source = {
     commit: git(['rev-parse', 'HEAD']),
@@ -72,7 +77,8 @@ export async function publishLinuxRelease(args: string[]): Promise<void> {
   if (!lstatSync(notesFile).isFile() || !readFileSync(notesFile, 'utf8').includes('DSH Workbench 0.1.0')) {
     throw new Error('release notes do not identify Workbench 0.1.0');
   }
-  command('/usr/bin/bash', [join(repo, 'scripts/check-publication.sh'), '--artifact', notesFile]);
+  command('/usr/bin/bash', [join(repo, 'scripts/check-publication.sh'), '--artifact', notesFile,
+    '--artifact', packetFile]);
   const notesBytes = readFileSync(notesFile);
   const notesSha256 = createHash('sha256').update(notesBytes).digest('hex');
   const verified = JSON.parse(command(process.execPath,
@@ -89,15 +95,21 @@ export async function publishLinuxRelease(args: string[]): Promise<void> {
       manifestSha256: packet.release.manifestSha256,
       ociManifestDigest: packet.carrier.manifestDigest,
       carrierArchiveSha256: assets.carrierArchiveSha256,
-      notesSha256, result: 'verified' })}\n`);
+      receiptSha256, notesSha256, result: 'verified' })}\n`);
     return;
   }
 
   const match = /^https:\/\/github\.com\/sympoies\/dsh-workbench\/issues\/8#issuecomment-(\d+)$/.exec(auditUrl);
   if (!match) throw new Error('publication audit URL must identify an issue #8 comment');
   const audit = JSON.parse(gh(['api', `repos/sympoies/dsh-workbench/issues/comments/${match[1]}`]));
-  assertAuditComment(packet, { body: audit.body, authorAssociation: audit.author_association }, notesSha256);
-  if (audit.html_url !== auditUrl) throw new Error('publication audit comment identity differs');
+  if (audit.html_url !== auditUrl || typeof audit.user?.login !== 'string'
+    || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(audit.user.login)) {
+    throw new Error('publication audit comment identity differs');
+  }
+  const reviewer = JSON.parse(gh(['api',
+    `repos/sympoies/dsh-workbench/collaborators/${audit.user.login}/permission`]));
+  assertAuditComment(packet, { body: audit.body, reviewerRole: reviewer.role_name,
+    edited: audit.created_at !== audit.updated_at }, { notesSha256, receiptSha256 });
 
   const tag = 'v0.1.0';
   const remoteTag = git(['ls-remote', '--tags', canonicalRemote, `refs/tags/${tag}`, `refs/tags/${tag}^{}`]);
@@ -119,30 +131,33 @@ export async function publishLinuxRelease(args: string[]): Promise<void> {
   const temp = mkdtempSync(join(dirname(packetFile), '.publication-'));
   try {
     const receiptAsset = join(temp, 'dsh-workbench-linux-x64-0.1.0.receipt.json');
-    copyFileSync(packetFile, receiptAsset);
+    writeFileSync(receiptAsset, receiptBytes, { flag: 'wx', mode: 0o600 });
     const expected = new Map<string, { path: string; digest: string }>([
       [basename(input.outputArchive), { path: input.outputArchive,
         digest: `sha256:${assets.archiveSha256}` }],
       [basename(ociArchive), { path: ociArchive,
         digest: `sha256:${assets.carrierArchiveSha256}` }],
       [basename(receiptAsset), { path: receiptAsset,
-        digest: `sha256:${await sha256(receiptAsset)}` }],
+        digest: `sha256:${receiptSha256}` }],
     ]);
-  const published = advanceDraftRelease({ tag, notes: notesBytes.toString('utf8'),
-    sourceCommit: source.commit, expected }, {
-    get: () => releaseAt(tag) as ReleaseRecord | null,
-    createDraft: () => { gh(['release', 'create', tag, input.outputArchive, ociArchive, receiptAsset,
-      '--draft', '--verify-tag', '--title', 'DSH Workbench 0.1.0 — Linux x64',
-      '--notes-file', notesFile]); },
-    uploadMissing: paths => { gh(['release', 'upload', tag, ...paths]); },
-    publishDraft: () => { gh(['release', 'edit', tag, '--draft=false', '--verify-tag']); },
-  });
+    const published = advanceDraftRelease({ tag, notes: notesBytes.toString('utf8'),
+      sourceCommit: source.commit, expected }, {
+      list: releases,
+      get: releaseById,
+      createDraft: () => { gh(['release', 'create', tag, input.outputArchive, ociArchive,
+        receiptAsset, '--draft', '--verify-tag', '--title', 'DSH Workbench 0.1.0 — Linux x64',
+        '--notes-file', notesFile]); },
+      // Only one release can carry the tag here, so gh resolves this exact draft.
+      uploadMissing: paths => { gh(['release', 'upload', tag, ...paths]); },
+      publishDraft: id => { gh(['api', '-X', 'PATCH',
+        `repos/sympoies/dsh-workbench/releases/${id}`, '-F', 'draft=false']); },
+    });
     process.stdout.write(`${JSON.stringify({ action, tag, url: published.html_url, source: source.commit,
       archiveSha256: assets.archiveSha256,
       manifestSha256: packet.release.manifestSha256,
       ociManifestDigest: packet.carrier.manifestDigest,
       carrierArchiveSha256: assets.carrierArchiveSha256,
-      notesSha256, auditUrl, result: 'published-and-verified' })}\n`);
+      receiptSha256, notesSha256, auditUrl, result: 'published-and-verified' })}\n`);
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

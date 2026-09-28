@@ -139,16 +139,21 @@ On the final clean `main` revision, run `release.sh preflight` with the same
 build input, OCI layout, OCI tarball, packet, a new extraction root, and the
 private release-notes file. It rechecks both assets, their source identity,
 canonical GitHub `main`, enabled immutable-release protection, and the extracted
-contents without publishing. After a human
-reviewer records explicit approval of that exact source, four artifact digests,
-and the release-notes digest on
-issue #8, `release.sh publish` takes the same arguments with another new
-extraction root and the issue-comment URL. It repeats verification, creates a
-signed `v0.1.0` tag, and publishes the native archive, non-runnable OCI
-carrier, and path-free packet as GitHub Release assets. It checks all draft
-asset digests and the rendered release notes before publication. If an attempt stops after tag creation, inspect
-the remote tag and any draft release before recovery; never move the tag or
-replace an asset in place.
+contents without publishing. The packet must be exactly the canonical path-free
+receipt that `prepare` writes; it and the notes pass the publication scanner,
+and preflight prints the receipt and notes digests. After a human reviewer with
+admin or maintain permission records explicit approval of that exact source,
+the four artifact digests, the receipt digest, and the release-notes digest in
+an unedited issue #8 comment, `release.sh publish` takes the same arguments
+with another new extraction root and the issue-comment URL. It repeats
+verification, creates a signed `v0.1.0` tag, and publishes the native archive,
+non-runnable OCI carrier, and receipt as GitHub Release assets. It finds the
+release by listing all releases, because GitHub's tag lookup omits drafts, and
+refuses more than one release for the tag. It then uploads, publishes, and
+verifies that release by id, checking every asset digest, the release notes
+body, and `immutable: true`. If an attempt stops after tag creation, rerun
+`publish` with the same inputs: it resumes the one draft for the tag. Never
+move the tag or replace an asset in place.
 
 ## Linux owner installation
 

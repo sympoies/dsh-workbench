@@ -47,11 +47,46 @@ export function assertPublicationIdentity(packet: PublicationPacket, source: Sou
   }
 }
 
-export function assertAuditComment(packet: PublicationPacket,
-  comment: { body: string; authorAssociation: string }, notesSha256: string): void {
-  if (!['OWNER', 'MEMBER', 'COLLABORATOR'].includes(comment.authorAssociation)) {
-    throw new Error('publication audit reviewer is not a repository member');
+const receiptShape = {
+  top: ['schemaVersion', 'release', 'carrier'],
+  release: ['releaseVersion', 'archiveSha256', 'manifestSha256', 'files', 'peerArchives'],
+  carrier: ['schemaVersion', 'releaseVersion', 'archiveSha256', 'manifestSha256', 'builderSource',
+    'manifestDigest', 'indexSha256', 'carrierArchiveSha256'],
+  builderSource: ['commit', 'tree'],
+};
+
+function exactKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+}
+
+// The public receipt asset is rebuilt from known path-free fields, so an
+// unexpected field in the private packet cannot reach an immutable release.
+export function canonicalPublicationReceipt(packet: unknown): string {
+  const count = (value: unknown) => Number.isSafeInteger(value) && (value as number) > 0;
+  if (!exactKeys(packet, receiptShape.top) || !exactKeys(packet.release, receiptShape.release)
+    || !exactKeys(packet.carrier, receiptShape.carrier)
+    || !exactKeys(packet.carrier.builderSource, receiptShape.builderSource)
+    || packet.carrier.schemaVersion !== 'dsh-workbench.linux-oci-carrier-receipt.v1'
+    || typeof packet.carrier.indexSha256 !== 'string' || !digest.test(packet.carrier.indexSha256)
+    || !count(packet.release.files) || !count(packet.release.peerArchives)) {
+    throw new Error('publication packet has unexpected receipt fields');
   }
+  const pick = (value: Record<string, unknown>, keys: string[]) =>
+    Object.fromEntries(keys.map(key => [key, value[key]]));
+  const carrier = pick(packet.carrier, receiptShape.carrier);
+  carrier.builderSource = pick(packet.carrier.builderSource, receiptShape.builderSource);
+  return `${JSON.stringify({ schemaVersion: packet.schemaVersion,
+    release: pick(packet.release, receiptShape.release), carrier }, null, 2)}\n`;
+}
+
+export function assertAuditComment(packet: PublicationPacket,
+  comment: { body: string; reviewerRole: string; edited: boolean },
+  digests: { notesSha256: string; receiptSha256: string }): void {
+  if (!['admin', 'maintain'].includes(comment.reviewerRole)) {
+    throw new Error('publication audit reviewer lacks admin or maintain permission');
+  }
+  if (comment.edited) throw new Error('publication audit comment was edited after approval');
   if (!/Decision:\s*approved for publication/i.test(comment.body)) {
     throw new Error('publication audit has no explicit approval');
   }
@@ -61,7 +96,8 @@ export function assertAuditComment(packet: PublicationPacket,
     ['release manifest digest', packet.release?.manifestSha256],
     ['OCI manifest digest', packet.carrier?.manifestDigest],
     ['OCI carrier digest', packet.carrier?.carrierArchiveSha256],
-    ['release notes digest', notesSha256],
+    ['receipt digest', digests.receiptSha256],
+    ['release notes digest', digests.notesSha256],
   ]) {
     if (typeof value !== 'string' || !comment.body.includes(value)) {
       throw new Error(`publication audit lacks exact ${label}`);
@@ -88,22 +124,31 @@ export function assertImmutableReleaseSetting(setting: { enabled?: unknown }): v
   if (setting.enabled !== true) throw new Error('GitHub immutable releases are not enabled');
 }
 
-export type ReleaseRecord = { tag_name: string; name: string; prerelease: boolean;
+export type ReleaseRecord = { id: number; tag_name: string; name: string; prerelease: boolean;
   body: string; draft: boolean;
   immutable?: boolean; html_url: string; target_commitish?: string;
   assets: Array<{ name: string; digest: string }> };
 
+// GitHub's tag lookup omits drafts, so the caller supplies the full release
+// list and every later step addresses the one matching release by id.
+export function releaseForTag(releases: ReleaseRecord[], tag: string): ReleaseRecord | null {
+  const matches = releases.filter(release => release.tag_name === tag);
+  if (matches.length > 1) throw new Error('multiple releases use the publication tag');
+  return matches[0] ?? null;
+}
+
 export function advanceDraftRelease(input: { tag: string; notes: string; sourceCommit: string;
   expected: ReadonlyMap<string, { path: string; digest: string }> }, operations: {
-    get: () => ReleaseRecord | null;
+    list: () => ReleaseRecord[];
+    get: (id: number) => ReleaseRecord;
     createDraft: () => void;
     uploadMissing: (paths: string[]) => void;
-    publishDraft: () => void;
+    publishDraft: (id: number) => void;
   }): ReleaseRecord {
-  let release = operations.get();
+  let release = releaseForTag(operations.list(), input.tag);
   if (!release) {
     operations.createDraft();
-    release = operations.get();
+    release = releaseForTag(operations.list(), input.tag);
   }
   if (!release || release.tag_name !== input.tag
     || release.name !== 'DSH Workbench 0.1.0 — Linux x64' || release.prerelease !== false
@@ -111,24 +156,26 @@ export function advanceDraftRelease(input: { tag: string; notes: string; sourceC
     || (release.target_commitish && !['main', input.sourceCommit].includes(release.target_commitish))) {
     throw new Error('release identity or reviewed notes differ');
   }
+  const id = release.id;
   const missing = reviewReleaseAssets(release.assets ?? [], input.expected);
   if (missing.length && !release.draft) throw new Error('published release lacks reviewed assets');
   if (missing.length) {
     operations.uploadMissing(missing.map(name => input.expected.get(name)!.path));
-    release = operations.get();
+    release = operations.get(id);
     if (!release?.draft || release.assets?.length !== input.expected.size
       || reviewReleaseAssets(release.assets, input.expected).length) {
       throw new Error('draft asset digests could not be verified');
     }
   }
-  if (release.draft) operations.publishDraft();
-  const published = operations.get();
-  if (!published || published.draft || published.immutable !== true
+  if (release.draft) operations.publishDraft(id);
+  const published = operations.get(id);
+  if (!published || published.id !== id || published.draft || published.immutable !== true
     || published.tag_name !== input.tag
     || published.name !== 'DSH Workbench 0.1.0 — Linux x64'
     || published.prerelease !== false || published.html_url !== release.html_url
     || published.body !== input.notes || published.assets?.length !== input.expected.size
-    || reviewReleaseAssets(published.assets, input.expected).length) {
+    || reviewReleaseAssets(published.assets, input.expected).length
+    || releaseForTag(operations.list(), input.tag)?.id !== id) {
     throw new Error('published release identity differs');
   }
   return published;
