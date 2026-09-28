@@ -150,7 +150,12 @@ its SHA-256, and the complete package tree digest. Apply rechecks these bytes
 before invoking pnpm through the current Node binary. The current Node must
 meet the contract baseline, and the package must be the reviewed pnpm version
 in the contract. A matching version string printed by an arbitrary PATH
-command is not sufficient.
+command is not sufficient. The frozen install uses a new private package-manager
+home and empty npm configuration, ignores pnpmfile hooks, and does not inherit
+caller package-manager or Node execution settings. Only proxy settings named in
+the private owner environment are passed to pnpm. Registry packages are still
+fetched according to the frozen lockfile; this release does not bundle every
+registry archive for offline installation.
 
 Run `node scripts/linux-install.mjs plan /absolute/private/input.json`, review
 the returned target and digests, then pass its exact `planDigest` to
@@ -174,7 +179,9 @@ from the intended canonical Git workspace. A live session owner prevents
 takeover. After a crash, the pinned Linux host must prove the old owner died,
 clean up its work, rotate authority, and invalidate old validation evidence
 before the other interface resumes. A pending Bash request is never
-implicitly approved by recovery.
+implicitly approved by recovery. The installed launchers reject DSH profile
+overlays and default-profile initialization flags, so launch arguments cannot
+replace the accepted graph.
 
 Install a newer or previous accepted version into a separate fresh root and
 verify it before switching an owner-controlled service entry. Do not replace

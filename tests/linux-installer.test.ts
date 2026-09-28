@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync,
-  symlinkSync, writeFileSync } from 'node:fs';
+  symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import test from 'node:test';
-import { applyLinuxInstall, nodeMeetsBaseline, planLinuxInstall, runInstallerCommand,
+import { applyLinuxInstall, nodeMeetsBaseline, planLinuxInstall, preparePnpmEnvironment,
+  runInstallerCommand,
   type LinuxInstallInput } from '../src/linux-installer.ts';
-import { ownerPackageTreeSha256 } from '../src/linux-owner-input.ts';
+import { hashOwnerFile, ownerPackageTreeSha256 } from '../src/linux-owner-input.ts';
 
 const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 const accepted = JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url),
@@ -129,6 +130,43 @@ test('pnpm package closure binds sibling code and Node baseline compares numeric
     assert.equal(nodeMeetsBaseline('24.2.99', '>=24.3.0'), false);
     assert.equal(nodeMeetsBaseline('25.0.0', '>=24.3.0'), true);
   } finally { rmSync(parent, { recursive: true, force: true }); }
+});
+
+test('archive planning hashes through a bounded owner descriptor', () => {
+  const parent = mkdtempSync(join(tmpdir(), 'workbench-archive-hash-'));
+  try {
+    const archive = join(parent, 'archive.tar.gz');
+    const bytes = Buffer.from('reviewed archive fixture');
+    writeFileSync(archive, bytes, { mode: 0o600 });
+    assert.equal(hashOwnerFile(archive, 'install archive', 512 * 1024 * 1024), sha256(bytes));
+    truncateSync(archive, 512 * 1024 * 1024 + 1);
+    assert.throws(() => hashOwnerFile(archive, 'install archive', 512 * 1024 * 1024),
+      /exceeds maximum/);
+  } finally { rmSync(parent, { recursive: true, force: true }); }
+});
+
+test('frozen pnpm installation receives no ambient executable configuration', () => {
+  const root = mkdtempSync(join(tmpdir(), 'workbench-pnpm-environment-'));
+  const previous = process.env.NPM_CONFIG_GLOBAL_PNPMFILE;
+  process.env.NPM_CONFIG_GLOBAL_PNPMFILE = join(root, 'untrusted-pnpmfile.cjs');
+  try {
+    const environment = preparePnpmEnvironment(root, {
+      schemaVersion: 'dsh-workbench.owner-environment.v1',
+      environment: { HTTPS_PROXY: 'http://proxy.example.invalid:8080' },
+      secretFiles: {},
+    });
+    assert.equal(environment.NPM_CONFIG_GLOBAL_PNPMFILE, undefined);
+    assert.equal(environment.NODE_OPTIONS, undefined);
+    assert.equal(environment.PNPM_HOME, undefined);
+    assert.equal(environment.HTTPS_PROXY, 'http://proxy.example.invalid:8080');
+    assert.equal(readFileSync(environment.NPM_CONFIG_USERCONFIG!, 'utf8'), '');
+    assert.equal(environment.NPM_CONFIG_GLOBALCONFIG, environment.NPM_CONFIG_USERCONFIG);
+    assert.ok(environment.HOME?.startsWith(root));
+  } finally {
+    if (previous === undefined) delete process.env.NPM_CONFIG_GLOBAL_PNPMFILE;
+    else process.env.NPM_CONFIG_GLOBAL_PNPMFILE = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('install entrypoint refuses unsafe input path before planning', () => {

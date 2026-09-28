@@ -66,6 +66,10 @@ if (appArgs[0] === '--profile') {
 if (appArgs.some(value => value === '--profile' || value.startsWith('--profile='))) {
   throw new Error('installed launch owns the workbench profile');
 }
+if (appArgs.some(value => ['--patch', '--from-default-profile'].some(option =>
+  value === option || value.startsWith(`${option}=`)))) {
+  throw new Error('installed launch arguments cannot change the installed graph');
+}
 const command = face === 'web'
   ? [launcher, '--runtime-root', config.runtimeRoot, '--', process.execPath,
     config.dshCli, '--profile', 'workbench', ...appArgs]

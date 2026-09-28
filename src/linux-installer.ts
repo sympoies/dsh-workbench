@@ -8,7 +8,7 @@ import type { WorkbenchContract } from './contract-types.ts';
 import { extractLinuxReleaseArchive } from './linux-release-archive.ts';
 import { verifyLinuxReleaseContents } from './linux-release-content.ts';
 import type { LinuxReleaseManifest } from './linux-release-manifest.ts';
-import { ownerPackageTreeSha256, readOwnerEnvironment, readOwnerFile,
+import { hashOwnerFile, ownerPackageTreeSha256, readOwnerEnvironment, readOwnerFile,
   type OwnerEnvironment } from './linux-owner-input.ts';
 
 const sourceRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -90,8 +90,8 @@ export function planLinuxInstall(input: LinuxInstallInput): LinuxInstallPlan {
       !== input.pnpmPackageSha256) {
     throw new Error('pnpm package tree digest differs');
   }
-  const archive = readOwnerFile(input.archivePath, 'install archive');
-  if (archive.length > 512 * 1024 * 1024 || sha256(archive) !== input.archiveSha256) {
+  if (hashOwnerFile(input.archivePath, 'install archive', 512 * 1024 * 1024)
+    !== input.archiveSha256) {
     throw new Error('install archive digest differs');
   }
   if (!isAbsolute(input.runtimeKitRepo) || resolve(input.runtimeKitRepo) !== input.runtimeKitRepo) {
@@ -204,6 +204,32 @@ function runtimeEnvironment(root: string, config: Record<string, string>,
   return environment;
 }
 
+/** Give the reviewed pnpm bytes only a private, empty configuration namespace. */
+export function preparePnpmEnvironment(root: string, owner: OwnerEnvironment): NodeJS.ProcessEnv {
+  const home = join(root, 'package-manager-home');
+  const configHome = join(root, 'package-manager-config');
+  const cacheHome = join(root, 'package-manager-cache');
+  for (const path of [home, configHome, cacheHome]) mkdirSync(path, { mode: 0o700 });
+  const npmrc = join(configHome, 'npmrc');
+  writeFileSync(npmrc, '', { flag: 'wx', mode: 0o600 });
+  const environment: NodeJS.ProcessEnv = {
+    HOME: home,
+    PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+    XDG_CONFIG_HOME: configHome,
+    XDG_CACHE_HOME: cacheHome,
+    NPM_CONFIG_USERCONFIG: npmrc,
+    NPM_CONFIG_GLOBALCONFIG: npmrc,
+    npm_config_userconfig: npmrc,
+    npm_config_globalconfig: npmrc,
+    CI: 'true',
+  };
+  for (const name of ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'] as const) {
+    const value = owner.environment[name];
+    if (value) environment[name] = value;
+  }
+  return environment;
+}
+
 function probeHost(agentHook: string, root: string): void {
   const result = runContained(agentHook, ['finish-line', 'open', '--format', 'json'],
     root, process.env, 'finish-line host probe', 30_000, JSON.stringify({
@@ -311,15 +337,19 @@ export function applyLinuxInstall(input: LinuxInstallInput,
         !== input.pnpmPackageSha256) {
       throw new Error('pnpm executable changed after the install plan');
     }
+    const pnpmOwner = readOwnerEnvironment(input.ownerEnvironmentFile);
+    if (pnpmOwner.rawSha256 !== plan.ownerEnvironmentSha256) {
+      throw new Error('owner environment changed before frozen install');
+    }
+    const pnpmEnvironment = preparePnpmEnvironment(root, pnpmOwner.config);
     const pnpmVersion = runInstallerCommand(process.execPath, [input.pnpmExecutable, '--version'],
-      root, process.env, 'pnpm version').trim();
+      root, pnpmEnvironment, 'pnpm version').trim();
     if (pnpmVersion !== contract.runtime.pnpm) throw new Error('pnpm version differs from contract');
-    const pnpmEnvironment = { ...process.env };
-    delete pnpmEnvironment.PNPM_HOME;
     if (ownerPackageTreeSha256(input.pnpmPackageRoot, input.pnpmExecutable)
       !== input.pnpmPackageSha256) throw new Error('pnpm package changed before frozen install');
     runInstallerCommand(process.execPath, [input.pnpmExecutable, '--dir', profile, 'install', '--frozen-lockfile',
-      '--strict-peer-dependencies', '--ignore-scripts'], root, pnpmEnvironment, 'frozen profile install');
+      '--strict-peer-dependencies', '--ignore-scripts', '--ignore-pnpmfile'],
+    root, pnpmEnvironment, 'frozen profile install');
     if (!readFileSync(join(profile, 'pnpm-lock.yaml'))
       .equals(readFileSync(join(releaseRoot, 'profile/pnpm-lock.yaml')))) {
       throw new Error('frozen install changed the reviewed lockfile');

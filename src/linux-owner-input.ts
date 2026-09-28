@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync,
-  readdirSync, realpathSync } from 'node:fs';
+  readdirSync, readSync, realpathSync, type Stats } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 const digest = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex');
@@ -22,8 +22,8 @@ export function assertOwnerDirectory(path: string, label: string): void {
   }
 }
 
-/** Read one verified descriptor, never a pathname reopened after validation. */
-export function readOwnerFile(path: string, label: string, privateFile = false): Buffer {
+function withOwnerFile<T>(path: string, label: string, privateFile: boolean,
+  consume: (fd: number, stat: Stats) => T): T {
   if (typeof path !== 'string' || !isAbsolute(path) || resolve(path) !== path) {
     throw new Error(`${label} must be an absolute canonical file`);
   }
@@ -36,14 +36,39 @@ export function readOwnerFile(path: string, label: string, privateFile = false):
       || realpathSync(path) !== path) {
       throw new Error(`${label} is not an owner-controlled regular file`);
     }
-    const bytes = readFileSync(fd);
+    const result = consume(fd, stat);
     const after = fstatSync(fd);
     if (after.dev !== stat.dev || after.ino !== stat.ino || after.size !== stat.size
       || after.mtimeMs !== stat.mtimeMs || after.ctimeMs !== stat.ctimeMs) {
       throw new Error(`${label} changed while being read`);
     }
-    return bytes;
+    return result;
   } finally { closeSync(fd); }
+}
+
+/** Read one verified descriptor, never a pathname reopened after validation. */
+export function readOwnerFile(path: string, label: string, privateFile = false): Buffer {
+  return withOwnerFile(path, label, privateFile, fd => readFileSync(fd));
+}
+
+/** Check the size before allocation and hash bounded chunks from one stable descriptor. */
+export function hashOwnerFile(path: string, label: string, maxBytes: number): string {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new Error('invalid owner file bound');
+  return withOwnerFile(path, label, false, (fd, stat) => {
+    if (stat.size > maxBytes) throw new Error(`${label} exceeds maximum size`);
+    const hash = createHash('sha256');
+    const chunk = Buffer.allocUnsafe(1024 * 1024);
+    let bytesRead = 0;
+    for (;;) {
+      const count = readSync(fd, chunk, 0, chunk.length, null);
+      if (count === 0) break;
+      bytesRead += count;
+      if (bytesRead > maxBytes) throw new Error(`${label} exceeds maximum size`);
+      hash.update(chunk.subarray(0, count));
+    }
+    if (bytesRead !== stat.size) throw new Error(`${label} changed while being read`);
+    return hash.digest('hex');
+  });
 }
 
 function exactKeys(value: unknown, keys: string[], label: string): Record<string, unknown> {

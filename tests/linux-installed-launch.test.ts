@@ -56,14 +56,18 @@ test('installed Web and TUI launch replace their process and use only private ow
       assert.equal(observed.dshHome, join(root, 'dsh-home'));
       assert.equal(observed.args.at(-1), '--dump-config');
     }
-    for (const args of [['--profile', 'other'], ['--profile=other'],
-      ['--profile', 'workbench', '--profile', 'other']]) {
-      const refused = spawnSync(process.execPath, [launch, configPath, 'web', ...args], {
-        encoding: 'utf8', timeout: 10_000,
-      });
-      assert.notEqual(refused.status, 0);
-      assert.match(refused.stderr, /owns the workbench profile/);
-      assert.equal(refused.stdout, '');
+    for (const face of ['web', 'tui']) {
+      for (const args of [['--profile', 'other'], ['--profile=other'],
+        ['--profile', 'workbench', '--profile', 'other'],
+        ['--patch', '/tmp/overlay.yml'], ['--patch=/tmp/overlay.yml'],
+        ['--from-default-profile', 'web'], ['--from-default-profile=web']]) {
+        const refused = spawnSync(process.execPath, [launch, configPath, face, ...args], {
+          encoding: 'utf8', timeout: 10_000,
+        });
+        assert.notEqual(refused.status, 0);
+        assert.match(refused.stderr, /owns the workbench profile|cannot change the installed graph/);
+        assert.equal(refused.stdout, '');
+      }
     }
     writeFileSync(secretPath, '\n', { mode: 0o600 });
     const emptySecret = spawnSync(process.execPath, [launch, configPath, 'web'], {
