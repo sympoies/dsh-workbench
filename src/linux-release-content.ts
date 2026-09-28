@@ -42,6 +42,8 @@ export const reviewedCompatibilitySourcePaths = [
 export const reviewedInstallerSourcePaths = [
   'scripts/contract.mjs', 'src/contract.ts', 'src/contract-types.ts',
   'src/linux-release-manifest.ts', 'src/linux-release-content.ts',
+  'src/linux-release-archive.ts', 'src/linux-installer.ts',
+  'src/linux-installed-launch.ts', 'src/linux-owner-input.ts', 'scripts/linux-install.mjs',
   'src/pinned-kit.ts', 'src/package-artifact.ts',
 ] as const;
 type LinuxArtifactsRecord = {

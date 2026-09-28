@@ -11,12 +11,17 @@ import headless from '@xterm/headless';
 import * as pty from 'node-pty';
 import type { WorkbenchContract } from '../src/contract-types.ts';
 import { readEvents } from './session-events.ts';
+import { configureOwnerBackend } from './owner-backend.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const { Terminal } = headless;
 const contract = JSON.parse(readFileSync(join(repo, 'compatibility/workbench.json'), 'utf8')) as WorkbenchContract;
 const installedHome = option('--installed-dsh-home');
 const runtimeEnvFile = option('--runtime-env-file');
+const ownerEnvFile = option('--owner-environment-file');
+if (ownerEnvFile && !installedHome) {
+  throw new Error('Owner environment fixture requires an installed home');
+}
 if (Boolean(installedHome) !== Boolean(runtimeEnvFile)) {
   throw new Error('Installed DSH home and runtime environment file must be provided together');
 }
@@ -117,6 +122,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
   waitFor: (marker: string | RegExp) => Promise<void>;
   waitForAfter: (first: string, second: string) => Promise<void>;
 } {
+  configureOwnerBackend(ownerEnvFile, baseURL, apiKey);
   const home = join(fixture, 'home');
   const child = pty.spawn(binary, ['--profile', profileName, ...appArgs], {
     name: 'xterm-256color', cols: 80, rows: 24,

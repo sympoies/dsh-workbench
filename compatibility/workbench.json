@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "release": {
-    "version": "0.1.0-rc.13",
-    "tag": "v0.1.0-rc.13"
+    "version": "0.1.0",
+    "tag": "v0.1.0"
   },
   "status": "accepted",
   "runtime": {
@@ -98,7 +98,7 @@
       "evidence": [
         {
           "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36353719094"
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36382287752"
         }
       ]
     },
@@ -107,7 +107,7 @@
       "evidence": [
         {
           "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36357463622"
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36382613741"
         }
       ]
     }

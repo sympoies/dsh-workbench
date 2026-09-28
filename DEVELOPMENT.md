@@ -21,6 +21,12 @@ private input schema and archive/content verification boundary are documented
 in [docs/linux-release.md](docs/linux-release.md). Run the content verifier
 against the same private staged root and external manifest digest before any
 installed-profile test. A successful builder result remains a candidate.
+The two-phase Linux installer is `scripts/linux-install.mjs`; its private
+input, owner environment, exact apply receipt, and launch behavior are in
+[docs/linux-release.md](docs/linux-release.md). Unit tests cover plan refusal
+and launcher environment/process replacement. The release profile must also
+exercise apply and both installed launchers from the same authenticated
+archive bytes before publication.
 Install the exact development toolchain with
 `pnpm install --frozen-lockfile --strict-peer-dependencies`, then run `pnpm typecheck` and
 `pnpm test`. The root lockfile pins development tools; the separate

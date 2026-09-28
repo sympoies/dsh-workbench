@@ -18,7 +18,16 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The Linux x64 component graph for `v0.1.0-rc.13` is **accepted for compatibility**.
+The current `v0.1.0` Linux x64 contract is **accepted for compatibility** for
+the first distributable release. It retains the accepted rc.13 DSH, TUI, and
+runtime-kit source pins, but changes the Workbench/Web release identity and
+adds a portable owner installer. Two distinct current-version Linux profile
+runs supplied [Web approval evidence](https://github.com/sympoies/dsh-workbench/actions/runs/36382287752)
+and [cross-interface handoff evidence](https://github.com/sympoies/dsh-workbench/actions/runs/36382613741).
+The source-bound archive, final owner installation, publication audit, and
+release are still separate gates. Contract acceptance does not publish a product.
+
+The earlier Linux x64 component graph for `v0.1.0-rc.13` was **accepted for compatibility**.
 This records the pinned graph and its installed-profile acceptance; no Workbench
 release, portable installer, OCI image, or owner deployment is published by
 that status. Those remain separate [#9](https://github.com/sympoies/dsh-workbench/issues/9)
@@ -202,7 +211,7 @@ Workbench profile runs supply installed interface and handoff evidence.
 
 `node scripts/contract.mjs check` validates structure and immutable pin shape.
 `node scripts/contract.mjs require-accepted` is the contract activation gate:
-it now passes for Linux x64. An accepted contract requires all three
+it passes for this Linux x64 compatibility graph. An accepted contract requires all three
 components marked accepted and distinct public evidence links for runtime-kit,
 TUI, Web, and cross-interface handoff on every declared target platform. A
 local schema check alone does not establish that upstream packages match the
@@ -212,8 +221,7 @@ externally authenticated payload-file check before installation.
 Schema 3 adds the TUI patch identity; the compare gate reads schema 1 and 2
 candidates only as previous releases.
 
-The current common runtime baseline is Node.js 24 or newer, derived from the
-pinned runtime-kit's minimum, on the target platform set recorded in the
+The current common runtime baseline is Node.js 24.3.0 or newer on the target platform set recorded in the
 contract. A target platform is planned while the contract is a candidate; it
 becomes compatible when the graph gates pass. Distribution and installed
 product support still require the separate release and owner installation
