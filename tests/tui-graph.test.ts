@@ -24,6 +24,40 @@ function errorCode(result: ReturnType<typeof run>): string {
     `exit ${result.status}`;
 }
 
+// A pinned Workbench profile must never update its own TUI. Every installed
+// update entry point refuses before a registry lookup, a profile write, or a
+// `dsh plugin update` process.
+async function assertSelfUpdateRefused(tuiRoot: string, patchedPlugin: string, stage: string): Promise<void> {
+  const home = join(stage, 'dsh-home');
+  const workspace = join(home, 'profiles', 'workbench', 'pnpm-workspace.yaml');
+  mkdirSync(join(home, 'profiles', 'workbench'), { recursive: true });
+  writeFileSync(workspace, 'packages: []\n');
+  const before = readFileSync(workspace);
+  const update = await import(pathToFileURL(join(tuiRoot, 'lib/types/update.js')).href);
+  const saved = { fetch: globalThis.fetch, home: process.env.DSH_HOME, path: process.env.PATH };
+  const requests: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    requests.push(String(input));
+    throw new Error('network disabled in the self-update regression');
+  }) as typeof fetch;
+  process.env.DSH_HOME = home;
+  process.env.PATH = join(stage, 'no-executables');
+  try {
+    assert.equal(await update.checkForTuiUpdate(), undefined);
+    assert.equal((await update.updateTui('workbench')).code, 1);
+    assert.equal(await update.cliUpdate('workbench'), 1);
+  } finally {
+    globalThis.fetch = saved.fetch;
+    if (saved.home === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = saved.home;
+    process.env.PATH = saved.path;
+  }
+  assert.deepEqual(requests, [], 'self-update must not query a registry');
+  assert.deepEqual(readFileSync(workspace), before, 'self-update must not rewrite the pinned profile');
+  assert.match(patchedPlugin,
+    /onUpdate: profile === undefined \? undefined : \(\) => \{\s*notifyChannel\(t\('update-managed'\), \{ color: 'warning' \}\);\s*\}/,
+    'installed /update must report the managed installation instead of updating');
+}
+
 test('pinned pnpm rejects the stale TUI graph and installs the reviewed correction', { timeout: 600_000 }, () => {
   const pinnedPnpm = contract.runtime.pnpm;
   const pnpmVersion = run('pnpm', ['--version'], root);
@@ -133,6 +167,7 @@ test('reviewed TUI profile lock installs without resolving a new graph', { timeo
     approvalStore.decide('rejected');
     assert.equal(await secondResult, 'rejected');
     assert.deepEqual(approvalStore.pendingAgentIds(), []);
+    await assertSelfUpdateRefused(tuiRoot, patchedPlugin, stage);
     const metadata = ts.createSourceFile('session-metadata.js', readFileSync(join(tuiRoot,
       'lib/types/dsh-adapter/channel/session-metadata.js'), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     const renameDeclarations = new Map<string, ts.Expression>();

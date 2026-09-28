@@ -18,7 +18,21 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.0` Linux x64 contract is **accepted for compatibility** for
+The current `v0.1.1` Linux x64 contract is a **candidate**. It keeps every
+`v0.1.0` source and package pin and extends the reviewed
+[TUI compatibility patch](../compatibility/patches/tui-rename.patch) so that the
+installed TUI never updates itself. `/update` reports that the pinned
+Workbench installation is upgraded by installing a newer Workbench release.
+`dsh-tui update` and the internal update path refuse before any registry
+lookup, profile write, or `dsh plugin update` process, and the background
+registry check is off. Otherwise `/update` would run
+`dsh plugin --profile workbench update` against the installed home and drift
+the accepted graph in place. The changed patch digest gives the Web identity,
+Web artifact, both profile lockfiles, and the Linux artifact record new values.
+The TUI, Web, and cross-interface gates are pending again for this graph; the
+runtime-kit pin and its evidence are unchanged.
+
+The published `v0.1.0` Linux x64 contract was **accepted for compatibility** for
 the first distributable release. It retains the accepted rc.13 DSH, TUI, and
 runtime-kit source pins, but changes the Workbench/Web release identity and
 adds a portable owner installer. Two distinct current-version Linux profile
