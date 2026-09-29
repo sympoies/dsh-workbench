@@ -2,8 +2,8 @@
 export const workbenchIdentity = {
   "schemaVersion": 2,
   "release": {
-    "version": "0.1.3",
-    "tag": "v0.1.3"
+    "version": "0.1.4",
+    "tag": "v0.1.4"
   },
   "runtime": {
     "node": ">=24.3.0",
@@ -33,13 +33,13 @@ export const workbenchIdentity = {
     "runtimeKit": {
       "source": {
         "url": "https://github.com/sympoies/dsh-runtime-kit",
-        "commit": "d3c3dace4540720839b34436a5f3ee9b15f76653",
-        "tree": "744cf616bcf6cd8aa50540a7ff720834e7d03b30"
+        "commit": "018646bc97448b1e879fab66ff293d3e18181f40",
+        "tree": "4edf27dbd2dc20c12a9952ac42a4e6422a9ef0be"
       },
       "package": {
         "name": "@sympoies/dsh-runtime-kit",
         "version": "0.0.0",
-        "integrity": "git-tree:744cf616bcf6cd8aa50540a7ff720834e7d03b30"
+        "integrity": "git-tree:4edf27dbd2dc20c12a9952ac42a4e6422a9ef0be"
       },
       "toolchain": {
         "node": ">=24.0.0"
@@ -71,5 +71,5 @@ export const workbenchIdentity = {
       }
     }
   },
-  "graphDigest": "sha256:9defbb517ac516d5ab43c81e9a805e50eba6251c21572a7fc81a8b0ecf1c9bd1"
+  "graphDigest": "sha256:7a786b3728f3b8a28a5a9108340bd02ce30196ce3541c1f83439773dbc72a021"
 } as const;
