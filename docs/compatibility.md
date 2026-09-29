@@ -18,13 +18,15 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.4` Linux x64 contract is a **candidate**. It keeps the DSH
+The current `v0.1.4` Linux x64 contract is **accepted for compatibility**. It keeps the DSH
 and dsh-TUI pins and the reviewed TUI patch, and moves runtime-kit to commit
 `018646bc97448b1e879fab66ff293d3e18181f40`, which adopts the released nils-cli
 1.29.4 companions. The runtime-kit source, its DSH patch, and the Workbench
-launch are otherwise unchanged. The runtime-kit, TUI, Web, and
-cross-interface handoff gates need current evidence before the contract can be
-accepted.
+launch are otherwise unchanged. Distinct current-version runs supplied the
+[runtime-kit](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36521711113),
+[TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36521995963), [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36523161796), and
+[cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36523180374) evidence. Deployments are
+accepted separately by the [agent delivery acceptance](agent-acceptance.md).
 
 The `v0.1.3` Linux x64 contract was **accepted for compatibility**. It keeps the DSH
 and dsh-TUI pins and the reviewed TUI patch, and moves runtime-kit to commit
