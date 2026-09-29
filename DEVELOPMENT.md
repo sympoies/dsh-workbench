@@ -217,16 +217,19 @@ pending attestation, resume, or publication review stays until that layer
 completes. On handoff, keep what the receiving agent needs to resume and name
 it in the handoff. The rule covers only run directories the agent created;
 never delete shared host caches such as `~/.npm`, the pnpm store, or
-`~/.cache/uv`, managed worktrees, or another agent's runs.
+`~/.cache/uv`, managed worktrees, or another agent's runs. The acceptance-run
+worktrees removed by the
+[agent delivery acceptance cleanup step](docs/agent-acceptance.md#procedure)
+and the release-run exception below are the only exceptions.
 
 Measured on the shared development host: workbench runs held 31 GB after one
 month. Four Linux releases in one day (0.1.1 to 0.1.4) left about 2 GB per
 release packet, 2.7 GB per peer-pack run, 1.1 GB per disposable acceptance root
-under `/tmp`, and 930 MB per installed owner root. One Linux portable release delivery kept nine superseded
-`formal-installed-vN` trees of about 650 MB each (15 GB). Acceptance runs kept
-an upstream DSH checkout (2.3 GB), a browser profile, and both a `nils-cli`
-release archive and its extracted tree. A trusted run left its agent home
-under `/tmp` (17-31 GB).
+under `/tmp`, and 930 MB per installed owner root. One Linux portable release
+delivery kept nine superseded `formal-installed-vN` trees of about 650 MB each
+(15 GB). Acceptance runs kept an upstream DSH checkout (2.3 GB), a browser
+profile, and both a `nils-cli` release archive and its extracted tree. A
+trusted run left its agent home under `/tmp` (17-31 GB).
 
 Create isolated homes inside the run directory, or in a `mktemp -d` directory
 removed by an exit trap. Never leave an agent home or DSH state under `/tmp`
@@ -257,9 +260,10 @@ result is recorded:
   [cleanup step](docs/agent-acceptance.md#procedure).
 
 Runs of published releases belong to the release lane, not to one session,
-so they are the one exception to trimming only your own runs.
-Before a release is closed, its agent reduces every earlier release run of
-this repository that is still over 500 MB by the same rules. Installed owner
+so they are an exception to trimming only your own runs.
+Before a release is closed, its agent reduces every earlier run of a
+published release of this repository that is still over 500 MB by the same
+rules, including the pending-layer exception. Installed owner
 roots are host state, not run output; their retention is in
 [the Linux release runbook](docs/linux-release.md#linux-owner-installation).
 

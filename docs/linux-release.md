@@ -280,13 +280,14 @@ generation, so roll back by restoring the whole pre-upgrade copy for the old
 binary, never by pointing the old binary at the migrated home. Stop the old owner and follow the session-copy and
 rollback acceptance procedure before changing a production service target.
 
-Keep the active root and the previous one, which is the rollback source. After
+Keep the active root and the previous one, whose binary and pre-upgrade home
+copy are the rollback source. After
 the active release passes its [agent delivery acceptance](agent-acceptance.md),
 remove any older root, but only when no process runs from it and every file
 under its `dsh-home/sessions/` exists byte-identical in the active home.
 Record the removed root's receipt SHA-256 in the owner's private install
-records, and remove the runtime-kit source checkout that no retained root was
-installed from.
+records, and remove any runtime-kit source checkout from which no retained root
+was installed.
 
 `scripts/linux-release-archive.mjs` authenticates the archive's external
 SHA-256 before extracting a bounded regular-file ustar payload into a new
