@@ -147,9 +147,9 @@ graph. The TUI contract therefore records the exact working-activity and React
 versions for a Workbench-scoped peer correction. `node scripts/tui-compat.mjs`
 renders pnpm overrides for only that package's stale peer edges, nine DSH
 packages and React for `dsh-working-activity@0.5.0`, while pinning the TUI's
-working-activity dependency and the graph's React version. At runtime the
-package imports only `@deepseek-ai/schemastery`; its DSH peers are type
-imports, and its Web client is a self-contained bundle. The corrected graph passed a strict frozen install in
+working-activity dependency and the graph's React version. Among its peers,
+the package imports only `@deepseek-ai/schemastery` at runtime; its DSH peers
+are type imports, and its Web client is a self-contained bundle. The corrected graph passed a strict frozen install in
 an isolated probe, and a disposable TUI profile reached the terminal UI.
 The Linux real-TTY acceptance additionally drove both an allowed-once and a
 rejected Bash escalation through the pinned TUI, then verified distinct
