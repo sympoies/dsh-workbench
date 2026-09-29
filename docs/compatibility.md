@@ -18,7 +18,9 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.6` Linux x64 contract is a **candidate**. It keeps the DSH
+The current `v0.1.7` Linux x64 contract is a **candidate**; the `v0.1.6`
+candidate was never released, because re-pinning runtime-kit changed the
+component tuple again. It keeps the DSH
 and dsh-TUI pins, moves runtime-kit to commit
 `44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3`, and extends the reviewed TUI patch so that a
 question from the agent reaches the TUI. DSH dispatches `user-questions/request`
