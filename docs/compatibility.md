@@ -18,7 +18,17 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.2` Linux x64 contract is **accepted for compatibility**. It keeps every
+The current `v0.1.3` Linux x64 contract is a **candidate**. It keeps the DSH
+and dsh-TUI pins and the reviewed TUI patch, and moves runtime-kit to commit
+`d3c3dace4540720839b34436a5f3ee9b15f76653`. That revision adopts the released
+nils-cli 1.29.3 companions, whose agent-hook no longer blocks read-only commands
+with descriptor duplications, quoted glob characters, or mid-word tildes, and
+it retires a finish-line ledger whose checkout the agent removed during a turn
+instead of ending the turn as `finish-line unavailable`. The runtime-kit DSH
+patch is unchanged. The runtime-kit, TUI, Web, and cross-interface handoff
+gates need current evidence before the contract can be accepted.
+
+The `v0.1.2` Linux x64 contract was **accepted for compatibility**. It keeps every
 `v0.1.1` source, package, and patch pin. The installed launch now runs DSH as a
 full host agent that keeps the machine's tool configuration, and the Workbench
 profile keeps the approval policy at `ask`; see
@@ -217,9 +227,10 @@ single component contract before the handoff proof is repeated.
 
 ## Gate
 
-The accepted rc.13 Linux graph pins runtime-kit commit
-`00f91aadae872ee98622192b347f13a6d8b1508f` and its authenticated nils-cli
-1.29.0 release. Finish-line open binds authority to the actual DSH process.
+The current Linux graph pins runtime-kit commit
+`d3c3dace4540720839b34436a5f3ee9b15f76653` and its authenticated nils-cli
+1.29.3 release (the accepted rc.13 graph pinned `00f91aad` with nils-cli
+1.29.0). Finish-line open binds authority to the actual DSH process.
 A live owner still prevents takeover. After a crash, nils must prove that the
 owner has died, perform authoritative cleanup, rotate authority, and invalidate
 the old validation evidence before returning a recovered capability. A resumed
