@@ -115,6 +115,13 @@ async function waitForTitle(path: string, title: string): Promise<void> {
   throw new Error('TUI did not persist the long-session title');
 }
 
+// dsh-TUI lands the first ordinary launch of a fresh home on its one-shot
+// workspace home; these scenarios drive the chat screen of a returning user.
+function markWorkspaceHomeSeen(home: string): void {
+  mkdirSync(join(home, '.dsh-tui'), { recursive: true });
+  writeFileSync(join(home, '.dsh-tui', 'home.json'), '{"seen":true}\n');
+}
+
 function startTerminal(binary: string, fixture: string, baseURL: string, apiKey: string, appArgs: string[] = []): {
   write: (data: string) => void;
   stop: () => Promise<void>;
@@ -124,6 +131,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
 } {
   configureOwnerBackend(ownerEnvFile, baseURL, apiKey);
   const home = join(fixture, 'home');
+  markWorkspaceHomeSeen(home);
   const child = pty.spawn(binary, ['--profile', profileName, ...appArgs], {
     name: 'xterm-256color', cols: 80, rows: 24,
     cwd: join(fixture, 'workspace'),

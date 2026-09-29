@@ -181,9 +181,17 @@ function visibleScreen(screen: InstanceType<typeof headless.Terminal>): string {
     screen.buffer.active.getLine(screen.buffer.active.viewportY + row)?.translateToString(true) ?? '').join('\n');
 }
 
+// dsh-TUI lands the first ordinary launch of a fresh home on its one-shot
+// workspace home; these scenarios drive the chat screen of a returning user.
+function markWorkspaceHomeSeen(home: string): void {
+  mkdirSync(join(home, '.dsh-tui'), { recursive: true });
+  writeFileSync(join(home, '.dsh-tui', 'home.json'), '{"seen":true}\n');
+}
+
 function startTui(dsh: string, fixture: string, home: string, agents: string, workspace: string,
   baseURL: string, apiKey: string, args: string[] = []) {
   configureOwnerBackend(ownerEnvFile, baseURL, apiKey);
+  markWorkspaceHomeSeen(home);
   const child = pty.spawn(dsh, ['--profile', tuiProfile, ...args], {
     name: 'xterm-256color', cols: 80, rows: 24, cwd: workspace,
     env: { ...runtimeEnvironment, ...managerEnvironment, PATH: `${dirname(dsh)}:${process.env.PATH ?? ''}`, HOME: home, DSH_HOME: home,

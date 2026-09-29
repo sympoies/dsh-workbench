@@ -28,8 +28,11 @@ depends on `dsh-working-activity@0.5.0`. The reviewed TUI patch is rebased onto
 0.11.2 with the same behavior. Upstream now writes the user-title payload for
 both renames, so the patch no longer changes `appendSessionTitle`, but live
 `/rename` still appends without DSH's projection-cache barrier and keeps the
-patched title-service path. The runtime-kit gate and its evidence are
-unchanged; the TUI, Web, and cross-interface handoff gates need current
+patched title-service path. The first ordinary launch of a home without
+`~/.dsh-tui/home.json` now opens the TUI's one-shot workspace home; 0.11.0
+skipped it because it read the launch's profile arguments as a first prompt.
+The acceptance fixtures record that home as seen and drive the chat screen.
+The runtime-kit gate and its evidence are unchanged; the TUI, Web, and cross-interface handoff gates need current
 evidence before the contract can be accepted.
 
 The `v0.1.4` Linux x64 contract was **accepted for compatibility**. It keeps the DSH
