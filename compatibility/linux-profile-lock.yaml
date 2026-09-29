@@ -3533,7 +3533,7 @@ packages:
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
 
   '@sympoies/dsh-workbench-web@file:artifacts/sympoies-dsh-workbench-web-0.1.6.tgz':
-    resolution: {integrity: sha512-+U5NOWJr+YL0ft4P7ZBPupz/xUvo2542PdZ3CG/afpyCp/2/fQTZDn5XnY0U7HJA/fBtmwEum4a/k3KmFn39MQ==, tarball: file:artifacts/sympoies-dsh-workbench-web-0.1.6.tgz}
+    resolution: {integrity: sha512-gQYVytfaoIsSKAnGxIr5UgoVCALYX4KfwbGGe+DOXV2rL6zX7S3+wWap8kPgOo8BhRrkWORj7hezH1G0arXW9A==, tarball: file:artifacts/sympoies-dsh-workbench-web-0.1.6.tgz}
     version: 0.1.6
     peerDependencies:
       '@deepseek-ai/cordis': 4.0.4

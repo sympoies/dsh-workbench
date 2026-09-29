@@ -18,16 +18,20 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.6` Linux x64 contract is a **candidate**. It keeps every
-0.1.5 source and package pin and extends the reviewed TUI patch so that a
+The current `v0.1.6` Linux x64 contract is a **candidate**. It keeps the DSH
+and dsh-TUI pins, moves runtime-kit to commit
+`44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3`, and extends the reviewed TUI patch so that a
 question from the agent reaches the TUI. DSH dispatches `user-questions/request`
 in the agent's scope, like approvals, and the pinned TUI registered its answerer
 without `{ global: true, prepend: true }`. The question then never reached the
 TUI: the turn waited on an answer while the screen showed only its working line.
 The 0.1.5 agent delivery acceptance stopped there. The real-TTY acceptance now
-answers an agent question in the TUI. The runtime-kit gate and its evidence are
-unchanged; the TUI, Web, and cross-interface handoff gates need current evidence
-before the contract can be accepted.
+answers an agent question in the TUI. The runtime-kit revision tells the agent
+that `runtime_kit_governed_commit` commits only the session cwd and that any
+other worktree commits with `semantic-commit commit --repo`; in the same run the
+agent had used the tool from a default-branch session cwd and could not commit.
+The runtime-kit, TUI, Web, and cross-interface handoff gates need current
+evidence before the contract can be accepted.
 
 The `v0.1.5` Linux x64 contract was **accepted for compatibility**. It keeps the DSH
 and runtime-kit pins and moves dsh-TUI to `v0.11.2` at
@@ -275,7 +279,7 @@ single component contract before the handoff proof is repeated.
 ## Gate
 
 The current Linux graph pins runtime-kit commit
-`018646bc97448b1e879fab66ff293d3e18181f40` and its authenticated nils-cli
+`44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3` and its authenticated nils-cli
 1.29.4 release (the accepted rc.13 graph pinned `00f91aad` with nils-cli
 1.29.0). Finish-line open binds authority to the actual DSH process.
 A live owner still prevents takeover. After a crash, nils must prove that the
