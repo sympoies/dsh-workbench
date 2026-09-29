@@ -1,8 +1,8 @@
 diff --git a/lib/types/adapter/ports/channel-ui.d.ts b/lib/types/adapter/ports/channel-ui.d.ts
-index 6db50f2..e3c22a3 100644
+index 1ffbfeb..19889a3 100644
 --- a/lib/types/adapter/ports/channel-ui.d.ts
 +++ b/lib/types/adapter/ports/channel-ui.d.ts
-@@ -471,7 +471,7 @@ export interface ChannelUi {
+@@ -512,7 +512,7 @@ export interface ChannelUi {
      setResumeTarget(sessionId: string): void;
      /** Rename the current session (`/rename`): appends a `session/title`
       *  event, which the status line and the /resume picker both read. */
@@ -12,10 +12,10 @@ index 6db50f2..e3c22a3 100644
       *  `session/color` event; '' clears it back to the theme default. */
      setSessionColor(color: string): void;
 diff --git a/lib/types/dsh-adapter/channel/session-metadata.d.ts b/lib/types/dsh-adapter/channel/session-metadata.d.ts
-index cf3bf97..93b8118 100644
+index b90c062..b227da0 100644
 --- a/lib/types/dsh-adapter/channel/session-metadata.d.ts
 +++ b/lib/types/dsh-adapter/channel/session-metadata.d.ts
-@@ -82,7 +82,7 @@ export declare function createSessionMetadataActions(ctx: Context, deps: {
+@@ -83,7 +83,7 @@ export declare function createSessionMetadataActions(ctx: Context, deps: {
          title: string;
      }>;
      setResumeTarget: typeof writeResumeTarget;
@@ -25,10 +25,10 @@ index cf3bf97..93b8118 100644
      deleteSession: (sessionId: string) => Promise<boolean>;
      renameSessionTo: (sessionId: string, title: string) => Promise<boolean>;
 diff --git a/lib/types/dsh-adapter/channel/session-metadata.js b/lib/types/dsh-adapter/channel/session-metadata.js
-index de95a03..ed1d475 100644
+index 8127eeb..9cbfc75 100644
 --- a/lib/types/dsh-adapter/channel/session-metadata.js
 +++ b/lib/types/dsh-adapter/channel/session-metadata.js
-@@ -159,12 +159,19 @@ export function createSessionMetadataActions(ctx, deps) {
+@@ -191,14 +191,19 @@ export function createSessionMetadataActions(ctx, deps) {
          const parsed = parseRecapResponse(outcome.answer);
          return parsed.title === undefined ? { summary: parsed.summary } : { summary: parsed.summary, title: parsed.title };
      };
@@ -37,7 +37,9 @@ index de95a03..ed1d475 100644
          const capture = deps.binding.capture();
          if (!current(capture))
 -            return;
--        capture.agent.session.append('session/title', { title });
+-        // Live rename: the same strict-reader-required payload the offline append
+-        // writes — a `{ title }`-only event made the log unopenable (issue #1006).
+-        capture.agent.session.append('session/title', userTitleData(title));
 -        deps.setSessionTitle(title);
 +            throw new Error('session binding unavailable for rename');
 +        const titleService = ctx.get('sessionTitle');
@@ -52,7 +54,7 @@ index de95a03..ed1d475 100644
          deps.emit();
      };
      const setSessionColor = (color) => {
-@@ -193,7 +200,7 @@ export function createSessionMetadataActions(ctx, deps) {
+@@ -227,7 +232,7 @@ export function createSessionMetadataActions(ctx, deps) {
          if (!current(capture))
              return false;
          if (sessionId === capture.agent.session.id) {
@@ -61,31 +63,11 @@ index de95a03..ed1d475 100644
              return true;
          }
          if (appendSessionTitle(sessionId, title) !== 'appended' || !current(capture))
-diff --git a/lib/types/dsh-adapter/compat/sessionLog.js b/lib/types/dsh-adapter/compat/sessionLog.js
-index c31d6e6..cb0cffd 100644
---- a/lib/types/dsh-adapter/compat/sessionLog.js
-+++ b/lib/types/dsh-adapter/compat/sessionLog.js
-@@ -1106,13 +1106,12 @@ export function appendSessionTitle(sessionId, title) {
-             if (typeof seq === 'number' && seq > maxSeq)
-                 maxSeq = seq;
-         }
--        // Same envelope shape as a manual /rename append ({ title } only); the
--        // seed validator asks only for type/seq/time/data on non-message types.
-+        // An explicit user rename cites no source messages and pins the title.
-         const event = {
-             type: 'session/title',
-             seq: maxSeq + 1,
-             time: Date.now(),
--            data: { title },
-+            data: { title, messageSeqs: [], source: { kind: 'user' } },
-         };
-         const frame = zstdCompressSync(Buffer.from(JSON.stringify(event) + '\n', 'utf8'));
-         appendFileSync(file, frame);
 diff --git a/lib/types/dsh-adapter/plugin.js b/lib/types/dsh-adapter/plugin.js
-index dcc87bd..4cd8252 100644
+index 5e5a31d..8ac10c9 100644
 --- a/lib/types/dsh-adapter/plugin.js
 +++ b/lib/types/dsh-adapter/plugin.js
-@@ -1318,7 +1318,7 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
+@@ -1112,7 +1112,7 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
      const approvalStore = new ApprovalStore(adapterRuntimeFor(ctx));
      bindApprovalStore(ctx, approvalStore);
      if (ctx.get('approval') !== undefined) {
@@ -94,7 +76,7 @@ index dcc87bd..4cd8252 100644
          // Badge-flip push (P-4): React does not know the session log appended —
          // a source-badge verdict that only flips inside getSnapshot() surfaces
          // solely when something else re-renders. Feed the session firehose to
-@@ -1516,50 +1516,11 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
+@@ -1312,50 +1312,11 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
          },
          // Only a `dsh --profile <name>` launch has a profile installation for
          // `/update` to act on; source checkouts and `--config` overlays get the
@@ -150,10 +132,10 @@ index dcc87bd..4cd8252 100644
      });
      // Freeze the fullscreen decision only NOW, right before the tree mounts:
 diff --git a/lib/types/i18n.d.ts b/lib/types/i18n.d.ts
-index dd26d31..eb33c63 100644
+index ef71399..d2b115e 100644
 --- a/lib/types/i18n.d.ts
 +++ b/lib/types/i18n.d.ts
-@@ -1631,6 +1631,10 @@ declare const dict: {
+@@ -1868,6 +1868,10 @@ declare const dict: {
          readonly zh: "需要时可在 cordis.yml 挂载对应 hooks 插件。";
          readonly en: "Mount the matching hooks plugin in cordis.yml when needed.";
      };
@@ -165,10 +147,10 @@ index dd26d31..eb33c63 100644
          readonly zh: "当前运行方式不支持自动更新（需经 dsh --profile 启动），请在终端执行 dsh plugin --profile <name> update @deepseek-harness-tui/dsh-tui";
          readonly en: "Automatic update is unavailable in this launch mode (needs dsh --profile). Run dsh plugin --profile <name> update @deepseek-harness-tui/dsh-tui in a terminal.";
 diff --git a/lib/types/i18n.js b/lib/types/i18n.js
-index 007f640..9963da0 100644
+index 54aa1c3..fcba654 100644
 --- a/lib/types/i18n.js
 +++ b/lib/types/i18n.js
-@@ -471,6 +471,7 @@ const dict = {
+@@ -560,6 +560,7 @@ const dict = {
      'plan-mode-off-desc': { zh: '退出计划模式，恢复正常执行', en: 'Exit plan mode, back to normal execution' },
      'hooks-not-mounted': { zh: 'DSH hooks（dsh-hooks-claude / dsh-hooks-codex）未在本 leaf 挂载。', en: 'DSH hooks (dsh-hooks-claude / dsh-hooks-codex) are not mounted in this leaf.' },
      'hooks-mount-hint': { zh: '需要时可在 cordis.yml 挂载对应 hooks 插件。', en: 'Mount the matching hooks plugin in cordis.yml when needed.' },
@@ -177,10 +159,10 @@ index 007f640..9963da0 100644
      'update-working': { zh: '当前回合仍在运行，请等待完成后再更新 TUI。', en: 'The current turn is still running. Wait for it to finish before updating the TUI.' },
      'update-starting': { zh: '正在更新 @deepseek-harness-tui/dsh-tui，完成后会自动重启并恢复当前会话……', en: 'Updating @deepseek-harness-tui/dsh-tui. The TUI will restart and resume this session when finished…' },
 diff --git a/lib/types/screens/Chat.js b/lib/types/screens/Chat.js
-index 53a80a9..91cfc76 100644
+index 82eee21..c5372a7 100644
 --- a/lib/types/screens/Chat.js
 +++ b/lib/types/screens/Chat.js
-@@ -1850,8 +1850,9 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
+@@ -2164,8 +2164,9 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
                      ]);
                      return true;
                  }
@@ -192,7 +174,7 @@ index 53a80a9..91cfc76 100644
                  return true;
              }
              case 'rewind':
-@@ -3813,9 +3814,12 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
+@@ -4359,9 +4360,12 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
                                      }, onApplyTitle: () => {
                                          if (recap.title === undefined || recap.titleApplied)
                                              return;

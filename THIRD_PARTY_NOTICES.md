@@ -35,8 +35,13 @@ SOFTWARE.
 
 ## dsh-TUI
 
-Source: [`v0.11.0` at
-`19c76a1d877b69ee3f399147bf84f2bae3b10e58`](https://github.com/ccch1mneyyy/dsh-TUI/blob/19c76a1d877b69ee3f399147bf84f2bae3b10e58/LICENSE)
+Source: [`v0.11.2` at
+`dd4137129b91090184e5eaabb7b8a0a74c1b919b`](https://github.com/ccch1mneyyy/dsh-TUI/blob/dd4137129b91090184e5eaabb7b8a0a74c1b919b/LICENSE)
+
+The dsh-TUI package bundles `@dsh-tui-vendor/mathjax-tex-svg`, built from
+MathJax (`mathjax-full` 3.2.2) and mhchemParser 4.2.1 under the Apache License
+2.0. Its `LICENSE` and `NOTICE` files ship unmodified inside the installed TUI
+package.
 
 ```text
 MIT License

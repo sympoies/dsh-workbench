@@ -26,7 +26,7 @@ immutable revisions. All three upstream source licenses are MIT:
 | Component | Accepted Linux source pin | Copyright holder | License evidence |
 | --- | --- | --- |
 | DeepSeek Harness | [`dsh-v0.1.7-rc.1` at `46a7f68b0922371ce7144b668b90e377d8e799f4`](https://github.com/deepseek-ai/deepseek-harness/tree/46a7f68b0922371ce7144b668b90e377d8e799f4) | DeepSeek | [MIT license at the pinned commit](https://github.com/deepseek-ai/deepseek-harness/blob/46a7f68b0922371ce7144b668b90e377d8e799f4/LICENSE) |
-| dsh-TUI | [`v0.11.0` at `19c76a1d877b69ee3f399147bf84f2bae3b10e58`](https://github.com/ccch1mneyyy/dsh-TUI/tree/19c76a1d877b69ee3f399147bf84f2bae3b10e58) | chimney (`ccch1mneyyy`) | [MIT license at the pinned commit](https://github.com/ccch1mneyyy/dsh-TUI/blob/19c76a1d877b69ee3f399147bf84f2bae3b10e58/LICENSE) |
+| dsh-TUI | [`v0.11.2` at `dd4137129b91090184e5eaabb7b8a0a74c1b919b`](https://github.com/ccch1mneyyy/dsh-TUI/tree/dd4137129b91090184e5eaabb7b8a0a74c1b919b) | chimney (`ccch1mneyyy`) | [MIT license at the pinned commit](https://github.com/ccch1mneyyy/dsh-TUI/blob/dd4137129b91090184e5eaabb7b8a0a74c1b919b/LICENSE) |
 | dsh-runtime-kit | [commit `018646bc97448b1e879fab66ff293d3e18181f40`](https://github.com/sympoies/dsh-runtime-kit/tree/018646bc97448b1e879fab66ff293d3e18181f40) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/018646bc97448b1e879fab66ff293d3e18181f40/LICENSE) |
 
 The upstream copyright lines and license texts for these pinned source trees

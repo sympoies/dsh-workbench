@@ -20,11 +20,13 @@ const patch = contract.components.tui.compatibilityPatch!;
 const selector = `dsh-working-activity@${workingActivity}>`;
 const peers = [
   '@deepseek-ai/dsh-agent',
-  '@deepseek-ai/dsh-client-runtime',
   '@deepseek-ai/dsh-client-ui-conversation',
+  '@deepseek-ai/dsh-client-ui-renderer',
+  '@deepseek-ai/dsh-client-ui-session',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-invariants',
   '@deepseek-ai/dsh-session',
+  '@deepseek-ai/dsh-session-projection',
   '@deepseek-ai/dsh-system-prompt',
 ];
 
