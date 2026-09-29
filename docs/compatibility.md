@@ -18,7 +18,7 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.7` Linux x64 contract is a **candidate**; the `v0.1.6`
+The current `v0.1.7` Linux x64 contract is **accepted for compatibility**; the `v0.1.6`
 candidate was never released, because re-pinning runtime-kit changed the
 component tuple again. It keeps the DSH
 and dsh-TUI pins, moves runtime-kit to commit
@@ -32,8 +32,11 @@ answers an agent question in the TUI. The runtime-kit revision tells the agent
 that `runtime_kit_governed_commit` commits only the session cwd and that any
 other worktree commits with `semantic-commit commit --repo`; in the same run the
 agent had used the tool from a default-branch session cwd and could not commit.
-The runtime-kit, TUI, Web, and cross-interface handoff gates need current
-evidence before the contract can be accepted.
+Distinct current-version runs supplied the
+[runtime-kit](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36566672034),
+[TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36567445313), [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36570557193), and
+[cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36570592963) evidence. Deployments are
+accepted separately by the [agent delivery acceptance](agent-acceptance.md).
 
 The `v0.1.5` Linux x64 contract was **accepted for compatibility**. It keeps the DSH
 and runtime-kit pins and moves dsh-TUI to `v0.11.2` at
