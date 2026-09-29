@@ -18,7 +18,7 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.5` Linux x64 contract is a **candidate**. It keeps the DSH
+The current `v0.1.5` Linux x64 contract is **accepted for compatibility**. It keeps the DSH
 and runtime-kit pins and moves dsh-TUI to `v0.11.2` at
 `dd4137129b91090184e5eaabb7b8a0a74c1b919b`. The npm package was built from that commit's
 parent, `1962450006ca63b146d9923c3ec42e7fc62a63d3`; the tagged commit changes
@@ -32,8 +32,12 @@ patched title-service path. The first ordinary launch of a home without
 `~/.dsh-tui/home.json` now opens the TUI's one-shot workspace home; 0.11.0
 skipped it because it read the launch's profile arguments as a first prompt.
 The acceptance fixtures record that home as seen and drive the chat screen.
-The runtime-kit gate and its evidence are unchanged; the TUI, Web, and cross-interface handoff gates need current
-evidence before the contract can be accepted.
+The runtime-kit gate keeps its 0.1.4
+[evidence](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36521711113),
+and distinct current-version runs supplied the
+[TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36540330089), [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36542080773), and
+[cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36542117064) evidence. Deployments are
+accepted separately by the [agent delivery acceptance](agent-acceptance.md).
 
 The `v0.1.4` Linux x64 contract was **accepted for compatibility**. It keeps the DSH
 and dsh-TUI pins and the reviewed TUI patch, and moves runtime-kit to commit
