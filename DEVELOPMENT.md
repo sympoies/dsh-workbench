@@ -217,20 +217,55 @@ pending attestation, resume, or publication review stays until that layer
 completes. On handoff, keep what the receiving agent needs to resume and name
 it in the handoff. The rule covers only run directories the agent created;
 never delete shared host caches such as `~/.npm`, the pnpm store, or
-`~/.cache/uv`, managed worktrees, or another agent's runs.
+`~/.cache/uv`, managed worktrees, or another agent's runs. The acceptance-run
+worktrees removed by the
+[agent delivery acceptance cleanup step](docs/agent-acceptance.md#procedure)
+and the release-run exception below are the only exceptions.
 
 Measured on the shared development host: workbench runs held 31 GB after one
-month. One Linux portable release delivery kept nine superseded
-`formal-installed-vN` trees of about 650 MB each (15 GB). Acceptance runs kept
-an upstream DSH checkout (2.3 GB), a browser profile, and both a `nils-cli`
-release archive and its extracted tree. A trusted run left its agent home
-under `/tmp` (17-31 GB).
+month. Four Linux releases in one day (0.1.1 to 0.1.4) left about 2 GB per
+release packet, 2.7 GB per peer-pack run, 1.1 GB per disposable acceptance root
+under `/tmp`, and 930 MB per installed owner root. One Linux portable release
+delivery kept nine superseded `formal-installed-vN` trees of about 650 MB each
+(15 GB). Acceptance runs kept an upstream DSH checkout (2.3 GB), a browser
+profile, and both a `nils-cli` release archive and its extracted tree. A
+trusted run left its agent home under `/tmp` (17-31 GB).
 
 Create isolated homes inside the run directory, or in a `mktemp -d` directory
 removed by an exit trap. Never leave an agent home or DSH state under `/tmp`
 after the run. A run directory larger than 500 MB when the task finishes needs
 a reason in its receipt; otherwise it is a cleanup defect to fix before
 delivery.
+
+### Release deliveries
+
+A Linux release leaves the largest runs. Close each layer as soon as its
+result is recorded:
+
+- Patched peer pack: once the pack receipt is written, delete the DSH and
+  runtime-kit clones and the private pnpm toolchain. Keep the receipt and the
+  patched peer tarballs while a later build of the same graph can reuse them.
+- Disposable installed acceptance: delete the whole acceptance root, including
+  its install and DSH home, after the Web, TUI, and full-host checks pass. If
+  socket path limits force it under `/tmp`, remove it in the same step.
+- Release packet: after `publish` reports `published-and-verified` and the
+  release checks pass, keep `release-packet.json`, `build-input.json`, the
+  notes, the prepare, verify, preflight, and publish output, and a
+  `sha256sum` record of the archive and nils-cli archive. Delete the release,
+  verify, preflight, and publish roots, the OCI layout, the archive, the OCI
+  carrier, downloaded release assets, the staged DSH home, and the frozen
+  profile input. Keep only the upstream DSH and TUI tarballs the next build
+  reuses. Delete an earlier packet's copies once a newer packet holds them.
+- Agent delivery acceptance: follow its
+  [cleanup step](docs/agent-acceptance.md#procedure).
+
+Runs of published releases belong to the release lane, not to one session,
+so they are an exception to trimming only your own runs.
+Before a release is closed, its agent reduces every earlier run of a
+published release of this repository that is still over 500 MB by the same
+rules, including the pending-layer exception. Installed owner
+roots are host state, not run output; their retention is in
+[the Linux release runbook](docs/linux-release.md#linux-owner-installation).
 
 The host removes project runs older than 30 days (`agent-out cleanup plan
 --include-projects --project-retention-days 30`). That is a backstop for
