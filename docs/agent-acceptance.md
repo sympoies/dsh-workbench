@@ -68,7 +68,9 @@ named tmux session and prints JSON:
    `prompt-2.md` and `wait --min-ended 2` until the second turn ends.
 5. Once the pull request's checks have finished, run `verify-pr` with the
    task's `verify.mjs`. It reports pending checks separately from failed ones.
-6. Close the pull request without merging and delete its branch, then remove
+6. Close the pull request without merging and delete its branch. Remove the
+   managed worktrees the Workbench agent created for the run with
+   `git-cli worktree remove`; they live outside the run directory. Then remove
    the run directory.
 
 The operator sends only the two task prompts. Rephrasing a prompt, explaining
