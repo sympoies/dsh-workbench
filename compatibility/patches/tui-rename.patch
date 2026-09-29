@@ -131,6 +131,26 @@ index 5e5a31d..8ac10c9 100644
          },
      });
      // Freeze the fullscreen decision only NOW, right before the tree mounts:
+diff --git a/lib/types/dsh-adapter/questions-answerer.js b/lib/types/dsh-adapter/questions-answerer.js
+index 510a86c..5f83a5f 100644
+--- a/lib/types/dsh-adapter/questions-answerer.js
++++ b/lib/types/dsh-adapter/questions-answerer.js
+@@ -37,11 +37,14 @@ export function prepareQuestionAnswerer(ctx, service, answerer) {
+         const events = ctx;
+         return {
+             kind: 'waterfall',
++            // DSH dispatches agent questions in the agent's scope; like the approval
++            // listener, answer them globally and ahead of other answerers so they
++            // reach this TUI instead of parking unseen.
+             register: owner => events.on('user-questions/request', (request, next) => {
+                 if (request.agent !== undefined && String(request.agent.id) !== owner.agentId)
+                     return next();
+                 return answerer.ask(request);
+-            }),
++            }, { global: true, prepend: true }),
+         };
+     }
+     const provider = { ask: request => answerer.ask(request) };
 diff --git a/lib/types/i18n.d.ts b/lib/types/i18n.d.ts
 index ef71399..d2b115e 100644
 --- a/lib/types/i18n.d.ts

@@ -467,6 +467,47 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
   }
 }
 
+async function runQuestionScenario(binary: string, fixture: string): Promise<void> {
+  const apiKey = randomBytes(24).toString('hex');
+  const question = 'Which marker should the Workbench record?';
+  const chosen = 'WB_QUESTION_ALPHA';
+  const answer = 'WB_QUESTION_ANSWERED';
+  const mock = await startApprovalMockLlmServer({ sequence: ['tool_call_success', 'success'], repeatLast: true,
+    apiKey, successText: answer, toolName: 'ask_user_question',
+    toolArguments: JSON.stringify({ questions: [{ id: 'marker', header: 'Marker', question,
+      options: [{ label: chosen }, { label: 'WB_QUESTION_BETA' }] }] }) });
+  const logRoot = join(fixture, 'home', 'sessions');
+  mkdirSync(logRoot, { recursive: true });
+  const previous = new Set(sessionLogs(logRoot));
+  let terminal: ReturnType<typeof startTerminal> | undefined;
+  try {
+    terminal = startTerminal(binary, fixture, mock.baseURL, apiKey);
+    await terminal.waitFor('Explore the uncharted!');
+    terminal.write('Ask me which marker to record, then report it.\r');
+    // An agent-scoped question must reach the TUI instead of parking unseen.
+    await terminal.waitFor(question);
+    await terminal.waitFor(chosen);
+    terminal.write('\r');
+    const logPath = await waitForTurn(logRoot, previous);
+    await terminal.stop();
+    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly');
+    const events = readEvents(logPath, { strict: true });
+    const endReason = events.find(event => event.type === 'turn/end')?.data?.reason as { kind?: string } | undefined;
+    assert.equal(endReason?.kind, 'completed', 'question turn did not complete');
+    const result = events.find(event => event.type === 'tool/result');
+    assert.notEqual((result?.data?.message as { isError?: boolean } | undefined)?.isError, true,
+      'question tool result is an error');
+    assert.ok(JSON.stringify((result?.data?.message as { content?: unknown } | undefined)?.content).includes(chosen),
+      'question tool result does not carry the chosen option');
+  } catch (error) {
+    const behaviors = mock.requests.map(request => request.behavior).join(',') || 'none';
+    throw new Error(`${error instanceof Error ? error.message : String(error)}; mock behaviors: ${behaviors}`);
+  } finally {
+    const cleanup = await Promise.allSettled([terminal?.stop(), mock.close()]);
+    if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI question cleanup failed');
+  }
+}
+
 async function main(): Promise<void> {
   if (process.platform !== 'linux' && process.platform !== 'darwin') {
     throw new Error('This real TTY acceptance requires Linux or macOS');
@@ -522,10 +563,11 @@ async function main(): Promise<void> {
       contract.components.tui.package.name, 'package.json'), 'utf8')) as { version: string };
     assert.equal(installedTui.version, contract.components.tui.package.version);
     for (const scenario of scenarios) await runScenario(dsh, fixture, scenario);
+    await runQuestionScenario(dsh, fixture);
     await runSessionScenario(dsh, fixture);
     await runRenameScenario(dsh, fixture);
     console.log(JSON.stringify({ result: 'pass', scenarios: scenarios.map(scenario => scenario.name),
-      approvals: true, toolResults: true, exactIdResume: true, manualRenameResume: true,
+      approvals: true, questions: true, toolResults: true, exactIdResume: true, manualRenameResume: true,
       offlineRenameResume: true, realTty: true }));
   } finally {
     rmSync(fixture, { recursive: true, force: true });
