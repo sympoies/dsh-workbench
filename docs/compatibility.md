@@ -18,7 +18,18 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.5` Linux x64 contract is **accepted for compatibility**. It keeps the DSH
+The current `v0.1.6` Linux x64 contract is a **candidate**. It keeps every
+0.1.5 source and package pin and extends the reviewed TUI patch so that a
+question from the agent reaches the TUI. DSH dispatches `user-questions/request`
+in the agent's scope, like approvals, and the pinned TUI registered its answerer
+without `{ global: true, prepend: true }`. The question then never reached the
+TUI: the turn waited on an answer while the screen showed only its working line.
+The 0.1.5 agent delivery acceptance stopped there. The real-TTY acceptance now
+answers an agent question in the TUI. The runtime-kit gate and its evidence are
+unchanged; the TUI, Web, and cross-interface handoff gates need current evidence
+before the contract can be accepted.
+
+The `v0.1.5` Linux x64 contract was **accepted for compatibility**. It keeps the DSH
 and runtime-kit pins and moves dsh-TUI to `v0.11.2` at
 `dd4137129b91090184e5eaabb7b8a0a74c1b919b`. The npm package was built from that commit's
 parent, `1962450006ca63b146d9923c3ec42e7fc62a63d3`; the tagged commit changes

@@ -19,7 +19,7 @@ overrides:
   dsh-working-activity@0.5.0>react: 19.3.0
 
 patchedDependencies:
-  '@deepseek-harness-tui/dsh-tui@0.11.2': 59b25849ce029c0886760fceebcc7e9f36dad43a9ae62efb7c598654e4034d27
+  '@deepseek-harness-tui/dsh-tui@0.11.2': 9393e884e9cd741890d82a959727e4ba29fa9d2fccefeb7f0c39d93eb1de94a3
 
 importers:
 
@@ -27,7 +27,7 @@ importers:
     dependencies:
       '@deepseek-harness-tui/dsh-tui':
         specifier: 0.11.2
-        version: 0.11.2(patch_hash=59b25849ce029c0886760fceebcc7e9f36dad43a9ae62efb7c598654e4034d27)(515ce9a12bf1433dcb95b4f2da12e01f)
+        version: 0.11.2(patch_hash=9393e884e9cd741890d82a959727e4ba29fa9d2fccefeb7f0c39d93eb1de94a3)(515ce9a12bf1433dcb95b4f2da12e01f)
 
 packages:
 
@@ -809,7 +809,7 @@ snapshots:
       '@deepseek-ai/cosmokit': 1.8.5
       '@standard-schema/spec': 1.1.0
 
-  '@deepseek-harness-tui/dsh-tui@0.11.2(patch_hash=59b25849ce029c0886760fceebcc7e9f36dad43a9ae62efb7c598654e4034d27)(515ce9a12bf1433dcb95b4f2da12e01f)':
+  '@deepseek-harness-tui/dsh-tui@0.11.2(patch_hash=9393e884e9cd741890d82a959727e4ba29fa9d2fccefeb7f0c39d93eb1de94a3)(515ce9a12bf1433dcb95b4f2da12e01f)':
     dependencies:
       '@alcalzone/ansi-tokenize': 0.3.1
       auto-bind: 5.0.1
