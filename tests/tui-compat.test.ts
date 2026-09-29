@@ -22,13 +22,14 @@ test('the reviewed TUI peer correction is scoped to one transitive package and c
   assert.equal(lines[2], 'patchedDependencies:');
   assert.equal(lines[3], `  '${contract.components.tui.package.name}@${contract.components.tui.package.version}': patches/tui-rename.patch`);
   assert.equal(lines[4], 'overrides:');
-  assert.equal(lines.length, 15);
+  assert.equal(lines.length, 17);
   assert.ok(lines.includes(`  '${contract.components.tui.package.name}@${contract.components.tui.package.version}>dsh-working-activity': ${contract.components.tui.peerOverrides!.workingActivity}`));
   assert.ok(lines.includes(`  react: ${contract.components.tui.peerOverrides!.react}`));
   for (const peer of [
-    '@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-client-runtime',
-    '@deepseek-ai/dsh-client-ui-conversation', '@deepseek-ai/dsh-client-ui-slots',
-    '@deepseek-ai/dsh-invariants', '@deepseek-ai/dsh-session',
+    '@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-client-ui-conversation',
+    '@deepseek-ai/dsh-client-ui-renderer', '@deepseek-ai/dsh-client-ui-session',
+    '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-invariants',
+    '@deepseek-ai/dsh-session', '@deepseek-ai/dsh-session-projection',
     '@deepseek-ai/dsh-system-prompt',
   ]) {
     assert.ok(lines.includes(`  '${selector}${peer}': ${contract.components.dsh.package.version}`), peer);

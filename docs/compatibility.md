@@ -18,7 +18,24 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.4` Linux x64 contract is **accepted for compatibility**. It keeps the DSH
+The current `v0.1.5` Linux x64 contract is a **candidate**. It keeps the DSH
+and runtime-kit pins and moves dsh-TUI to `v0.11.2` at
+`dd4137129b91090184e5eaabb7b8a0a74c1b919b`. The npm package was built from that commit's
+parent, `1962450006ca63b146d9923c3ec42e7fc62a63d3`; the tagged commit changes
+only standalone-executable packaging files that are not in the npm package.
+0.11.2 speeds up `/resume`, renders images and LaTeX math in the terminal, and
+depends on `dsh-working-activity@0.5.0`. The reviewed TUI patch is rebased onto
+0.11.2 with the same behavior. Upstream now writes the user-title payload for
+both renames, so the patch no longer changes `appendSessionTitle`, but live
+`/rename` still appends without DSH's projection-cache barrier and keeps the
+patched title-service path. The first ordinary launch of a home without
+`~/.dsh-tui/home.json` now opens the TUI's one-shot workspace home; 0.11.0
+skipped it because it read the launch's profile arguments as a first prompt.
+The acceptance fixtures record that home as seen and drive the chat screen.
+The runtime-kit gate and its evidence are unchanged; the TUI, Web, and cross-interface handoff gates need current
+evidence before the contract can be accepted.
+
+The `v0.1.4` Linux x64 contract was **accepted for compatibility**. It keeps the DSH
 and dsh-TUI pins and the reviewed TUI patch, and moves runtime-kit to commit
 `018646bc97448b1e879fab66ff293d3e18181f40`, which adopts the released nils-cli
 1.29.4 companions. The runtime-kit source, its DSH patch, and the Workbench
@@ -126,14 +143,16 @@ runtime-kit `doctor` with `healthy` status, and real-terminal TUI startup.
 This is composition evidence; it does not accept the tuple or establish a
 portable release artifact.
 
-The TUI's `dsh-working-activity@0.4.0` dependency still declares peers for
-older DSH client packages and React 18. The selected TUI uses React 19 and
-declares support for DSH `0.1.7-rc.1`; unmodified npm and pnpm strict installs
-reject the combined graph. The TUI contract therefore records the exact
-working-activity and React versions for a Workbench-scoped peer correction.
-`node scripts/tui-compat.mjs` renders pnpm overrides for only that package's
-eight stale peer edges, while pinning the TUI's working-activity dependency and
-the graph's React version. The corrected graph passed a strict frozen install in
+The TUI's `dsh-working-activity` dependency declares peers for other DSH
+releases and React 18. The selected TUI uses React 19 and declares support for
+DSH `0.1.7-rc.1`; unmodified npm and pnpm strict installs reject the combined
+graph. The TUI contract therefore records the exact working-activity and React
+versions for a Workbench-scoped peer correction. `node scripts/tui-compat.mjs`
+renders pnpm overrides for only that package's stale peer edges, nine DSH
+packages and React for `dsh-working-activity@0.5.0`, while pinning the TUI's
+working-activity dependency and the graph's React version. Among its peers,
+the package imports only `@deepseek-ai/schemastery` at runtime; its DSH peers
+are type imports, and its Web client is a self-contained bundle. The corrected graph passed a strict frozen install in
 an isolated probe, and a disposable TUI profile reached the terminal UI.
 The Linux real-TTY acceptance additionally drove both an allowed-once and a
 rejected Bash escalation through the pinned TUI, then verified distinct

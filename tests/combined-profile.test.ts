@@ -299,7 +299,7 @@ test('stages a portable profile from the authenticated runtime-kit patched recei
     assert.equal(manifest.dependencies['@deepseek-ai/dsh-sandbox'],
       'file:artifacts/deepseek-ai-dsh-sandbox-0.1.7-rc.1.tgz');
     assert.equal(manifest.dependencies['@deepseek-harness-tui/dsh-tui'],
-      'file:artifacts/deepseek-harness-tui-dsh-tui-0.11.0.tgz');
+      'file:artifacts/deepseek-harness-tui-dsh-tui-0.11.2.tgz');
     const workspace = readFileSync(join(profile, 'pnpm-workspace.yaml'), 'utf8');
     assert.match(workspace, /patchedDependencies:/);
     assert.match(workspace, /'@deepseek-ai\/dsh-sandbox': 'file:artifacts\/deepseek-ai-dsh-sandbox-0\.1\.7-rc\.1\.tgz'/);
