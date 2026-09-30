@@ -126,7 +126,12 @@ of the patched closure.
    fresh profile, then run pnpm `install --frozen-lockfile
    --strict-peer-dependencies --ignore-scripts`. Require the lockfile bytes to
    remain unchanged. Regenerating and deduplicating a lockfile is a separate
-   release-version preparation step, not an installation step. Runtime-kit
+   release-version preparation step, not an installation step. When preparing
+   a record, take the workspace digest from the staged `pnpm-workspace.yaml` and
+   require pnpm to leave it unchanged: pnpm adds a `minimumReleaseAgeExclude`
+   entry when a locked package is younger than its release-age policy.
+   `node scripts/verify-profile-record.ts [--require-lock] <absolute-profile>`
+   compares the staged workspace and lock with the reviewed artifact record. Runtime-kit
    setup continues to reject any later unrelated profile or lockfile mutation.
    Use runtime-kit's documented owner launcher to preview and apply `setup
    --profile workbench --package <exact-kit-package>`. Require `doctor
