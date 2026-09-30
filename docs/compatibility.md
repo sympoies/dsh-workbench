@@ -18,7 +18,7 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.2.0` Linux x64 contract is a **candidate**. It is the first
+The current `v0.2.0` Linux x64 contract is **accepted for compatibility**. It is the first
 Workbench graph to move DeepSeek Harness: DSH moves to `dsh-v0.2.0-rc.2` at
 `639ed015397290b3745d163aafe02ffee4aa3f84`, dsh-TUI to `v0.12.0` at
 `3066b29113bde90606921b64bcf7c25fad31068d`, and runtime-kit to commit
@@ -34,6 +34,11 @@ The rc.2 Web chat shows a running Turn only in its live running indicator and
 renders the Turn-process summary once the Turn settles; settled Turns read
 "Completed", and the welcome dialog is the "Preview Notice". The browser
 acceptance follows those native states.
+Distinct current-version runs supplied the
+[runtime-kit](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36697031259),
+[TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36709133530), [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36710992715), and
+[cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36711041549) evidence. Deployments are
+accepted separately by the [agent delivery acceptance](agent-acceptance.md).
 
 The previous `v0.1.7` Linux x64 contract was **accepted for compatibility**; the `v0.1.6`
 candidate was never released, because re-pinning runtime-kit changed the

@@ -1,7 +1,7 @@
 # Session visibility and handoff
 
 This document records the observed two-process behavior of the Linux x64
-**accepted compatibility graph**: DSH 0.1.7-rc.1, dsh-TUI 0.11.2, and the
+**accepted compatibility graph**: DSH 0.2.0-rc.2, dsh-TUI 0.12.0, and the
 pinned dsh-runtime-kit revision. It selects a service-stop topology for the
 first Workbench milestone. It is not a published release or a migration
 procedure for an existing DSH home.
