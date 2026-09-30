@@ -355,7 +355,21 @@ export type LinuxInstallReceipt = {
   installRoot: string;
   webLauncher: string;
   tuiLauncher: string;
+  seedLauncher: string;
+  historyLauncher: string;
+  agentSessionHooks: string;
+  agentSessionHooksSha256: string;
 };
+
+/**
+ * The Claude Code hook surface a managed TUI pane mounts: DSH turn lifecycle
+ * reported to the pane's own agent-session through its loopback activity ingress.
+ */
+export const AGENT_SESSION_HOOKS = `${JSON.stringify({ hooks: Object.fromEntries(
+  [['UserPromptSubmit', 'pre_llm_call'], ['Stop', 'post_llm_call']].map(([hook, event]) => [hook, [{
+    hooks: [{ type: 'command',
+      command: `agent-session activity hook --agent dsh --event ${event} --via http`, timeout: 10 }],
+  }]])) }, null, 2)}\n`;
 
 /** Apply the unchanged plan into one new private root, or remove that root on failure. */
 export function applyLinuxInstall(input: LinuxInstallInput,
@@ -425,6 +439,8 @@ export function applyLinuxInstall(input: LinuxInstallInput,
     writeFileSync(hookConfig,
       `schema_version = "agent-hook.config.v1"\n\n[policy]\npath = ${JSON.stringify(hookPolicy)}\ndigest = "sha256:${sha256(readFileSync(hookPolicy))}"\n`,
       { flag: 'wx', mode: 0o600 });
+    const agentSessionHooks = join(configHome, 'agent-session-hooks.json');
+    writeFileSync(agentSessionHooks, AGENT_SESSION_HOOKS, { flag: 'wx', mode: 0o600 });
     const dshCli = join(profile, 'node_modules/@deepseek-ai/dsh/lib/bin.js');
     const dshDirectBin = join(binDir, 'dsh-direct');
     writeFileSync(dshDirectBin,
@@ -442,7 +458,7 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       privateSkillsDir: join(root, 'private-skills'), agentDocsHome,
       hookConfig, hookPolicy,
       agentHookBin: join(releaseRoot, 'nils/bin/agent-hook'),
-      agentDocsBin: join(releaseRoot, 'nils/bin/agent-docs'), dshDirectBin,
+      agentDocsBin: join(releaseRoot, 'nils/bin/agent-docs'), dshDirectBin, agentSessionHooks,
     };
     const launchConfig = join(root, 'launch-config.json');
     writeFileSync(launchConfig, `${JSON.stringify(config)}\n`, { flag: 'wx', mode: 0o600 });
@@ -458,7 +474,7 @@ export function applyLinuxInstall(input: LinuxInstallInput,
     }
     const owner = refreshedOwner.config;
     const runtimeKitPlanDigest = setupRuntime(root, kitPackage, config, owner, pnpmEnvironment);
-    const launcher = (face: 'web' | 'tui'): string => {
+    const launcher = (face: 'web' | 'tui' | 'seed' | 'history'): string => {
       const path = join(binDir, `workbench-${face}`);
       writeFileSync(path,
         `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${shellQuote(installedLaunch)} ${shellQuote(launchConfig)} ${face} "$@"\n`,
@@ -468,6 +484,8 @@ export function applyLinuxInstall(input: LinuxInstallInput,
     };
     const webLauncher = launcher('web');
     const tuiLauncher = launcher('tui');
+    const seedLauncher = launcher('seed');
+    const historyLauncher = launcher('history');
     const receipt: LinuxInstallReceipt = {
       schemaVersion: 'dsh-workbench.linux-installed-unit.v1',
       releaseVersion: content.releaseVersion,
@@ -483,7 +501,8 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       profileLockSha256: content.profileLockSha256,
       runtimeKitPlanDigest,
       finishLineHostProbe: 'available', runtimeKitDoctor: 'healthy',
-      productAccepted: false, installRoot: root, webLauncher, tuiLauncher,
+      productAccepted: false, installRoot: root, webLauncher, tuiLauncher, seedLauncher, historyLauncher,
+      agentSessionHooks, agentSessionHooksSha256: sha256(readFileSync(agentSessionHooks)),
     };
     writeFileSync(join(root, 'installed-unit-receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`,
       { flag: 'wx', mode: 0o600 });

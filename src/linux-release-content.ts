@@ -342,6 +342,10 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
     // Same bytes as WORKBENCH_PROFILE_PATCH; kept inline because combined-profile.ts
     // is not an installer source shipped in the release.
     ['profile/cordis.patch.yml', "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"
+      + "    - id: hooks-claude-code\n      name: '@deepseek-ai/dsh-hooks-claude-code'\n"
+      + "      disabled: !!js '!process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS'\n"
+      + "      config:\n        configPath: !!js process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS ?? ''\n"
+      + '        defaultTimeoutMs: 10000\n'
       + '- id: approval\n  config:\n    policy: ask\n'],
     ['profile/workbench-tui/LICENSE', sourceBlob('LICENSE')],
     ['profile/workbench-tui/src/launch-workbench.ts', sourceBlob('src/launch-workbench.ts')],

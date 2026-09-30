@@ -96,7 +96,7 @@ test('shipped installer sources import only other shipped installer sources', ()
 
 test('the release content check expects the staged profile patch bytes', () => {
   const source = readFileSync(new URL('../src/linux-release-content.ts', import.meta.url), 'utf8');
-  const literal = source.match(/\['profile\/cordis\.patch\.yml', ("[^"]*"\n\s*\+ '[^']*')\]/);
+  const literal = source.match(/\['profile\/cordis\.patch\.yml', ((?:(?:"[^"]*"|'[^']*')\s*\+?\s*)+)\]/);
   assert.ok(literal, 'profile patch expectation not found');
   assert.equal(new Function(`return ${literal[1]};`)(), WORKBENCH_PROFILE_PATCH);
 });
