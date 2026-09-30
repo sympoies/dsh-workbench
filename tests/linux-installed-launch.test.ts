@@ -275,13 +275,17 @@ test('the history face runs the bundled adapter against the installed profile un
   try {
     const { dshHome, kitPackage, profile, run } = managedFixture(root);
     const result = run('history', ['list', '--root', join(dshHome, 'sessions'), '--compression', 'zstd',
-      '--limit', '5'], { DEEPSEEK_API_KEY: 'inherited-key' });
+      '--limit', '5'], { DEEPSEEK_API_KEY: 'inherited-key', DSH_CODEX_SUBSCRIPTION_TOKEN: 'inherited-token',
+      DSH_CODEX_PROXY_TOKEN: 'inherited-token', DSH_CODEX_SUBSCRIPTION_URL: 'https://inherited.invalid/v1' });
     assert.equal(result.status, 0, result.stderr);
     const observed = JSON.parse(result.stdout);
     assert.deepEqual(observed.args, ['list', '--profile-root', profile, '--root',
       join(dshHome, 'sessions'), '--compression', 'zstd', '--limit', '5']);
     assert.equal(observed.env.DSH_HOME, dshHome);
     assert.equal(observed.env.DEEPSEEK_API_KEY, undefined, 'the history adapter never receives a model credential');
+    for (const name of ['DSH_CODEX_SUBSCRIPTION_TOKEN', 'DSH_CODEX_PROXY_TOKEN', 'DSH_CODEX_SUBSCRIPTION_URL']) {
+      assert.equal(observed.env[name], undefined, `the history adapter never receives ${name}`);
+    }
     assert.ok(kitPackage);
     for (const args of [['list', '--profile-root', '/elsewhere'], ['list', '--profile-root=/elsewhere'], []]) {
       const refused = run('history', args, {});

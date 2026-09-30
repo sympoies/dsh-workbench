@@ -143,8 +143,8 @@ if (face === 'history') {
     throw new Error('installed history owns the workbench profile root');
   }
   const environment: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: config.dshHome };
-  // The adapter only reads the session store; it never needs a model credential.
-  delete environment.DEEPSEEK_API_KEY;
+  // The adapter only reads the session store; it never needs a model route or credential.
+  for (const name of ownerSuppliedNames) delete environment[name];
   const [operation, ...rest] = args;
   exec([join(config.kitPackage, 'dist/bin/dsh-runtime-kit-history.js'), operation!,
     '--profile-root', profileRoot, ...rest], environment);
