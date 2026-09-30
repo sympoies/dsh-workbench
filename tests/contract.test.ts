@@ -165,9 +165,10 @@ test('adding a Web artifact record to a previous release requires a version bump
   }
 });
 
-test('schema 3 compares with the original schema 1 candidate only after a release bump', () => {
+test('schema 4 compares with the original schema 1 candidate only after a release bump', () => {
   const previous = fixture(contract => {
     contract.schemaVersion = 1;
+    Reflect.deleteProperty(contract.components, 'codexSubscription');
     contract.release.version = '0.1.0-rc.0';
     contract.release.tag = 'v0.1.0-rc.0';
     Reflect.deleteProperty(contract.runtime, 'pnpm');
@@ -190,9 +191,10 @@ test('schema 3 compares with the original schema 1 candidate only after a releas
   }
 });
 
-test('schema 3 compares with the prior unpatched schema 2 contract', () => {
+test('schema 4 compares with the prior unpatched schema 2 contract', () => {
   const previous = fixture(contract => {
     contract.schemaVersion = 2;
+    Reflect.deleteProperty(contract.components, 'codexSubscription');
     contract.release.version = '0.1.0-rc.2';
     contract.release.tag = 'v0.1.0-rc.2';
     Reflect.deleteProperty(contract.components.tui, 'compatibilityPatch');
@@ -354,4 +356,68 @@ test('accepted release evidence must identify each gate and platform with distin
       rmSync(dir, { recursive: true, force: true });
     }
   }
+});
+
+test('schema 4 pins the Codex subscription provider as an exact component', () => {
+  const current = JSON.parse(readFileSync(source, 'utf8')) as WorkbenchContract;
+  assert.equal(current.schemaVersion, 4);
+  assert.equal(current.components.codexSubscription.package.name, '@sympoies/dsh-llm-codex-subscription');
+  assert.equal(current.components.codexSubscription.source.tag,
+    `dsh-llm-codex-subscription-v${current.components.codexSubscription.package.version}`);
+  for (const [change, message] of [
+    [(contract: WorkbenchContract) => { contract.components.codexSubscription.package.name = '@sympoies/other-provider'; },
+      /codexSubscription package name is not the reviewed provider/],
+    [(contract: WorkbenchContract) => { contract.components.codexSubscription.source.tag = 'v0.2.0'; },
+      /codexSubscription source tag and package version disagree/],
+    [(contract: WorkbenchContract) => { contract.components.codexSubscription.package.integrity = 'sha512-short'; },
+      /codexSubscription\.package\.integrity has an invalid value/],
+    [(contract: WorkbenchContract) => { contract.components.codexSubscription.source.commit = 'main'; },
+      /codexSubscription\.source\.commit has an invalid value/],
+    [(contract: WorkbenchContract) => { contract.components.codexSubscription.toolchain.pnpm = '11.0.0'; },
+      /components\.codexSubscription|codexSubscription\.toolchain has missing or unexpected fields/],
+    [(contract: WorkbenchContract) => { Reflect.deleteProperty(contract.components, 'codexSubscription'); },
+      /components has missing or unexpected fields/],
+    [(contract: WorkbenchContract) => { contract.components.codexSubscription.status = 'candidate'; },
+      /accepted contract requires accepted components/],
+  ] as const) {
+    const { dir, path } = fixture(change);
+    try {
+      const result = run('check', path);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, message);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  }
+  const base = fixture();
+  const repinned = fixture(contract => {
+    contract.components.codexSubscription.package.integrity = `sha512-${'A'.repeat(86)}==`;
+  });
+  try {
+    const result = run('compare', repinned.path, ['--previous', base.path]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /component tuple changed without a new Workbench release\.version/);
+  } finally {
+    rmSync(base.dir, { recursive: true, force: true });
+    rmSync(repinned.dir, { recursive: true, force: true });
+  }
+});
+
+test('schema 4 compares with the prior schema 3 contract only after a release bump', () => {
+  const schema3 = (version: string) => fixture(contract => {
+    contract.schemaVersion = 3;
+    contract.release.version = version;
+    contract.release.tag = `v${version}`;
+    Reflect.deleteProperty(contract.components, 'codexSubscription');
+  });
+  const previous = schema3('0.2.1');
+  try {
+    assert.equal(run('compare', source, ['--previous', previous.path]).status, 0);
+    // A schema 3 contract is readable only as the previous side of a comparison.
+    assert.match(run('check', previous.path).stderr, /unsupported contract schemaVersion/);
+    const current = JSON.parse(readFileSync(source, 'utf8')) as WorkbenchContract;
+    const same = schema3(current.release.version);
+    try {
+      assert.match(run('compare', source, ['--previous', same.path]).stderr,
+        /component tuple changed without a new Workbench release\.version|accepted release contract is immutable/);
+    } finally { rmSync(same.dir, { recursive: true, force: true }); }
+  } finally { rmSync(previous.dir, { recursive: true, force: true }); }
 });

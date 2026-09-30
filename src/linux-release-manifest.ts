@@ -203,6 +203,8 @@ export function verifyLinuxReleaseEnvelope(root: string, expectedManifestSha256:
   const requiredArchivePaths = [
     componentArchive(contract.components.dsh.package.name, contract.components.dsh.package.version),
     componentArchive(contract.components.tui.package.name, contract.components.tui.package.version),
+    componentArchive(contract.components.codexSubscription.package.name,
+      contract.components.codexSubscription.package.version),
     `profile/artifacts/sympoies-dsh-workbench-web-${contract.release.version}.tgz`,
     'profile/artifacts/peer-closure.tgz',
   ];

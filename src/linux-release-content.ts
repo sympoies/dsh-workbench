@@ -7,6 +7,7 @@ import { gunzipSync } from 'node:zlib';
 import { inspectPeerArtifact, inspectSemanticPeerArtifact } from './package-artifact.ts';
 import { readPinnedKitJson } from './pinned-kit.ts';
 import { verifyLinuxReleaseEnvelope } from './linux-release-manifest.ts';
+import { WORKBENCH_PROFILE_PATCH } from './profile-patch.ts';
 import type { WorkbenchContract } from './contract-types.ts';
 
 type DshCompatibility = {
@@ -44,7 +45,7 @@ export const reviewedInstallerSourcePaths = [
   'src/linux-release-manifest.ts', 'src/linux-release-content.ts',
   'src/linux-release-archive.ts', 'src/linux-installer.ts',
   'src/linux-installed-launch.ts', 'src/linux-owner-input.ts', 'scripts/linux-install.mjs',
-  'src/pinned-kit.ts', 'src/package-artifact.ts',
+  'src/pinned-kit.ts', 'src/package-artifact.ts', 'src/profile-patch.ts',
 ] as const;
 type LinuxArtifactsRecord = {
   schemaVersion: string; releaseVersion: string;
@@ -83,6 +84,7 @@ export function expectedProfilePaths(workbench: WorkbenchContract, kit: DshCompa
       `profile/artifacts/${artifactName(name, entry.version)}`),
     `profile/artifacts/${artifactName(workbench.components.dsh.package.name, workbench.components.dsh.package.version)}`,
     `profile/artifacts/${artifactName(workbench.components.tui.package.name, workbench.components.tui.package.version)}`,
+    `profile/artifacts/${artifactName(workbench.components.codexSubscription.package.name, workbench.components.codexSubscription.package.version)}`,
     `profile/artifacts/sympoies-dsh-workbench-web-${workbench.release.version}.tgz`,
   ].sort();
 }
@@ -250,16 +252,21 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
   const archiveDir = join(root, 'profile/artifacts');
   const dshName = artifactName(contract.components.dsh.package.name, contract.components.dsh.package.version);
   const tuiName = artifactName(contract.components.tui.package.name, contract.components.tui.package.version);
+  const providerName = artifactName(contract.components.codexSubscription.package.name,
+    contract.components.codexSubscription.package.version);
   const webName = `sympoies-dsh-workbench-web-${contract.release.version}.tgz`;
-  const official = new Set([dshName, tuiName, webName, 'peer-closure.tgz']);
+  const official = new Set([dshName, tuiName, providerName, webName, 'peer-closure.tgz']);
   const dsh = readFileSync(join(archiveDir, dshName));
   const tui = readFileSync(join(archiveDir, tuiName));
+  const provider = readFileSync(join(archiveDir, providerName));
   const web = readFileSync(join(archiveDir, webName));
   if (integrity(dsh) !== contract.components.dsh.package.integrity
-    || integrity(tui) !== contract.components.tui.package.integrity) {
+    || integrity(tui) !== contract.components.tui.package.integrity
+    || integrity(provider) !== contract.components.codexSubscription.package.integrity) {
     throw new Error('official component archive integrity differs from contract');
   }
-  for (const [bytes, component] of [[dsh, contract.components.dsh], [tui, contract.components.tui]] as const) {
+  for (const [bytes, component] of [[dsh, contract.components.dsh], [tui, contract.components.tui],
+    [provider, contract.components.codexSubscription]] as const) {
     const found = inspectPeerArtifact(bytes);
     const archivePath = `profile/artifacts/${artifactName(component.package.name, component.package.version)}`;
     if (found.name !== component.package.name || found.version !== component.package.version) {
@@ -316,6 +323,7 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
   }
   selected.set(contract.components.dsh.package.name, `file:artifacts/${dshName}`);
   selected.set(contract.components.tui.package.name, `file:artifacts/${tuiName}`);
+  selected.set(contract.components.codexSubscription.package.name, `file:artifacts/${providerName}`);
   selected.set('@sympoies/dsh-workbench-web', `file:artifacts/${webName}`);
   const actualProfilePaths = manifest.files.filter(file => file.role === 'profile')
     .map(file => file.path).filter(path => path !== 'profile/artifacts/peer-closure.tgz').sort();
@@ -339,14 +347,7 @@ export function verifyLinuxReleaseContents(root: string, manifestSha256: string,
     ['profile/THIRD_PARTY_NOTICES.md', sourceBlob('THIRD_PARTY_NOTICES.md')],
     ['profile/patches/tui-rename.patch', sourceBlob(contract.components.tui.compatibilityPatch!.path)],
     ['profile/cordis.yml', '[]\n'],
-    // Same bytes as WORKBENCH_PROFILE_PATCH; kept inline because combined-profile.ts
-    // is not an installer source shipped in the release.
-    ['profile/cordis.patch.yml', "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"
-      + "    - id: hooks-claude-code\n      name: '@deepseek-ai/dsh-hooks-claude-code'\n"
-      + "      disabled: !!js '!process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS'\n"
-      + "      config:\n        configPath: !!js process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS ?? ''\n"
-      + '        defaultTimeoutMs: 10000\n'
-      + '- id: approval\n  config:\n    policy: ask\n'],
+    ['profile/cordis.patch.yml', WORKBENCH_PROFILE_PATCH],
     ['profile/workbench-tui/LICENSE', sourceBlob('LICENSE')],
     ['profile/workbench-tui/src/launch-workbench.ts', sourceBlob('src/launch-workbench.ts')],
     ['profile/workbench-tui/scripts/launch-workbench-tui.ts',

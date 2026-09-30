@@ -7,20 +7,9 @@ import type { WorkbenchContract } from './contract-types.ts';
 import { readPinnedKitJson } from './pinned-kit.ts';
 import { inspectPeerArtifact, normalizePeerArtifact } from './package-artifact.ts';
 import { materializeTuiEntry } from './launch-workbench.ts';
+import { WORKBENCH_PROFILE_PATCH } from './profile-patch.ts';
 
-/**
- * The Workbench profile's own patch layer: register the Web plugin, and keep approvals
- * asking. The installed launch runs DSH as a full host agent, whose preset would
- * otherwise reject every approval-gated action instead of asking the operator.
- * The official CLI's Claude Code hook bridge stays disabled unless the installed
- * TUI launch runs as an agent-session managed pane and names its activity hooks.
- */
-export const WORKBENCH_PROFILE_PATCH = "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"
-  + "    - id: hooks-claude-code\n      name: '@deepseek-ai/dsh-hooks-claude-code'\n"
-  + "      disabled: !!js '!process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS'\n"
-  + "      config:\n        configPath: !!js process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS ?? ''\n"
-  + '        defaultTimeoutMs: 10000\n'
-  + '- id: approval\n  config:\n    policy: ask\n';
+export { WORKBENCH_PROFILE_PATCH };
 
 type Artifact = { name: string; version: string; path: string; tarball_sha256: string; artifact_sha256: string };
 type PeerReceipt = {
@@ -63,8 +52,8 @@ function artifactFile(name: string, version: string): string {
 /**
  * Stage the exact patched DSH peer closure and TUI before runtime-kit setup.
  * The CLI reads the pinned kit source and accepts its patched peer-pack
- * receipt. This function authenticates those archives and the pinned TUI
- * tarball before writing only relative artifact references.
+ * receipt. This function authenticates those archives, the pinned TUI tarball, and the
+ * pinned provider tarball before writing only relative artifact references.
  */
 export function stageCombinedProfile(input: {
   profile: string;
@@ -73,10 +62,12 @@ export function stageCombinedProfile(input: {
   tuiArchive: string;
   webArchive: string;
   cliArchive: string;
+  providerArchive: string;
 }, expectedTuiIntegrity = contract.components.tui.package.integrity,
 expectedWebArtifactSha256 = webArtifact.artifactSha256,
-expectedCliIntegrity = contract.components.dsh.package.integrity): void {
-  const { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive } = input;
+expectedCliIntegrity = contract.components.dsh.package.integrity,
+expectedProviderIntegrity = contract.components.codexSubscription.package.integrity): void {
+  const { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive, providerArchive } = input;
   if (!isAbsolute(profile)) throw new Error('profile target must be a new absolute path');
   if (!isAbsolute(tuiArchive) || !lstatSync(tuiArchive).isFile()) {
     throw new Error('TUI archive must be an absolute regular file');
@@ -113,6 +104,18 @@ expectedCliIntegrity = contract.components.dsh.package.integrity): void {
   if (cliPackage.name !== contract.components.dsh.package.name
     || cliPackage.version !== contract.components.dsh.package.version) {
     throw new Error('Official CLI archive identity mismatch');
+  }
+  if (!isAbsolute(providerArchive) || !lstatSync(providerArchive, { throwIfNoEntry: false })?.isFile()) {
+    throw new Error('Provider archive must be an absolute regular file');
+  }
+  const providerBytes = readFileSync(providerArchive);
+  if (`sha512-${createHash('sha512').update(providerBytes).digest('base64')}` !== expectedProviderIntegrity) {
+    throw new Error('Provider archive integrity mismatch');
+  }
+  const provider = contract.components.codexSubscription.package;
+  const providerPackage = inspectPeerArtifact(providerBytes);
+  if (providerPackage.name !== provider.name || providerPackage.version !== provider.version) {
+    throw new Error('Provider archive identity mismatch');
   }
   const dsh = contract.components.dsh;
   if (kitManifest.schema_version !== 'dsh-runtime-kit.dsh-compatibility.v1'
@@ -195,6 +198,8 @@ expectedCliIntegrity = contract.components.dsh.package.integrity): void {
   dependencies[cliPackage.name] = `file:artifacts/${cliFile}`;
   dependencies[contract.components.tui.package.name] = `file:artifacts/${tuiFile}`;
   dependencies[webPackage.name] = `file:artifacts/${webFile}`;
+  const providerFile = `${provider.name.slice(1).replace('/', '-')}-${provider.version}.tgz`;
+  dependencies[provider.name] = `file:artifacts/${providerFile}`;
   const overrides = selected.map(([name, entry]) =>
     `  '${name}': 'file:artifacts/${artifactFile(name, entry.version)}'`).join('\n');
   const workspace = rendered.stdout.replace('overrides:\n', `overrides:\n${overrides}\n`);
@@ -228,6 +233,7 @@ expectedCliIntegrity = contract.components.dsh.package.integrity): void {
     writeFileSync(join(profile, 'artifacts', tuiFile), tuiBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'artifacts', webFile), normalizePeerArtifact(webBytes), { flag: 'wx' });
     writeFileSync(join(profile, 'artifacts', cliFile), cliBytes, { flag: 'wx' });
+    writeFileSync(join(profile, 'artifacts', providerFile), providerBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'patches/tui-rename.patch'), patchBytes, { flag: 'wx' });
     writeFileSync(join(profile, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     writeFileSync(join(profile, 'pnpm-workspace.yaml'), workspace);
@@ -253,6 +259,7 @@ export function stageCombinedProfileFromPinnedKit(input: {
   tuiArchive: string;
   webArchive: string;
   cliArchive: string;
+  providerArchive: string;
 }, gitExecutable = '/usr/bin/git'): void {
   if (!isAbsolute(input.dshHome)
     || !lstatSync(join(input.dshHome, 'profiles'), { throwIfNoEntry: false })?.isDirectory()) {
@@ -260,5 +267,6 @@ export function stageCombinedProfileFromPinnedKit(input: {
   }
   const kitManifest = readPinnedKitJson(input.kitRepo, 'compatibility/dsh.json', gitExecutable) as KitManifest;
   stageCombinedProfile({ profile: join(input.dshHome, 'profiles', 'workbench'), receipt: input.receipt, kitManifest,
-    tuiArchive: input.tuiArchive, webArchive: input.webArchive, cliArchive: input.cliArchive });
+    tuiArchive: input.tuiArchive, webArchive: input.webArchive, cliArchive: input.cliArchive,
+    providerArchive: input.providerArchive });
 }

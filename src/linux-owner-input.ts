@@ -4,8 +4,13 @@ import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync,
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 const digest = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex');
-const environmentKeys = new Set(['DEEPSEEK_BASE_URL', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY']);
-const secretKeys = new Set(['DEEPSEEK_API_KEY']);
+// Codex endpoints and the default route are host settings, so they live only in the owner file.
+const environmentKeys = new Set(['DEEPSEEK_BASE_URL', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
+  'DSH_CODEX_SUBSCRIPTION_URL',
+  'DSH_WORKBENCH_DEFAULT_PROVIDER', 'DSH_WORKBENCH_DEFAULT_MODEL']);
+const secretKeys = new Set(['DEEPSEEK_API_KEY', 'DSH_CODEX_SUBSCRIPTION_TOKEN']);
+/** Every name the owner file may supply; the installed launch drops inherited values of these. */
+export const ownerSuppliedNames: ReadonlySet<string> = new Set([...environmentKeys, ...secretKeys]);
 
 export type OwnerEnvironment = {
   schemaVersion: 'dsh-workbench.owner-environment.v1';

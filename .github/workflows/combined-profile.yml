@@ -42,6 +42,7 @@ jobs:
             const fs=require("node:fs");
             const t=c.components.tui.package;
             const cli=c.components.dsh.package;
+            const provider=c.components.codexSubscription.package;
             const outputs={
               kit_commit:c.components.runtimeKit.source.commit,
               contract_status:c.status,
@@ -52,6 +53,8 @@ jobs:
               cli_file:`${cli.name.slice(1).replace("/","-")}-${cli.version}.tgz`,
               tui_spec:`${t.name}@${t.version}`,
               tui_file:`${t.name.slice(1).replace("/","-")}-${t.version}.tgz`,
+              provider_spec:`${provider.name}@${provider.version}`,
+              provider_file:`${provider.name.slice(1).replace("/","-")}-${provider.version}.tgz`,
               web_file:`sympoies-dsh-workbench-web-${c.release.version}.tgz`
             };
             fs.appendFileSync(process.env.GITHUB_OUTPUT,
@@ -173,6 +176,8 @@ jobs:
           CLI_FILE: ${{ steps.pins.outputs.cli_file }}
           TUI_SPEC: ${{ steps.pins.outputs.tui_spec }}
           TUI_FILE: ${{ steps.pins.outputs.tui_file }}
+          PROVIDER_SPEC: ${{ steps.pins.outputs.provider_spec }}
+          PROVIDER_FILE: ${{ steps.pins.outputs.provider_file }}
           WEB_FILE: ${{ steps.pins.outputs.web_file }}
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
         run: |
@@ -184,6 +189,9 @@ jobs:
             --pack-destination "$VERIFICATION_ROOT" >/dev/null
           npm pack "$CLI_SPEC" --ignore-scripts --silent \
             --pack-destination "$VERIFICATION_ROOT" >/dev/null
+          # Staging authenticates this tarball against the contract integrity.
+          npm pack "$PROVIDER_SPEC" --ignore-scripts --silent \
+            --pack-destination "$VERIFICATION_ROOT" >/dev/null
           install -d -m 0700 "$VERIFICATION_ROOT/dsh-home/profiles"
           node scripts/combined-profile.mjs \
             "$GITHUB_WORKSPACE/dsh-runtime-kit" \
@@ -191,6 +199,7 @@ jobs:
             "$VERIFICATION_ROOT/$TUI_FILE" \
             "$VERIFICATION_ROOT/$WEB_FILE" \
             "$VERIFICATION_ROOT/$CLI_FILE" \
+            "$VERIFICATION_ROOT/$PROVIDER_FILE" \
             "$VERIFICATION_ROOT/dsh-home"
       - name: Verify source-bound semantic identities before frozen installation
         working-directory: dsh-workbench

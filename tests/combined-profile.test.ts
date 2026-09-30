@@ -5,12 +5,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { gunzipSync, gzipSync } from 'node:zlib';
-import { stageCombinedProfile, stageCombinedProfileFromPinnedKit } from '../src/combined-profile.ts';
+import { stageCombinedProfile, stageCombinedProfileFromPinnedKit, WORKBENCH_PROFILE_PATCH } from '../src/combined-profile.ts';
 import { inspectPeerArtifact, inspectSemanticPeerArtifact, normalizePeerArtifact } from '../src/package-artifact.ts';
 
 const revision = '639ed015397290b3745d163aafe02ffee4aa3f84';
-const releaseVersion = (JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url), 'utf8')) as
-  { release: { version: string } }).release.version;
+const contract = JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url), 'utf8')) as {
+  release: { version: string };
+  components: { codexSubscription: { package: { name: string; version: string } } };
+};
+const releaseVersion = contract.release.version;
+const provider = contract.components.codexSubscription.package;
+const providerFile = `${provider.name.slice(1).replace('/', '-')}-${provider.version}.tgz`;
 
 function tarEntry(path: string, bytes: Buffer): Buffer {
   const header = Buffer.alloc(512);
@@ -44,6 +49,10 @@ function fixture() {
     'export const marker = 1;'));
   const webDigest = inspectPeerArtifact(readFileSync(webArchive)).artifactSha256;
   const tuiIntegrity = `sha512-${createHash('sha512').update(tuiBytes).digest('base64')}`;
+  const providerArchive = join(artifacts, 'provider.tgz');
+  const providerBytes = archive(provider.name, provider.version);
+  writeFileSync(providerArchive, providerBytes);
+  const providerIntegrity = `sha512-${createHash('sha512').update(providerBytes).digest('base64')}`;
   const entries = [
     ['@deepseek-ai/cordis', '4.0.4'],
     ['@deepseek-ai/dsh-sandbox', '0.2.0-rc.2'],
@@ -89,14 +98,15 @@ function fixture() {
         : { platform: row.name.slice('@deepseek-ai/node-addon-system-'.length) }),
     }])),
   };
-  return { root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest, cliArchive, cliIntegrity };
+  return { root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest, cliArchive, cliIntegrity,
+    providerArchive, providerIntegrity };
 }
 
 test('portable profile authenticates every native archive and overrides only the host platform', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const profile = join(root, 'profile');
-    stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity);
+    stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive, providerArchive }, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity);
     const workspace = readFileSync(join(profile, 'pnpm-workspace.yaml'), 'utf8');
     for (const row of receipt.data.packages.slice(2)) {
       const file = `${row.name.slice(1).replace('/', '-')}-${row.version}.tgz`;
@@ -110,7 +120,7 @@ test('portable profile authenticates every native archive and overrides only the
 });
 
 test('profile roots the authenticated host closure so plugin resolution cannot fall back to CLI scopes', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const additional = ['@deepseek-ai/dsh-agent-loop', '@deepseek-ai/dsh-scope'].map(name => {
       const version = '0.2.0-rc.2';
@@ -124,7 +134,7 @@ test('profile roots the authenticated host closure so plugin resolution cannot f
     const manifest = { ...kitManifest, workspace_artifacts: { ...kitManifest.workspace_artifacts,
       ...Object.fromEntries(additional.map(row => [row.name, { version: row.version, artifact_sha256: row.artifact_sha256 }])) } };
     const profile = join(root, 'profile');
-    stageCombinedProfile({ cliArchive, profile, receipt: complete, kitManifest: manifest, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity);
+    stageCombinedProfile({ cliArchive, profile, receipt: complete, kitManifest: manifest, tuiArchive, webArchive, providerArchive }, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity);
     const dependencies = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')).dependencies;
     for (const row of [...additional, ...receipt.data.packages]) {
       const platform = manifest.registry_workspace_artifacts[row.name]?.platform;
@@ -137,7 +147,7 @@ test('profile roots the authenticated host closure so plugin resolution cannot f
 });
 
 test('portable profile rejects changed native compressed bytes with rewritten receipt SHA-256', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const row = receipt.data.packages[2];
     const bytes = archive(row.name, row.version);
@@ -146,8 +156,8 @@ test('portable profile rejects changed native compressed bytes with rewritten re
     writeFileSync(row.path, bytes);
     row.tarball_sha256 = createHash('sha256').update(bytes).digest('hex');
     const profile = join(root, 'profile');
-    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive },
-      tuiIntegrity, webDigest, cliIntegrity), /registry artifact integrity mismatch/);
+    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive, providerArchive },
+      tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /registry artifact integrity mismatch/);
     assert.equal(existsSync(profile), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -164,8 +174,9 @@ test('portable profile normalizes authenticated workspace tarballs across gzip m
     const stage = (input: ReturnType<typeof fixture>) => {
       const profile = join(input.root, 'profile');
       stageCombinedProfile({ profile, receipt: input.receipt, kitManifest: input.kitManifest,
-        tuiArchive: input.tuiArchive, webArchive: input.webArchive, cliArchive: input.cliArchive },
-      input.tuiIntegrity, input.webDigest, input.cliIntegrity);
+        tuiArchive: input.tuiArchive, webArchive: input.webArchive, cliArchive: input.cliArchive,
+        providerArchive: input.providerArchive },
+      input.tuiIntegrity, input.webDigest, input.cliIntegrity, input.providerIntegrity);
       return readFileSync(join(profile, 'artifacts/deepseek-ai-cordis-4.0.4.tgz'));
     };
     assert.deepEqual(stage(first), stage(second));
@@ -239,10 +250,10 @@ test('normalization converges package-name dependency maps without changing spec
 });
 
 test('stages the native Web plugin in the same governed workbench profile', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const profile = join(root, 'profile');
-    stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity);
+    stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive, providerArchive }, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity);
     const tuiEntry = JSON.parse(readFileSync(join(profile, 'workbench-tui/receipt.json'), 'utf8'));
     assert.equal(tuiEntry.schemaVersion, 'dsh-workbench.installed-tui-entry.v1');
     assert.equal(tuiEntry.releaseVersion, releaseVersion);
@@ -260,16 +271,9 @@ test('stages the native Web plugin in the same governed workbench profile', () =
     ]);
     assert.equal(manifest.dependencies['@sympoies/dsh-workbench-web'],
       `file:artifacts/sympoies-dsh-workbench-web-${releaseVersion}.tgz`);
-    // Registers the Web plugin, keeps approvals asking when the installed launch
-    // runs DSH as a full host agent (danger-full-access would otherwise imply never),
-    // and mounts the activity hook bridge only when a managed pane names its config.
-    assert.equal(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'),
-      "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"
-      + "    - id: hooks-claude-code\n      name: '@deepseek-ai/dsh-hooks-claude-code'\n"
-      + "      disabled: !!js '!process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS'\n"
-      + "      config:\n        configPath: !!js process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS ?? ''\n"
-      + '        defaultTimeoutMs: 10000\n'
-      + '- id: approval\n  config:\n    policy: ask\n');
+    // Registers the Web plugin, and keeps approvals asking when the installed launch
+    // runs DSH as a full host agent (danger-full-access would otherwise imply never).
+    assert.equal(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'), WORKBENCH_PROFILE_PATCH);
     assert.deepEqual(readFileSync(join(profile, `artifacts/sympoies-dsh-workbench-web-${releaseVersion}.tgz`)),
       normalizePeerArtifact(readFileSync(webArchive)));
   } finally {
@@ -278,13 +282,13 @@ test('stages the native Web plugin in the same governed workbench profile', () =
 });
 
 test('rejects altered Web code under the same package name and version', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const profile = join(root, 'profile');
     writeFileSync(webArchive, archive('@sympoies/dsh-workbench-web', releaseVersion,
       'export const marker = 2;'));
-    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive },
-      tuiIntegrity, webDigest, cliIntegrity), /Web archive digest/);
+    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive, providerArchive },
+      tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /Web archive digest/);
     assert.equal(existsSync(profile), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -292,10 +296,10 @@ test('rejects altered Web code under the same package name and version', () => {
 });
 
 test('stages a portable profile from the authenticated runtime-kit patched receipt', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const profile = join(root, 'profile');
-    stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity);
+    stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive, providerArchive }, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity);
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'));
     assert.deepEqual(manifest.dsh.profile.bundles, [
       '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-harness-tui/dsh-tui',
@@ -317,35 +321,35 @@ test('stages a portable profile from the authenticated runtime-kit patched recei
 });
 
 test('refuses a mixed, forged, or incomplete patched closure before creating a profile', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const profile = join(root, 'profile');
     assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt: {
       ...receipt, data: { ...receipt.data, packages: receipt.data.packages.slice(0, 1) },
-    }, kitManifest, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity), /closure/);
+    }, kitManifest, tuiArchive, webArchive, providerArchive }, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /closure/);
     assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt: {
       ...receipt, data: { ...receipt.data, patch_state: 'pristine' },
-    }, kitManifest, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity), /identity/);
+    }, kitManifest, tuiArchive, webArchive, providerArchive }, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /identity/);
     assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt: {
       ...receipt, data: { ...receipt.data, packages: [
         receipt.data.packages[0],
         { ...receipt.data.packages[1], tarball_sha256: '0'.repeat(64) },
         ...receipt.data.packages.slice(2),
       ] },
-    }, kitManifest, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity), /digest/);
+    }, kitManifest, tuiArchive, webArchive, providerArchive }, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /digest/);
     assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest: {
       ...kitManifest, patched_workspace_artifacts: {
         '@deepseek-ai/dsh-sandbox': '0'.repeat(64),
       },
-    }, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity), /digest/);
+    }, tuiArchive, webArchive, providerArchive }, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /digest/);
     assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest: {
       ...kitManifest, validated_releases: { '0.2.0-rc.2': { revision: '0'.repeat(40) } },
-    }, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity), /revision/);
-    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive },
-      'sha512-' + '0'.repeat(88), undefined, cliIntegrity), /TUI archive integrity/);
+    }, tuiArchive, webArchive, providerArchive }, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /revision/);
+    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive, providerArchive },
+      'sha512-' + '0'.repeat(88), undefined, cliIntegrity, providerIntegrity), /TUI archive integrity/);
     writeFileSync(webArchive, archive('@sympoies/dsh-workbench-web', '0.1.0-rc.4'));
-    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive },
-      tuiIntegrity, webDigest, cliIntegrity), /Web archive identity/);
+    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive, providerArchive },
+      tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /Web archive identity/);
     assert.equal(existsSync(profile), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -353,13 +357,13 @@ test('refuses a mixed, forged, or incomplete patched closure before creating a p
 });
 
 test('preserves a profile directory owned by another process', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const profile = join(root, 'profile');
     mkdirSync(profile);
     writeFileSync(join(profile, 'owner.txt'), 'keep');
-    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive },
-      tuiIntegrity, webDigest, cliIntegrity), /EEXIST/);
+    assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive, providerArchive },
+      tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /EEXIST/);
     assert.equal(readFileSync(join(profile, 'owner.txt'), 'utf8'), 'keep');
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -367,13 +371,13 @@ test('preserves a profile directory owned by another process', () => {
 });
 
 test('requires an absolute DSH home with a profiles directory', () => {
-  const { cliArchive, cliIntegrity, root, receipt, tuiArchive, webArchive } = fixture();
+  const { cliArchive, providerArchive, root, receipt, tuiArchive, webArchive } = fixture();
   try {
     assert.throws(() => stageCombinedProfileFromPinnedKit({ cliArchive,
-      dshHome: 'relative-home', receipt, tuiArchive, webArchive, kitRepo: root,
+      dshHome: 'relative-home', receipt, tuiArchive, webArchive, providerArchive, kitRepo: root,
     }), /DSH home/);
     assert.throws(() => stageCombinedProfileFromPinnedKit({ cliArchive,
-      dshHome: root, receipt, tuiArchive, webArchive, kitRepo: root,
+      dshHome: root, receipt, tuiArchive, webArchive, providerArchive, kitRepo: root,
     }), /profiles directory/);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -382,11 +386,11 @@ test('requires an absolute DSH home with a profiles directory', () => {
 
 
 test('roots the authenticated official CLI in the same profile graph', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const profile = join(root, 'profile');
-    const input = { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive };
-    stageCombinedProfile(input, tuiIntegrity, webDigest, cliIntegrity);
+    const input = { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive, providerArchive };
+    stageCombinedProfile(input, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity);
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'));
     assert.equal(manifest.dependencies['@deepseek-ai/dsh'], 'file:artifacts/deepseek-ai-dsh-0.2.0-rc.2.tgz');
     assert.deepEqual(readFileSync(join(profile, 'artifacts/deepseek-ai-dsh-0.2.0-rc.2.tgz')), readFileSync(cliArchive));
@@ -394,19 +398,55 @@ test('roots the authenticated official CLI in the same profile graph', () => {
 });
 
 test('rejects a changed or misidentified official CLI before creating the profile', () => {
-  const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const profile = join(root, 'profile');
-    const input = { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive };
+    const input = { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive, providerArchive };
     writeFileSync(cliArchive, archive('@deepseek-ai/dsh', '0.2.0-rc.2', 'altered'));
-    assert.throws(() => stageCombinedProfile(input, tuiIntegrity, webDigest, cliIntegrity), /Official CLI archive integrity mismatch/);
+    assert.throws(() => stageCombinedProfile(input, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /Official CLI archive integrity mismatch/);
     assert.equal(existsSync(profile), false);
     for (const [name, version] of [['@deepseek-ai/other', '0.2.0-rc.2'], ['@deepseek-ai/dsh', '0.1.7-rc.2']]) {
       const bytes = archive(name, version);
       writeFileSync(cliArchive, bytes);
       const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
-      assert.throws(() => stageCombinedProfile(input, tuiIntegrity, webDigest, integrity), /Official CLI archive identity mismatch/);
+      assert.throws(() => stageCombinedProfile(input, tuiIntegrity, webDigest, integrity, providerIntegrity), /Official CLI archive identity mismatch/);
       assert.equal(existsSync(profile), false);
     }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('roots the authenticated Codex subscription provider in the same profile graph', () => {
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  try {
+    const profile = join(root, 'profile');
+    stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive, providerArchive },
+      tuiIntegrity, webDigest, cliIntegrity, providerIntegrity);
+    const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'));
+    assert.equal(manifest.dependencies[provider.name], `file:artifacts/${providerFile}`);
+    assert.deepEqual(readFileSync(join(profile, 'artifacts', providerFile)), readFileSync(providerArchive));
+    assert.equal(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'), WORKBENCH_PROFILE_PATCH);
+    assert.ok(WORKBENCH_PROFILE_PATCH.includes(`      name: '${provider.name}'\n`));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('rejects a changed or misidentified provider archive before creating the profile', () => {
+  const { cliArchive, cliIntegrity, providerArchive, providerIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
+  try {
+    const profile = join(root, 'profile');
+    const input = { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive, providerArchive };
+    writeFileSync(providerArchive, archive(provider.name, provider.version, 'altered'));
+    assert.throws(() => stageCombinedProfile(input, tuiIntegrity, webDigest, cliIntegrity, providerIntegrity),
+      /Provider archive integrity mismatch/);
+    assert.equal(existsSync(profile), false);
+    for (const [name, version] of [['@sympoies/other-provider', provider.version], [provider.name, '0.1.5']]) {
+      const bytes = archive(name, version);
+      writeFileSync(providerArchive, bytes);
+      const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
+      assert.throws(() => stageCombinedProfile(input, tuiIntegrity, webDigest, cliIntegrity, integrity),
+        /Provider archive identity mismatch/);
+      assert.equal(existsSync(profile), false);
+    }
+    assert.throws(() => stageCombinedProfile({ ...input, providerArchive: 'relative.tgz' },
+      tuiIntegrity, webDigest, cliIntegrity, providerIntegrity), /Provider archive must be an absolute regular file/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

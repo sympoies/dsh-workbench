@@ -137,6 +137,16 @@ const unmanaged = spawnSync(installed.seedLauncher, ['--session-id', seedId], {
   env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('AGENT_SESSION_'))),
 });
 assert.notEqual(unmanaged.status, 0, 'installed seed must refuse an unmanaged launch');
+// The history face reads that store through the installed profile with the bundled
+// runtime-kit adapter, which needs the pinned kit's profile-root support.
+const listed = spawnSync(installed.historyLauncher,
+  ['list', '--root', sessionsRoot, '--compression', 'zstd'],
+  { cwd: paneWorkspace, encoding: 'utf8', timeout: 60_000, maxBuffer: 16 * 1024 * 1024 });
+if (listed.error || listed.status !== 0) throw new Error(`installed history failed: ${listed.stderr}`);
+const history = JSON.parse(listed.stdout) as { schema_version?: string; data?: unknown };
+assert.equal(history.schema_version, 'dsh-runtime-kit.history.v1');
+assert.ok(JSON.stringify(history.data).includes(`"provider_session_id":"${seedId}"`),
+  'installed history did not list the seeded session');
 
 process.stdout.write(`${JSON.stringify({
   schemaVersion: 'dsh-workbench.owner-install-acceptance.v1',
@@ -144,6 +154,6 @@ process.stdout.write(`${JSON.stringify({
   archiveSha256: installed.archiveSha256,
   manifestSha256: installed.manifestSha256,
   planDigest: installed.planDigest,
-  installedFaces: ['web', 'tui', 'seed'],
+  installedFaces: ['web', 'tui', 'seed', 'history'],
   result: 'passed',
 })}\n`);

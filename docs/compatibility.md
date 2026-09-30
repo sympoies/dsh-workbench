@@ -18,7 +18,28 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.2.1` Linux x64 contract is **accepted for compatibility**. It keeps the 0.2.0
+The current `v0.2.2` Linux x64 contract is a **candidate**. It is the first
+schema 4 contract: a fourth component, `codexSubscription`, pins
+`@sympoies/dsh-llm-codex-subscription` 0.2.0 at
+`14216533f76ce05f2b2bbf4390227fb02b853ff3` (tag
+`dsh-llm-codex-subscription-v0.2.0`) by source tree and npm integrity. That
+release supports exactly DSH 0.2.0-rc.2 and builds on the pi-ai version that
+DSH release resolves. Its archive is staged and shipped like the dsh-TUI
+archive. The profile patch adds the `codex-subscription` route and an
+owner-selected default model; both stay off until the owner environment file
+configures them, so an unconfigured install composes the 0.2.1 routes and
+default. The patch leaves the pi-ai provider row, which the Web Models page
+edits, to the base bundle. It restates two upstream
+rows, and the combined-profile workflow fails when either drifts from its
+pinned bundle: `agent-default-model` of the DSH base bundle, and `dsh-tui` of
+the dsh-TUI bundle, restated without `effort` and with fullscreen off inside an
+agent-session managed pane. runtime-kit moves to commit
+`3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9`, whose history adapter reads
+Workbench session stores through the installed profile; its DSH and nils-cli
+records are unchanged, so the patched 84-package closure and its semantic
+identities are the same as in 0.2.1. All four gates need current evidence.
+
+The previous `v0.2.1` Linux x64 contract was **accepted for compatibility**. It keeps the 0.2.0
 component graph and corrects the Linux artifact record. The `v0.2.0` record
 pinned the digest of a profile workspace that pnpm had edited while the record
 was derived: a locked DSH package was younger than pnpm's minimum release age,
@@ -258,7 +279,7 @@ paths ([workspace boundary](session-handoff.md#workspace-boundary)).
 Workbench `v0.1.0-rc.4` narrows the first release's acceptance targets to
 Linux x64 and macOS arm64. Linux arm64 and macOS x64 may be evaluated for a
 later Workbench version. This target change does not promote the graph from
-candidate status or alter any of the three component pins.
+candidate status or alter any component pin.
 
 Workbench `v0.1.0-rc.5` pins runtime-kit's merged patched-peer commit and
 stages the combined profile at `$DSH_HOME/profiles/workbench` from the owner
@@ -345,15 +366,16 @@ Workbench profile runs supply installed interface and handoff evidence.
 
 `node scripts/contract.mjs check` validates structure and immutable pin shape.
 `node scripts/contract.mjs require-accepted` is the contract activation gate:
-it passes for this Linux x64 compatibility graph. An accepted contract requires all three
-components marked accepted and distinct public evidence links for runtime-kit,
+it passes for this Linux x64 compatibility graph. An accepted contract requires every
+component marked accepted and distinct public evidence links for runtime-kit,
 TUI, Web, and cross-interface handoff on every declared target platform. A
 local schema check alone does not establish that upstream packages match the
 recorded hashes; the release build and installation must verify those bytes.
 The [Linux release envelope](linux-release.md) defines the separate
 externally authenticated payload-file check before installation.
-Schema 3 adds the TUI patch identity; the compare gate reads schema 1 and 2
-candidates only as previous releases.
+Schema 3 adds the TUI patch identity, and schema 4 adds the Codex subscription
+provider component; the compare gate reads schemas 1 to 3 only as previous
+releases.
 
 The current common runtime baseline is Node.js 24.3.0 or newer on the target platform set recorded in the
 contract. A target platform is planned while the contract is a candidate; it
@@ -385,7 +407,7 @@ Consumers may use `node scripts/contract.mjs print` to read the validated
 contract as JSON. The Web plugin now embeds a generated identity with a
 SHA-256 digest of the immutable graph (release, runtime, component sources,
 packages, toolchains, peer overrides and patches) and reports the release and
-three component pins. Schema V2 excludes candidate/accepted status and
+the DSH, runtime-kit, and TUI pins; the digest covers every component. Schema V2 excludes candidate/accepted status and
 acceptance evidence so promoting the same tested bytes cannot change the
 artifact. The external contract owns acceptance; the Web package does not
 advertise an acceptance verdict. Its package build checks that identity against

@@ -275,18 +275,86 @@ test('the history face runs the bundled adapter against the installed profile un
   try {
     const { dshHome, kitPackage, profile, run } = managedFixture(root);
     const result = run('history', ['list', '--root', join(dshHome, 'sessions'), '--compression', 'zstd',
-      '--limit', '5'], { DEEPSEEK_API_KEY: 'inherited-key' });
+      '--limit', '5'], { DEEPSEEK_API_KEY: 'inherited-key', DSH_CODEX_SUBSCRIPTION_TOKEN: 'inherited-token',
+      DSH_CODEX_SUBSCRIPTION_URL: 'https://inherited.invalid/v1' });
     assert.equal(result.status, 0, result.stderr);
     const observed = JSON.parse(result.stdout);
     assert.deepEqual(observed.args, ['list', '--profile-root', profile, '--root',
       join(dshHome, 'sessions'), '--compression', 'zstd', '--limit', '5']);
     assert.equal(observed.env.DSH_HOME, dshHome);
     assert.equal(observed.env.DEEPSEEK_API_KEY, undefined, 'the history adapter never receives a model credential');
+    for (const name of ['DSH_CODEX_SUBSCRIPTION_TOKEN', 'DSH_CODEX_SUBSCRIPTION_URL']) {
+      assert.equal(observed.env[name], undefined, `the history adapter never receives ${name}`);
+    }
     assert.ok(kitPackage);
     for (const args of [['list', '--profile-root', '/elsewhere'], ['list', '--profile-root=/elsewhere'], []]) {
       const refused = run('history', args, {});
       assert.notEqual(refused.status, 0);
       assert.equal(refused.stdout, '');
     }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('Codex route settings reach the installed launch only from the owner environment file', () => {
+  const root = mkdtempSync(join(tmpdir(), 'workbench-installed-codex-'));
+  try {
+    const ownerPath = join(root, 'owner.json');
+    const configPath = join(root, 'launch.json');
+    const kitPackage = join(root, 'kit');
+    const fakeEntry = join(root, 'entry.mjs');
+    const names = ['DSH_CODEX_SUBSCRIPTION_URL', 'DSH_WORKBENCH_DEFAULT_PROVIDER',
+      'DSH_WORKBENCH_DEFAULT_MODEL', 'DSH_CODEX_SUBSCRIPTION_TOKEN'];
+    writeFileSync(fakeEntry, `console.log(JSON.stringify(Object.fromEntries(${JSON.stringify(names)}
+      .map(name => [name, process.env[name] ?? null]))));\n`, { mode: 0o600 });
+    mkdirSync(join(kitPackage, 'dist/bin'), { recursive: true });
+    copyFileSync(fakeEntry, join(kitPackage, 'dist/bin/dsh-runtime-kit-launch.js'));
+    writeFileSync(join(root, 'subscription-token'), 'owner-subscription-token\n', { mode: 0o600 });
+    writeFileSync(configPath, JSON.stringify({
+      schemaVersion: 'dsh-workbench.linux-launch.v1', ownerEnvironmentFile: ownerPath,
+      runtimeRoot: join(root, 'runtime'), kitPackage, dshCli: fakeEntry,
+      tuiEntry: fakeEntry, dshHome: join(root, 'dsh-home'),
+      codexHome: join(root, 'codex'), claudeConfigDir: join(root, 'claude'),
+      configHome: join(root, 'config'), stateHome: join(root, 'state'),
+      privateSkillsDir: join(root, 'skills'), agentDocsHome: join(root, 'docs'),
+      hookConfig: join(root, 'hook-config'), hookPolicy: join(root, 'hook-policy'),
+      agentHookBin: join(root, 'agent-hook'), agentDocsBin: join(root, 'agent-docs'),
+      dshDirectBin: join(root, 'dsh-direct'),
+    }), { mode: 0o600 });
+    const inherited = Object.fromEntries(names.map(name => [name, `inherited-${name}`]));
+    const launchWith = (owner: unknown, face: string) => {
+      writeFileSync(ownerPath, JSON.stringify(owner), { mode: 0o600 });
+      return spawnSync(process.execPath, [launch, configPath, face],
+        { env: { ...process.env, ...inherited }, encoding: 'utf8', timeout: 10_000 });
+    };
+    for (const face of ['web', 'tui']) {
+      const configured = launchWith({
+        schemaVersion: 'dsh-workbench.owner-environment.v1',
+        environment: {
+          DSH_CODEX_SUBSCRIPTION_URL: 'https://subscription.example.invalid/v1',
+          DSH_WORKBENCH_DEFAULT_PROVIDER: 'codex-subscription',
+          DSH_WORKBENCH_DEFAULT_MODEL: 'gpt-6.1-sol',
+        },
+        secretFiles: { DSH_CODEX_SUBSCRIPTION_TOKEN: join(root, 'subscription-token') },
+      }, face);
+      assert.equal(configured.status, 0, configured.stderr);
+      assert.deepEqual(JSON.parse(configured.stdout), {
+        DSH_CODEX_SUBSCRIPTION_URL: 'https://subscription.example.invalid/v1',
+        DSH_WORKBENCH_DEFAULT_PROVIDER: 'codex-subscription',
+        DSH_WORKBENCH_DEFAULT_MODEL: 'gpt-6.1-sol',
+        DSH_CODEX_SUBSCRIPTION_TOKEN: 'owner-subscription-token',
+      });
+      // An owner who configures nothing gets none of the caller's values either.
+      const absent = launchWith({
+        schemaVersion: 'dsh-workbench.owner-environment.v1', environment: {}, secretFiles: {},
+      }, face);
+      assert.equal(absent.status, 0, absent.stderr);
+      assert.deepEqual(JSON.parse(absent.stdout), Object.fromEntries(names.map(name => [name, null])));
+    }
+    const misplaced = launchWith({
+      schemaVersion: 'dsh-workbench.owner-environment.v1',
+      environment: { DSH_CODEX_SUBSCRIPTION_TOKEN: 'a-token-in-plain-settings' }, secretFiles: {},
+    }, 'web');
+    assert.notEqual(misplaced.status, 0);
+    assert.match(misplaced.stderr, /owner environment contains an unsupported setting/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

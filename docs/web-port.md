@@ -23,7 +23,7 @@ replaces the native conversation.
 The Web package version, pnpm DSH catalog, and generated Client identity are
 checked against the sole Workbench contract by
 `node scripts/web-metadata.mjs check`. The identity reports the Workbench
-version, immutable graph digest, and all three pinned component identities
+version, immutable graph digest, and the pinned component identities
 through the Web handoff action and the package's server export. The package
 build rejects stale generated identity before bundling. After a deliberate
 contract revision, run `node scripts/web-metadata.mjs write` and regenerate

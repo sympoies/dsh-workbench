@@ -2,7 +2,7 @@ import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:
 import { createRequire } from 'node:module';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { readOwnerEnvironment, readOwnerFile } from './linux-owner-input.ts';
+import { ownerSuppliedNames, readOwnerEnvironment, readOwnerFile } from './linux-owner-input.ts';
 
 type LaunchConfig = {
   schemaVersion: 'dsh-workbench.linux-launch.v1';
@@ -143,8 +143,8 @@ if (face === 'history') {
     throw new Error('installed history owns the workbench profile root');
   }
   const environment: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: config.dshHome };
-  // The adapter only reads the session store; it never needs a model credential.
-  delete environment.DEEPSEEK_API_KEY;
+  // The adapter only reads the session store; it never needs a model route or credential.
+  for (const name of ownerSuppliedNames) delete environment[name];
   const [operation, ...rest] = args;
   exec([join(config.kitPackage, 'dist/bin/dsh-runtime-kit-history.js'), operation!,
     '--profile-root', profileRoot, ...rest], environment);
@@ -155,8 +155,7 @@ const environment: NodeJS.ProcessEnv = { ...process.env };
 const agentSession = face === 'tui' ? managedAgentSession(process.env) : undefined;
 for (const key of Object.keys(environment)) {
   if ((key.startsWith('AGENT_SESSION_') && agentSession === undefined)
-    || ['DEEPSEEK_BASE_URL', 'DEEPSEEK_API_KEY', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
-      'DSH_WORKBENCH_AGENT_SESSION_HOOKS'].includes(key)) {
+    || ownerSuppliedNames.has(key) || key === 'DSH_WORKBENCH_AGENT_SESSION_HOOKS') {
     delete environment[key];
   }
 }

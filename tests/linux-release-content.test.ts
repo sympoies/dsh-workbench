@@ -94,9 +94,11 @@ test('shipped installer sources import only other shipped installer sources', ()
   }
 });
 
-test('the release content check expects the staged profile patch bytes', () => {
+test('the release content check and the staged profile share one patch module shipped with the installer', () => {
   const source = readFileSync(new URL('../src/linux-release-content.ts', import.meta.url), 'utf8');
-  const literal = source.match(/\['profile\/cordis\.patch\.yml', ((?:(?:"[^"]*"|'[^']*')\s*\+?\s*)+)\]/);
-  assert.ok(literal, 'profile patch expectation not found');
-  assert.equal(new Function(`return ${literal[1]};`)(), WORKBENCH_PROFILE_PATCH);
+  assert.match(source, /\['profile\/cordis\.patch\.yml', WORKBENCH_PROFILE_PATCH\]/);
+  assert.match(source, /import \{ WORKBENCH_PROFILE_PATCH \} from '\.\/profile-patch\.ts';/);
+  // The installer verifies the patch from its own copy of the module, so it must ship.
+  assert.ok((reviewedInstallerSourcePaths as readonly string[]).includes('src/profile-patch.ts'));
+  assert.ok(WORKBENCH_PROFILE_PATCH.length > 0);
 });

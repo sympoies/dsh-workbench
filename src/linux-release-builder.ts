@@ -254,8 +254,9 @@ export function buildLinuxRelease(input: LinuxReleaseBuildInput): {
     const artifactDir = join(input.outputRoot, 'profile/artifacts');
     const dshPath = `profile/artifacts/${contract.components.dsh.package.name.slice(1).replace('/', '-')}-${contract.components.dsh.package.version}.tgz`;
     const tuiPath = `profile/artifacts/${contract.components.tui.package.name.slice(1).replace('/', '-')}-${contract.components.tui.package.version}.tgz`;
+    const providerPath = `profile/artifacts/${contract.components.codexSubscription.package.name.slice(1).replace('/', '-')}-${contract.components.codexSubscription.package.version}.tgz`;
     const webPath = `profile/artifacts/sympoies-dsh-workbench-web-${contract.release.version}.tgz`;
-    const official = new Set([dshPath, tuiPath, webPath]);
+    const official = new Set([dshPath, tuiPath, providerPath, webPath]);
     const peers = readdirSync(artifactDir).filter(name => name.endsWith('.tgz')
       && !official.has(`profile/artifacts/${name}`)).sort();
     const expectedPeers = Object.entries(dshKit.workspace_artifacts).map(([name, entry]) =>
@@ -296,7 +297,7 @@ export function buildLinuxRelease(input: LinuxReleaseBuildInput): {
 
     const files = index(input.outputRoot);
     const byPath = new Map(files.map(file => [file.path, file]));
-    const archives = [dshPath, tuiPath, webPath, peerBundle].map(path => ({
+    const archives = [dshPath, tuiPath, providerPath, webPath, peerBundle].map(path => ({
       path, rawSha256: byPath.get(path)!.rawSha256,
       canonicalSha256: path === peerBundle
         ? sha256(peers.map(name => sha256(readFileSync(join(artifactDir, name)))).join('\n'))
