@@ -360,19 +360,28 @@ async function runHookBridgeScenario(binary: string, fixture: string): Promise<v
     command: `printf '%s\\n' ${event} >> ${quote(events)}`, timeout: 10 }] });
   writeFileSync(hooks, JSON.stringify({ hooks: {
     UserPromptSubmit: [record('pre_llm_call')], Stop: [record('post_llm_call')] } }), { mode: 0o600 });
+  const logRoot = join(fixture, 'home', 'sessions');
+  const previous = new Set(sessionLogs(logRoot));
   let terminal: ReturnType<typeof startTerminal> | undefined;
   try {
+    // A managed pane runs as the installed full host agent; hook commands run
+    // through the DSH shell, which a workspace-write sandbox confines.
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, [],
-      { DSH_WORKBENCH_AGENT_SESSION_HOOKS: hooks });
+      { DSH_WORKBENCH_AGENT_SESSION_HOOKS: hooks, DSH_PERMISSION_MODE: 'danger-full-access' });
     await terminal.waitFor('Explore the uncharted!');
     terminal.write('TUI_HOOK_BRIDGE_TURN\r');
+    const logPath = await waitForTurn(logRoot, previous);
     await terminal.waitForAfter('TUI_HOOK_BRIDGE_TURN', answer);
     const deadline = Date.now() + 10_000;
     while (!(existsSync(events) && readFileSync(events, 'utf8').includes('post_llm_call')) && Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    assert.deepEqual(readFileSync(events, 'utf8').trim().split('\n'), ['pre_llm_call', 'post_llm_call'],
-      'The managed hook bridge must report one prompt and one stop for one turn');
+    const hookEvents = readEvents(logPath, { strict: true })
+      .filter(event => event.type === 'hook/invoked' || event.type === 'hook/result')
+      .map(event => `${event.type}:${String(event.data?.point)}:${JSON.stringify(event.data?.output ?? {}).slice(0, 200)}`);
+    assert.deepEqual(existsSync(events) ? readFileSync(events, 'utf8').trim().split('\n') : [],
+      ['pre_llm_call', 'post_llm_call'],
+      `The managed hook bridge must report one prompt and one stop for one turn; session hook events: ${JSON.stringify(hookEvents)}`);
     await terminal.stop();
     assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly in the hook bridge scenario: ${terminal.exitDiagnostic()}`);
   } finally {
