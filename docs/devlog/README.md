@@ -35,4 +35,5 @@ topology, provider payloads, session state, or private skill contents.
 
 ## Months
 
+- [2026-10](2026-10.md)
 - [2026-09](2026-09.md)
