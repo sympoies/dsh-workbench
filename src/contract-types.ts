@@ -3,7 +3,7 @@ export interface WorkbenchContract {
   release: { version: string; tag: string };
   status: string;
   runtime: { node: string; pnpm: string; platforms: string[] };
-  components: Record<'dsh' | 'runtimeKit' | 'tui', {
+  components: Record<'dsh' | 'runtimeKit' | 'tui' | 'codexSubscription', {
     source: { url: string; tag?: string; commit: string; tree: string };
     package: { name: string; version: string; integrity: string };
     toolchain: { node: string; pnpm?: string };

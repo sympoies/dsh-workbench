@@ -2,12 +2,13 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startApprovalMockLlmServer } from '../tests/approval-mock.ts';
 import { chromium } from 'playwright-core';
 import { publicBrowserFailure } from '../src/browser-diagnostic.ts';
+import { BASE_DEFAULT_MODEL, TUI_ROW_CONFIG } from '../src/profile-patch.ts';
 import { readEvents } from '../tests/session-events.ts';
 import { workbenchIdentity } from '../web/src/identity.ts';
 
@@ -172,6 +173,25 @@ if (composition.status !== 0) {
 assert.match(composition.stdout, /@deepseek-harness-tui\/dsh-tui/);
 assert.match(composition.stdout, /@sympoies\/dsh-runtime-kit/);
 assert.match(composition.stdout, /@sympoies\/dsh-workbench-web/);
+assert.match(composition.stdout, /@sympoies\/dsh-llm-codex-subscription/);
+// The profile patch restates the base bundle's default model; it must not drift from the bundle.
+const baseDefault = /\n {4}- id: agent-default-model\n {6}name: '@deepseek-ai\/dsh-agent-default-model'\n {6}config:\n {8}provider: (\S+)\n {8}model: (\S+)\n/
+  // pnpm links the CLI's own dependencies beside it in the virtual store.
+  .exec(readFileSync(join(realpathSync(join(profile, 'node_modules/@deepseek-ai/dsh')),
+    '../dsh-base/cordis.patch.yml'), 'utf8'));
+assert.deepEqual(baseDefault?.slice(1), [BASE_DEFAULT_MODEL.provider, BASE_DEFAULT_MODEL.model],
+  'The restated default model differs from the pinned DSH base bundle');
+// The profile patch restates the dsh-TUI row without `effort`; every other key must equal the bundle's.
+const tuiBundle = readFileSync(join(profile, 'node_modules/@deepseek-harness-tui/dsh-tui/cordis.patch.yml'), 'utf8')
+  .split('\n');
+const tuiRow = tuiBundle.indexOf('    - id: dsh-tui');
+const tuiRowEnd = tuiBundle.findIndex((line, index) => index > tuiRow && /^ {4}- id: /.test(line));
+const tuiConfig = tuiBundle.slice(tuiRow, tuiRowEnd === -1 ? undefined : tuiRowEnd);
+assert.deepEqual(
+  tuiConfig.slice(tuiConfig.indexOf('      config:') + 1)
+    .filter(line => /^ {8}[A-Za-z]/.test(line)).map(line => line.trim())
+    .filter(line => !line.startsWith('effort:')),
+  [...TUI_ROW_CONFIG], 'The restated dsh-TUI row differs from the pinned dsh-TUI bundle');
 
 const webScenarios = [
   { name: 'allow', answer: 'ACTIVATED_WEB_ALLOW_FINISHED', output: 'ACTIVATED_WEB_ALLOW_TOOL_OK',

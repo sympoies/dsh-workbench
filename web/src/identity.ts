@@ -2,8 +2,8 @@
 export const workbenchIdentity = {
   "schemaVersion": 2,
   "release": {
-    "version": "0.2.1",
-    "tag": "v0.2.1"
+    "version": "0.2.2",
+    "tag": "v0.2.2"
   },
   "runtime": {
     "node": ">=24.3.0",
@@ -33,13 +33,13 @@ export const workbenchIdentity = {
     "runtimeKit": {
       "source": {
         "url": "https://github.com/sympoies/dsh-runtime-kit",
-        "commit": "e3de3b5007d9535ccced0262e463c8fccc9c0734",
-        "tree": "b6c3721b139141b17b8a987c3705aef6cd8b25a3"
+        "commit": "3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9",
+        "tree": "dd9a6be4a2d619cff6e0e4002ba71c82b7096522"
       },
       "package": {
         "name": "@sympoies/dsh-runtime-kit",
         "version": "0.0.0",
-        "integrity": "git-tree:b6c3721b139141b17b8a987c3705aef6cd8b25a3"
+        "integrity": "git-tree:dd9a6be4a2d619cff6e0e4002ba71c82b7096522"
       },
       "toolchain": {
         "node": ">=24.0.0"
@@ -69,7 +69,23 @@ export const workbenchIdentity = {
         "path": "compatibility/patches/tui-rename.patch",
         "sha256": "caa9d784da59914c1954f0bf5d63d09a998b01f27c692027193efe1e056c5cad"
       }
+    },
+    "codexSubscription": {
+      "source": {
+        "url": "https://github.com/sympoies/dsh-plugins",
+        "tag": "dsh-llm-codex-subscription-v0.2.0",
+        "commit": "14216533f76ce05f2b2bbf4390227fb02b853ff3",
+        "tree": "b71edfde5b992a9964e06a68d714bf5efcb1a551"
+      },
+      "package": {
+        "name": "@sympoies/dsh-llm-codex-subscription",
+        "version": "0.2.0",
+        "integrity": "sha512-3QXpKjzgQT2RJdXVvGSNuBNMJznSYs81b8PzGT/xrYgLaRtZA3zXIXv8sXVSo0LCkJWWRjjephZTlgHRGrRX1A=="
+      },
+      "toolchain": {
+        "node": ">=24.0.0"
+      }
     }
   },
-  "graphDigest": "sha256:9b68e3fddf3c97d4dd32e08116e8aedc0f9d5d5d22deb46c0596340af91ce3c8"
+  "graphDigest": "sha256:b458c380321f54d8df3835f56a076c2cc6cdcb80afd7062b577c71a3a568f410"
 } as const;

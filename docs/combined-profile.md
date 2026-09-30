@@ -86,20 +86,21 @@ of the patched closure.
    for example with `npm pack <contract-tui-package>@<contract-tui-version>
    --ignore-scripts --pack-destination <private-artifact-dir>`. Stage a
    **new** profile under a fresh DSH home. Create its `profiles` directory,
-   Download the exact official CLI archive the same way using the contract
-   DSH package and version, then pass that same home to the stager and runtime-kit:
+   Download the exact official CLI archive and the exact Codex subscription
+   provider archive the same way, using the contract package names and
+   versions, then pass that same home to the stager and runtime-kit:
 
    ```sh
    install -d -m 0700 <absolute-dsh-home>/profiles
-   node scripts/combined-profile.mjs <kit-git-repo> <separate-peer-receipt.json> <tui-archive.tgz> <web-archive.tgz> <official-cli-archive.tgz> <absolute-dsh-home>
+   node scripts/combined-profile.mjs <kit-git-repo> <separate-peer-receipt.json> <tui-archive.tgz> <web-archive.tgz> <official-cli-archive.tgz> <provider-archive.tgz> <absolute-dsh-home>
    export DSH_HOME=<absolute-dsh-home>
    ```
 
    The command requires the runtime-kit patched receipt and checks each archive
    against both its receipt and the fixed canonical digest read from the
-   contract-pinned Git object. It also checks the official CLI archive's package
-   name, version, and SHA-512
-   integrity before creating the profile. The official CLI is a direct profile
+   contract-pinned Git object. It also checks the package name, version, and
+   SHA-512 integrity of the official CLI archive and of the provider archive
+   before creating the profile. The official CLI is a direct profile
    dependency and must be launched from this profile, so stock API and UI owners
    resolve the same patched core modules as the Web/TUI plugins. A separate CLI
    host is a provenance input, not the accepted runtime entry.

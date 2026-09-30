@@ -27,7 +27,8 @@ immutable revisions. All three upstream source licenses are MIT:
 | --- | --- | --- |
 | DeepSeek Harness | [`dsh-v0.2.0-rc.2` at `639ed015397290b3745d163aafe02ffee4aa3f84`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84) | DeepSeek | [MIT license at the pinned commit](https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/LICENSE) |
 | dsh-TUI | [`v0.12.0` at `3066b29113bde90606921b64bcf7c25fad31068d`](https://github.com/ccch1mneyyy/dsh-TUI/tree/3066b29113bde90606921b64bcf7c25fad31068d) | chimney (`ccch1mneyyy`) | [MIT license at the pinned commit](https://github.com/ccch1mneyyy/dsh-TUI/blob/3066b29113bde90606921b64bcf7c25fad31068d/LICENSE) |
-| dsh-runtime-kit | [commit `e3de3b5007d9535ccced0262e463c8fccc9c0734`](https://github.com/sympoies/dsh-runtime-kit/tree/e3de3b5007d9535ccced0262e463c8fccc9c0734) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/e3de3b5007d9535ccced0262e463c8fccc9c0734/LICENSE) |
+| Codex subscription provider | [`dsh-llm-codex-subscription-v0.2.0` at `14216533f76ce05f2b2bbf4390227fb02b853ff3`](https://github.com/sympoies/dsh-plugins/tree/14216533f76ce05f2b2bbf4390227fb02b853ff3) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-plugins/blob/14216533f76ce05f2b2bbf4390227fb02b853ff3/LICENSE) |
+| dsh-runtime-kit | [commit `3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9`](https://github.com/sympoies/dsh-runtime-kit/tree/3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9/LICENSE) |
 
 The upstream copyright lines and license texts for these pinned source trees
 are preserved in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). These are

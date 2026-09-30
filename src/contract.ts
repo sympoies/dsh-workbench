@@ -10,7 +10,10 @@ const integrity = /^sha512-[A-Za-z0-9+/]{86}==$/;
 const version = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
 const platform = /^(?:linux|darwin)-(?:x64|arm64)$/;
 const evidenceUrl = /^https:\/\/github\.com\/(sympoies\/(?:dsh-workbench|dsh-runtime-kit)|ccch1mneyyy\/dsh-TUI)\/(?:pull\/[1-9]\d*|actions\/runs\/[1-9]\d*|commit\/[a-f0-9]{40})(?:#[A-Za-z0-9._-]+)?$/;
-const components = ['dsh', 'runtimeKit', 'tui'] as const;
+const components = ['dsh', 'runtimeKit', 'tui', 'codexSubscription'] as const;
+// Schema 4 adds the Codex subscription provider; earlier schemas are read only as a previous contract.
+const componentsOf = (contract: WorkbenchContract) =>
+  contract.schemaVersion >= 4 ? components : components.slice(0, 3);
 const gates = ['runtimeKit', 'tui', 'web', 'handoff'] as const;
 
 function fail(message: string): never {
@@ -104,9 +107,9 @@ function nodeFloor(value: unknown, name: string): number[] {
 
 function validate(contract: WorkbenchContract, contractPath: string, { previous = false }: { previous?: boolean } = {}): void {
   exactKeys(contract, ['schemaVersion', 'release', 'status', 'runtime', 'components', 'acceptance'], 'contract');
-  if (contract.schemaVersion !== 3 && !(previous && [1, 2].includes(contract.schemaVersion))) fail('unsupported contract schemaVersion');
+  if (contract.schemaVersion !== 4 && !(previous && [1, 2, 3].includes(contract.schemaVersion))) fail('unsupported contract schemaVersion');
   const legacy = contract.schemaVersion === 1;
-  const patched = contract.schemaVersion === 3;
+  const patched = contract.schemaVersion >= 3;
   exactKeys(contract.release, ['version', 'tag'], 'release');
   match(contract.release.version, version, 'release.version');
   if (contract.release.tag !== `v${contract.release.version}`) fail('release.tag must match release.version');
@@ -117,8 +120,8 @@ function validate(contract: WorkbenchContract, contractPath: string, { previous 
   if (!Array.isArray(contract.runtime.platforms) || !contract.runtime.platforms.length ||
       new Set(contract.runtime.platforms).size !== contract.runtime.platforms.length ||
       !contract.runtime.platforms.every((value: string) => platform.test(value))) fail('invalid runtime.platforms');
-  exactKeys(contract.components, components, 'components');
-  for (const id of components) {
+  exactKeys(contract.components, componentsOf(contract), 'components');
+  for (const id of componentsOf(contract)) {
     const item = contract.components[id];
     exactKeys(item, id === 'tui' && patched ? ['source', 'package', 'toolchain', 'peerOverrides', 'compatibilityPatch', 'status'] :
       id === 'tui' && !legacy ? ['source', 'package', 'toolchain', 'peerOverrides', 'status'] :
@@ -133,12 +136,16 @@ function validate(contract: WorkbenchContract, contractPath: string, { previous 
     match(item.package.version, version, `${id}.package.version`);
     if (id === 'dsh' && item.source.tag !== `dsh-v${item.package.version}`) fail('dsh source tag and package version disagree');
     if (id === 'tui' && item.source.tag !== `v${item.package.version}`) fail('tui source tag and package version disagree');
+    if (id === 'codexSubscription') {
+      if (item.package.name !== '@sympoies/dsh-llm-codex-subscription') fail('codexSubscription package name is not the reviewed provider');
+      if (item.source.tag !== `dsh-llm-codex-subscription-v${item.package.version}`) fail('codexSubscription source tag and package version disagree');
+    }
     if (id === 'runtimeKit') {
       if (item.package.integrity !== `git-tree:${item.source.tree}`) fail('runtimeKit package integrity must match its Git tree');
     } else {
       match(item.package.integrity, integrity, `${id}.package.integrity`);
     }
-    exactKeys(item.toolchain, id === 'runtimeKit' ? ['node'] : ['node', 'pnpm'], `${id}.toolchain`);
+    exactKeys(item.toolchain, id === 'runtimeKit' || id === 'codexSubscription' ? ['node'] : ['node', 'pnpm'], `${id}.toolchain`);
     string(item.toolchain.node, `${id}.toolchain.node`);
     if (item.toolchain.pnpm !== undefined) match(item.toolchain.pnpm, version, `${id}.toolchain.pnpm`);
     if (id === 'tui' && !legacy) {
@@ -190,7 +197,7 @@ function validate(contract: WorkbenchContract, contractPath: string, { previous 
     }
   }
   if (contract.status === 'accepted' &&
-      (components.some(id => contract.components[id].status !== 'accepted') ||
+      (componentsOf(contract).some(id => contract.components[id].status !== 'accepted') ||
        gates.some(gate => contract.acceptance[gate].status !== 'passed' || !contract.acceptance[gate].evidence.length))) {
     fail('accepted contract requires accepted components and acceptance evidence for every gate');
   }
@@ -200,7 +207,7 @@ function tuple(contract: WorkbenchContract, webArtifactDigest: string | null) {
   return {
     runtime: contract.runtime,
     webArtifactDigest,
-    components: components.map(id => {
+    components: componentsOf(contract).map(id => {
       const item = contract.components[id];
       return [item.source.url, item.source.tag ?? '', item.source.commit, item.source.tree,
         item.package.name, item.package.version, item.package.integrity, item.toolchain,

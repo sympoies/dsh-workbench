@@ -53,9 +53,10 @@ function fixture(): { root: string; manifest: LinuxReleaseManifest; write: () =>
   writeFileSync(join(root, 'compatibility/workbench.json'), `${JSON.stringify(contract)}\n`);
   const dshPath = `profile/artifacts/${contract.components.dsh.package.name.slice(1).replace('/', '-')}-${contract.components.dsh.package.version}.tgz`;
   const tuiPath = `profile/artifacts/${contract.components.tui.package.name.slice(1).replace('/', '-')}-${contract.components.tui.package.version}.tgz`;
+  const providerPath = `profile/artifacts/${contract.components.codexSubscription.package.name.slice(1).replace('/', '-')}-${contract.components.codexSubscription.package.version}.tgz`;
   const webPath = `profile/artifacts/sympoies-dsh-workbench-web-${contract.release.version}.tgz`;
   const peerPath = 'profile/artifacts/peer-closure.tgz';
-  for (const path of [dshPath, tuiPath, webPath, peerPath]) add(path, `${path} archive bytes`);
+  for (const path of [dshPath, tuiPath, providerPath, webPath, peerPath]) add(path, `${path} archive bytes`);
   add('profile/package.json', '{"name":"dsh-profile-workbench","private":true}\n');
   add('profile/pnpm-workspace.yaml', "packages: []\n");
   add('profile/pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
@@ -96,7 +97,7 @@ function fixture(): { root: string; manifest: LinuxReleaseManifest; write: () =>
       'compatibility/patches/tui-rename.patch', 'installer/package.json',
       'installer/scripts/contract.mjs', 'installer/src/contract.ts',
       'installer/src/contract-types.ts', 'installer/src/linux-release-manifest.ts',
-      dshPath, tuiPath, webPath, peerPath,
+      dshPath, tuiPath, providerPath, webPath, peerPath,
       'profile/package.json', 'profile/pnpm-workspace.yaml', 'profile/pnpm-lock.yaml',
       'runtime-kit/package.tgz',
       'runtime-kit/compatibility/nils-cli.json', manifest.nilsRelease.archivePath,
@@ -113,7 +114,7 @@ function fixture(): { root: string; manifest: LinuxReleaseManifest; write: () =>
     manifest.nilsRelease.archiveRawSha256 = manifest.files.find(file => file.path === manifest.nilsRelease.archivePath)!.rawSha256;
     const webRecord = JSON.parse(readFileSync(join(root, 'compatibility/web-artifact.json'), 'utf8'));
     manifest.archives = [
-      ...[dshPath, tuiPath, peerPath].map(path => ({ path,
+      ...[dshPath, tuiPath, providerPath, peerPath].map(path => ({ path,
         rawSha256: manifest.files.find(file => file.path === path)!.rawSha256,
         canonicalSha256: 'c'.repeat(64) })),
       { path: webPath, rawSha256: manifest.files.find(file => file.path === webPath)!.rawSha256,
@@ -250,7 +251,8 @@ test('release verification refuses setuid permission bits on an indexed executab
 });
 
 test('release verification refuses omitted required archive or frozen profile classes', () => {
-  for (const omitted of ['deepseek-ai-dsh-', 'deepseek-harness-tui-dsh-tui-', 'sympoies-dsh-workbench-web-',
+  for (const omitted of ['deepseek-ai-dsh-', 'deepseek-harness-tui-dsh-tui-',
+    'sympoies-dsh-llm-codex-subscription-', 'sympoies-dsh-workbench-web-',
     'peer-closure.tgz', 'profile/pnpm-lock.yaml', 'profile/pnpm-workspace.yaml', 'profile/package.json']) {
     const release = fixture();
     try {

@@ -8,6 +8,7 @@ type Contract = {
     dsh: Component;
     runtimeKit: Component;
     tui: Component;
+    codexSubscription: Component;
   };
 };
 const contract = JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url), 'utf8')) as Contract;
@@ -18,6 +19,7 @@ const components = [
   { key: 'dsh', heading: '## DeepSeek Harness', row: '| DeepSeek Harness |' },
   { key: 'tui', heading: '## dsh-TUI', row: '| dsh-TUI |' },
   { key: 'runtimeKit', heading: '## dsh-runtime-kit', row: '| dsh-runtime-kit |' },
+  { key: 'codexSubscription', heading: '## Codex subscription provider', row: '| Codex subscription provider |' },
 ] as const;
 
 function sectionAfter(markdown: string, heading: string): string {
@@ -59,7 +61,7 @@ test('third-party notices and publication table track each exact contract source
     assert.ok(notices.includes(holder), `missing upstream notice ${holder}`);
   }
 
-  assert.equal((notices.match(/MIT License/g) ?? []).length, 3);
+  assert.equal((notices.match(/MIT License/g) ?? []).length, 4);
 });
 
 test('rejects a new contract pin appended outside a stale component section', () => {
