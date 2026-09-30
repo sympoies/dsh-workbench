@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { startApprovalMockLlmServer } from '../tests/approval-mock.ts';
 import { chromium } from 'playwright-core';
 import { publicBrowserFailure } from '../src/browser-diagnostic.ts';
-import { BASE_DEFAULT_MODEL, TUI_ROW_CONFIG } from '../src/profile-patch.ts';
+import { BASE_DEFAULT_MODEL, TUI_FULLSCREEN, TUI_ROW_CONFIG } from '../src/profile-patch.ts';
 import { readEvents } from '../tests/session-events.ts';
 import { workbenchIdentity } from '../web/src/identity.ts';
 
@@ -181,7 +181,8 @@ const baseDefault = /\n {4}- id: agent-default-model\n {6}name: '@deepseek-ai\/d
     '../dsh-base/cordis.patch.yml'), 'utf8'));
 assert.deepEqual(baseDefault?.slice(1), [BASE_DEFAULT_MODEL.provider, BASE_DEFAULT_MODEL.model],
   'The restated default model differs from the pinned DSH base bundle');
-// The profile patch restates the dsh-TUI row without `effort`; every other key must equal the bundle's.
+// The profile patch restates the dsh-TUI row without `effort` and with its own fullscreen rule,
+// which keeps the bundle's `fullscreen: true` outside a managed pane; every other key must equal the bundle's.
 const tuiBundle = readFileSync(join(profile, 'node_modules/@deepseek-harness-tui/dsh-tui/cordis.patch.yml'), 'utf8')
   .split('\n');
 const tuiRow = tuiBundle.indexOf('    - id: dsh-tui');
@@ -191,7 +192,8 @@ assert.deepEqual(
   tuiConfig.slice(tuiConfig.indexOf('      config:') + 1)
     .filter(line => /^ {8}[A-Za-z]/.test(line)).map(line => line.trim())
     .filter(line => !line.startsWith('effort:')),
-  [...TUI_ROW_CONFIG], 'The restated dsh-TUI row differs from the pinned dsh-TUI bundle');
+  TUI_ROW_CONFIG.map(line => line === TUI_FULLSCREEN ? 'fullscreen: true' : line),
+  'The restated dsh-TUI row differs from the pinned dsh-TUI bundle');
 
 const webScenarios = [
   { name: 'allow', answer: 'ACTIVATED_WEB_ALLOW_FINISHED', output: 'ACTIVATED_WEB_ALLOW_TOOL_OK',

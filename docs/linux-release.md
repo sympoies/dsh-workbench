@@ -234,6 +234,9 @@ The profile restates the dsh-TUI row without its reasoning effort. A new TUI
 session therefore uses the stored `/effort` choice, and otherwise the default
 of the selected route (`high` on the Codex routes). The dsh-TUI bundle's own
 row pins an effort that would replace the stored choice in every new session.
+The TUI runs fullscreen as in the bundle, except inside an agent-session
+managed pane, where it runs inline because the host replays and scrolls the
+pane itself.
 The pnpm package is a trusted owner input: plan binds the canonical entrypoint,
 its SHA-256, and the complete package tree digest. Apply rechecks these bytes
 before invoking pnpm through the current Node binary. The current Node must

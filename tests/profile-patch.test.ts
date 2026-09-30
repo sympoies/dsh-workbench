@@ -110,6 +110,15 @@ test('the dsh-TUI row is restated without a reasoning effort', () => {
     ['provider', 'fullscreen', 'terminalImages', 'preset', 'workspace', 'sessionId']);
 });
 
+test('the TUI runs inline only inside an agent-session managed pane', () => {
+  const fullscreen = expressionOf('dsh-tui', 'fullscreen');
+  assert.equal(evaluate(fullscreen, {}), true);
+  assert.equal(evaluate(fullscreen, { DSH_WORKBENCH_AGENT_SESSION_HOOKS: '' }), true);
+  assert.equal(evaluate(fullscreen, { DSH_WORKBENCH_AGENT_SESSION_HOOKS: '/private/agent-session-hooks.json' }), false);
+  // The Codex settings do not change the screen mode.
+  assert.equal(evaluate(fullscreen, configured), true);
+});
+
 test('the patch carries no host endpoint or credential value', () => {
   assert.doesNotMatch(WORKBENCH_PROFILE_PATCH, /https?:\/\/|127\.0\.0\.1|localhost/);
   for (const line of WORKBENCH_PROFILE_PATCH.split('\n').filter(value => /TOKEN/.test(value))) {

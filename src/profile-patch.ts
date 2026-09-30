@@ -13,6 +13,9 @@
  * - Restates the dsh-TUI row without its `effort`, so the TUI honors the user's stored
  *   `/effort` choice and otherwise the route's own default. A row-level effort outranks
  *   the stored choice and would reset it in every new session.
+ * - Runs the TUI inline, not on the alternate screen, inside an agent-session managed
+ *   pane. The host replays and scrolls such a pane itself. The installed launch sets
+ *   `DSH_WORKBENCH_AGENT_SESSION_HOOKS` only for a complete managed pane.
  */
 const codexModels = [
   ['gpt-6.1-sol', 'GPT-6.1 Sol'], ['gpt-6-sol', 'GPT-6 Sol'],
@@ -22,14 +25,17 @@ const codexModels = [
 /** The base bundle's default, restated because a patch replaces a row's whole config. */
 export const BASE_DEFAULT_MODEL = { provider: 'deepseek-official', model: 'deepseek-flash' } as const;
 
+/** Fullscreen as in the bundle, except inside an agent-session managed pane. */
+export const TUI_FULLSCREEN = "fullscreen: !!js '!process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS'";
+
 /**
- * The dsh-TUI bundle's own `dsh-tui` row config, without `effort`. A patch replaces a row's
- * whole config, so every other key is restated; the combined-profile check compares these
- * lines with the pinned bundle.
+ * The dsh-TUI bundle's own `dsh-tui` row config, without `effort` and with the managed-pane
+ * fullscreen rule. A patch replaces a row's whole config, so every other key is restated;
+ * the combined-profile check compares these lines with the pinned bundle.
  */
 export const TUI_ROW_CONFIG = [
   'provider: deepseek-official',
-  'fullscreen: true',
+  TUI_FULLSCREEN,
   'terminalImages: true',
   'preset: !!js process.env.DSH_TUI_PRESET ?? undefined',
   'workspace: !!js process.env.DSH_TUI_WORKSPACE_TARGET ?? undefined',
