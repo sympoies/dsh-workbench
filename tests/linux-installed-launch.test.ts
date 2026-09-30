@@ -125,7 +125,8 @@ function managedFixture(root: string) {
   const hooks = join(root, 'config/agent-session-hooks.json');
   writeFileSync(fakeEntry, `console.log(JSON.stringify({ args: process.argv.slice(2),
     env: Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-      key.startsWith('AGENT_SESSION_') || key.startsWith('DSH_') || key === 'PATH')) }));\n`,
+      key.startsWith('AGENT_SESSION_') || key.startsWith('DSH_') || key === 'PATH'
+      || key === 'DEEPSEEK_API_KEY')) }));\n`,
   { mode: 0o600 });
   mkdirSync(join(kitPackage, 'dist/bin'), { recursive: true });
   copyFileSync(fakeEntry, join(kitPackage, 'dist/bin/dsh-runtime-kit-launch.js'));
@@ -202,7 +203,8 @@ test('a managed TUI pane keeps its agent-session identity and mounts the activit
   const root = mkdtempSync(join(tmpdir(), 'workbench-managed-launch-'));
   try {
     const { binDir, agentSessionBin, hooks, managed, run } = managedFixture(root);
-    const tui = run('tui', [], managed);
+    const callerHooks = { DSH_WORKBENCH_AGENT_SESSION_HOOKS: '/caller/hooks.json' };
+    const tui = run('tui', [], { ...managed, ...callerHooks });
     assert.equal(tui.status, 0, tui.stderr);
     const observed = JSON.parse(tui.stdout).env;
     assert.equal(observed.AGENT_SESSION_ID, 'managed-1');
@@ -213,12 +215,14 @@ test('a managed TUI pane keeps its agent-session identity and mounts the activit
     assert.equal(observed.DSH_RUNTIME_KIT_MAIN_AGENT_BIN, join(binDir, 'main-agent'));
     assert.equal(observed.PATH.split(':')[0], binDir, 'hook commands must reach the pane agent-session');
     // The Web face and any launch without a complete managed identity stay unmanaged.
+    // A caller-named hooks file never reaches the profile gate: a managed pane gets the
+    // owner-installed surface and every other launch gets none.
     for (const [face, env] of [['web', managed],
       ['tui', { ...managed, AGENT_SESSION_RUNTIME_ID: '' }],
       ['tui', { ...managed, AGENT_SESSION_BIN: 'agent-session' }],
       ['tui', { ...managed, AGENT_SESSION_BIN: join(root, 'missing/agent-session') }],
       ['tui', { ...managed, AGENT_SESSION_BIN: join(binDir, 'main-agent') }]] as const) {
-      const result = run(face, [], env);
+      const result = run(face, [], { ...env, ...callerHooks });
       assert.equal(result.status, 0, result.stderr);
       const stripped = JSON.parse(result.stdout).env;
       assert.deepEqual(Object.keys(stripped).filter(key => key.startsWith('AGENT_SESSION_')), []);
@@ -258,7 +262,9 @@ test('the seed face creates one empty session for a managed pane that then resum
       [[], managed]] as const) {
       const refused = run('seed', [...args], env, workspace);
       assert.notEqual(refused.status, 0);
-      assert.match(refused.stderr, /seed/);
+      assert.match(refused.stderr, env.AGENT_SESSION_ID
+        ? /installed seed expects exactly --session-id UUID/
+        : /installed seed requires an agent-session managed pane/);
       assert.equal(refused.stdout, '');
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -275,6 +281,7 @@ test('the history face runs the bundled adapter against the installed profile un
     assert.deepEqual(observed.args, ['list', '--profile-root', profile, '--root',
       join(dshHome, 'sessions'), '--compression', 'zstd', '--limit', '5']);
     assert.equal(observed.env.DSH_HOME, dshHome);
+    assert.equal(observed.env.DEEPSEEK_API_KEY, undefined, 'the history adapter never receives a model credential');
     assert.ok(kitPackage);
     for (const args of [['list', '--profile-root', '/elsewhere'], ['list', '--profile-root=/elsewhere'], []]) {
       const refused = run('history', args, {});

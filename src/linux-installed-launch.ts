@@ -92,7 +92,7 @@ function profileModule(specifier: string): string {
     const resolved = attempt(scope, specifier);
     if (resolved !== undefined) return pathToFileURL(resolved).href;
   }
-  throw new Error(`installed seed cannot resolve ${specifier} from the workbench profile`);
+  throw new Error(`cannot resolve ${specifier} from the installed workbench profile`);
 }
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -103,7 +103,7 @@ const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a
  */
 async function seed(): Promise<void> {
   if (managedAgentSession(process.env) === undefined) {
-    throw new Error('installed seed requires an exact fresh agent-session launch');
+    throw new Error('installed seed requires an agent-session managed pane');
   }
   if (args.length !== 2 || args[0] !== '--session-id' || !SESSION_ID.test(args[1] ?? '')) {
     throw new Error('installed seed expects exactly --session-id UUID');

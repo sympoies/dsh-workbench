@@ -297,8 +297,10 @@ The host then starts `bin/workbench-tui --resume <uuid>`.
 [...]` runs the bundled runtime-kit history adapter with the installation's
 workbench profile as `--profile-root`, forwarding every other argument
 unchanged. It refuses a caller-supplied `--profile-root` and removes the
-DeepSeek credential from the adapter's environment. The adapter needs a
-runtime-kit revision that accepts `--profile-root` and reads Session V4.
+DeepSeek credential from the adapter's environment. The history face requires
+runtime-kit `3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9` or later, whose adapter
+accepts `--profile-root` and reads Session V4; the installed acceptance
+exercises it from Workbench 0.2.2, which pins that revision.
 
 Install a newer or previous accepted version into a separate fresh root and
 verify it before switching an owner-controlled service entry. Do not replace
