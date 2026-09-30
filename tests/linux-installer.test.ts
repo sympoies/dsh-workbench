@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync,
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import test from 'node:test';
-import { applyLinuxInstall, nodeMeetsBaseline, planLinuxInstall, preparePnpmEnvironment,
+import { AGENT_SESSION_HOOKS, applyLinuxInstall, nodeMeetsBaseline, planLinuxInstall, preparePnpmEnvironment,
   runInstallerCommand, writePackageManagerShims,
   type LinuxInstallInput } from '../src/linux-installer.ts';
 import { hashOwnerFile, ownerPackageTreeSha256 } from '../src/linux-owner-input.ts';
@@ -261,4 +261,14 @@ test('runtime-kit setup failure reports only its bounded diagnostic code', () =>
       return true;
     });
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('the installed agent-session hook surface reports DSH turn lifecycle only', () => {
+  assert.deepEqual(JSON.parse(AGENT_SESSION_HOOKS), { hooks: {
+    UserPromptSubmit: [{ hooks: [{ type: 'command',
+      command: 'agent-session activity hook --agent dsh --event pre_llm_call --via http', timeout: 10 }] }],
+    Stop: [{ hooks: [{ type: 'command',
+      command: 'agent-session activity hook --agent dsh --event post_llm_call --via http', timeout: 10 }] }],
+  } });
+  assert.ok(AGENT_SESSION_HOOKS.endsWith('}\n'));
 });

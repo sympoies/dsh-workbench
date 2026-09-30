@@ -12,8 +12,14 @@ import { materializeTuiEntry } from './launch-workbench.ts';
  * The Workbench profile's own patch layer: register the Web plugin, and keep approvals
  * asking. The installed launch runs DSH as a full host agent, whose preset would
  * otherwise reject every approval-gated action instead of asking the operator.
+ * The official CLI's Claude Code hook bridge stays disabled unless the installed
+ * TUI launch runs as an agent-session managed pane and names its activity hooks.
  */
 export const WORKBENCH_PROFILE_PATCH = "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"
+  + "    - id: hooks-claude-code\n      name: '@deepseek-ai/dsh-hooks-claude-code'\n"
+  + "      disabled: !!js '!process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS'\n"
+  + "      config:\n        configPath: !!js process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS ?? ''\n"
+  + '        defaultTimeoutMs: 10000\n'
   + '- id: approval\n  config:\n    policy: ask\n';
 
 type Artifact = { name: string; version: string; path: string; tarball_sha256: string; artifact_sha256: string };

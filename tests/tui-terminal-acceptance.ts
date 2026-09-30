@@ -122,7 +122,8 @@ function markWorkspaceHomeSeen(home: string): void {
   writeFileSync(join(home, '.dsh-tui', 'home.json'), '{"seen":true}\n');
 }
 
-function startTerminal(binary: string, fixture: string, baseURL: string, apiKey: string, appArgs: string[] = []): {
+function startTerminal(binary: string, fixture: string, baseURL: string, apiKey: string, appArgs: string[] = [],
+  extraEnvironment: Record<string, string> = {}): {
   write: (data: string) => void;
   stop: () => Promise<void>;
   readonly exitCode: number | null;
@@ -151,6 +152,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
       DEEPSEEK_API_KEY: apiKey,
       LANG: 'en_US.UTF-8',
       TERM: 'xterm-256color',
+      ...extraEnvironment,
     },
   });
   const screen = new Terminal({ cols: 80, rows: 24, scrollback: 1_000, allowProposedApi: true });
@@ -340,6 +342,42 @@ async function runSessionScenario(binary: string, fixture: string): Promise<void
   } finally {
     const cleanup = await Promise.allSettled([terminal?.stop(), mock.close()]);
     if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI session cleanup failed');
+  }
+}
+
+/**
+ * The installed profile mounts the official Claude Code hook bridge only when the
+ * managed-pane launch names its hooks file. One turn must fire the same prompt and
+ * stop events Agent Console's activity ingress consumes, in order.
+ */
+async function runHookBridgeScenario(binary: string, fixture: string): Promise<void> {
+  const apiKey = randomBytes(24).toString('hex');
+  const answer = 'TUI_HOOK_BRIDGE_ANSWER';
+  const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true, apiKey, successText: answer });
+  const events = join(fixture, 'hook-events.log');
+  const hooks = join(fixture, 'agent-session-hooks.json');
+  const record = (event: string) => ({ hooks: [{ type: 'command',
+    command: `printf '%s\\n' ${event} >> ${quote(events)}`, timeout: 10 }] });
+  writeFileSync(hooks, JSON.stringify({ hooks: {
+    UserPromptSubmit: [record('pre_llm_call')], Stop: [record('post_llm_call')] } }), { mode: 0o600 });
+  let terminal: ReturnType<typeof startTerminal> | undefined;
+  try {
+    terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, [],
+      { DSH_WORKBENCH_AGENT_SESSION_HOOKS: hooks });
+    await terminal.waitFor('Explore the uncharted!');
+    terminal.write('TUI_HOOK_BRIDGE_TURN\r');
+    await terminal.waitForAfter('TUI_HOOK_BRIDGE_TURN', answer);
+    const deadline = Date.now() + 10_000;
+    while (!(existsSync(events) && readFileSync(events, 'utf8').includes('post_llm_call')) && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.deepEqual(readFileSync(events, 'utf8').trim().split('\n'), ['pre_llm_call', 'post_llm_call'],
+      'The managed hook bridge must report one prompt and one stop for one turn');
+    await terminal.stop();
+    assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly in the hook bridge scenario: ${terminal.exitDiagnostic()}`);
+  } finally {
+    const cleanup = await Promise.allSettled([terminal?.stop(), mock.close()]);
+    if (cleanup.some(result => result.status === 'rejected')) throw new Error('TUI hook bridge cleanup failed');
   }
 }
 
@@ -569,9 +607,10 @@ async function main(): Promise<void> {
     await runQuestionScenario(dsh, fixture);
     await runSessionScenario(dsh, fixture);
     await runRenameScenario(dsh, fixture);
+    if (installedHome) await runHookBridgeScenario(dsh, fixture);
     console.log(JSON.stringify({ result: 'pass', scenarios: scenarios.map(scenario => scenario.name),
       approvals: true, questions: true, toolResults: true, exactIdResume: true, manualRenameResume: true,
-      offlineRenameResume: true, realTty: true }));
+      offlineRenameResume: true, managedHookBridge: Boolean(installedHome), realTty: true }));
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }

@@ -268,6 +268,38 @@ setup, and the pinned hook policy, agent-docs, and state paths stay explicit.
 Isolation belongs to a container or an explicit sandbox, not to an edited
 process environment.
 
+### Agent Console managed panes
+
+A terminal host such as Agent Console runs the TUI launcher as an
+agent-session managed pane. The TUI launcher treats a launch as managed only
+when `AGENT_SESSION_ID` and `AGENT_SESSION_RUNTIME_ID` are nonempty and
+`AGENT_SESSION_BIN` is the absolute path of an executable named
+`agent-session`. A managed launch keeps the caller's `AGENT_SESSION_*`
+variables, pins runtime-kit's agent-session and `main-agent` controllers to
+that executable and its sibling, puts its directory first on `PATH`, and sets
+`DSH_WORKBENCH_AGENT_SESSION_HOOKS` to the install-private, owner-only
+`config/agent-session-hooks.json`. The profile's patch layer mounts the
+official CLI's Claude Code hook bridge only when that variable is set, so the
+pane reports each prompt and stop through `agent-session activity hook --agent
+dsh --event pre_llm_call|post_llm_call --via http`. The Web launcher and every
+other TUI launch drop all `AGENT_SESSION_*` variables and leave the bridge
+disabled. The installed-unit receipt records the hooks file and its SHA-256.
+
+`bin/workbench-seed --session-id <uuid>`, run from the pane's working
+directory, creates one empty Session V4 for that exact ID through the
+profile's own `session-persistence-jsonl` backend, in the root the TUI writes
+(`DSH_TUI_SESSION_ROOT`, else `<dshHome>/sessions`, Zstandard). It prints
+`{"schema_version":"dsh-workbench.seed.v1","provider_session_id":"<uuid>"}`
+and refuses an unmanaged launch, any other argument, or an existing session.
+The host then starts `bin/workbench-tui --resume <uuid>`.
+
+`bin/workbench-history <operation> --root <root> --compression <zstd|none>
+[...]` runs the bundled runtime-kit history adapter with the installation's
+workbench profile as `--profile-root`, forwarding every other argument
+unchanged. It refuses a caller-supplied `--profile-root` and removes the
+DeepSeek credential from the adapter's environment. The adapter needs a
+runtime-kit revision that accepts `--profile-root` and reads Session V4.
+
 Install a newer or previous accepted version into a separate fresh root and
 verify it before switching an owner-controlled service entry. Do not replace
 the active root in place. Preserve the session home and its backup as a

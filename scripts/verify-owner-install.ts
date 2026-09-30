@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applyLinuxInstall, planLinuxInstall, type LinuxInstallInput } from '../src/linux-installer.ts';
+import { AGENT_SESSION_HOOKS, applyLinuxInstall, planLinuxInstall, type LinuxInstallInput } from '../src/linux-installer.ts';
 import { ownerPackageTreeSha256 } from '../src/linux-owner-input.ts';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
@@ -106,12 +106,43 @@ for (const [script, args, timeout] of [
     throw new Error(`installed owner ${script} acceptance failed with status ${result.status ?? 'unknown'}`);
   }
 }
+// After the interface acceptance, so its session inventory is unchanged: a managed
+// pane mounts the exact installed hook surface and seeds an exact-ID
+// Session V4 through the profile's own persistence backend before resuming it.
+assert.equal(readFileSync(installed.agentSessionHooks, 'utf8'), AGENT_SESSION_HOOKS);
+assert.equal(sha256(installed.agentSessionHooks), installed.agentSessionHooksSha256);
+assert.equal(lstatSync(installed.agentSessionHooks).mode & 0o777, 0o600);
+const paneBin = join(root, 'pane-nils');
+mkdirSync(paneBin, { mode: 0o700 });
+writeFileSync(join(paneBin, 'agent-session'), '#!/bin/sh\nexit 0\n', { flag: 'wx', mode: 0o700 });
+chmodSync(join(paneBin, 'agent-session'), 0o700);
+const paneWorkspace = join(root, 'seed-workspace');
+mkdirSync(paneWorkspace, { mode: 0o700 });
+const seedId = '6d2f1e9a-4b7c-4d3e-8f10-2a9b8c7d6e5f';
+const seeded = spawnSync(installed.seedLauncher, ['--session-id', seedId], {
+  cwd: paneWorkspace, encoding: 'utf8', timeout: 60_000,
+  env: { ...process.env, AGENT_SESSION_ID: 'owner-acceptance', AGENT_SESSION_RUNTIME_ID: 'owner-runtime',
+    AGENT_SESSION_BIN: join(paneBin, 'agent-session') },
+});
+if (seeded.error || seeded.status !== 0) throw new Error(`installed seed failed: ${seeded.stderr}`);
+assert.deepEqual(JSON.parse(seeded.stdout),
+  { schema_version: 'dsh-workbench.seed.v1', provider_session_id: seedId });
+const sessionsRoot = join(config.dshHome, 'sessions');
+assert.ok(readdirSync(sessionsRoot).some(project =>
+  existsSync(join(sessionsRoot, project, seedId, 'session.v4.jsonl.zstd'))),
+'installed seed did not create a Session V4 archive');
+const unmanaged = spawnSync(installed.seedLauncher, ['--session-id', seedId], {
+  cwd: paneWorkspace, encoding: 'utf8', timeout: 60_000,
+  env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('AGENT_SESSION_'))),
+});
+assert.notEqual(unmanaged.status, 0, 'installed seed must refuse an unmanaged launch');
+
 process.stdout.write(`${JSON.stringify({
   schemaVersion: 'dsh-workbench.owner-install-acceptance.v1',
   releaseVersion: installed.releaseVersion,
   archiveSha256: installed.archiveSha256,
   manifestSha256: installed.manifestSha256,
   planDigest: installed.planDigest,
-  installedFaces: ['web', 'tui'],
+  installedFaces: ['web', 'tui', 'seed'],
   result: 'passed',
 })}\n`);

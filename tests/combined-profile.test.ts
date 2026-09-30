@@ -260,10 +260,15 @@ test('stages the native Web plugin in the same governed workbench profile', () =
     ]);
     assert.equal(manifest.dependencies['@sympoies/dsh-workbench-web'],
       `file:artifacts/sympoies-dsh-workbench-web-${releaseVersion}.tgz`);
-    // Registers the Web plugin, and keeps approvals asking when the installed launch
-    // runs DSH as a full host agent (danger-full-access would otherwise imply never).
+    // Registers the Web plugin, keeps approvals asking when the installed launch
+    // runs DSH as a full host agent (danger-full-access would otherwise imply never),
+    // and mounts the activity hook bridge only when a managed pane names its config.
     assert.equal(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'),
       "- insert:\n    - id: dsh-workbench-web\n      name: '@sympoies/dsh-workbench-web'\n"
+      + "    - id: hooks-claude-code\n      name: '@deepseek-ai/dsh-hooks-claude-code'\n"
+      + "      disabled: !!js '!process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS'\n"
+      + "      config:\n        configPath: !!js process.env.DSH_WORKBENCH_AGENT_SESSION_HOOKS ?? ''\n"
+      + '        defaultTimeoutMs: 10000\n'
       + '- id: approval\n  config:\n    policy: ask\n');
     assert.deepEqual(readFileSync(join(profile, `artifacts/sympoies-dsh-workbench-web-${releaseVersion}.tgz`)),
       normalizePeerArtifact(readFileSync(webArchive)));
