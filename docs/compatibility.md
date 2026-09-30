@@ -18,7 +18,7 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.2.2` Linux x64 contract is a **candidate**. It is the first
+The current `v0.2.2` Linux x64 contract is **accepted for compatibility**. It is the first
 schema 4 contract: a fourth component, `codexSubscription`, pins
 `@sympoies/dsh-llm-codex-subscription` 0.2.0 at
 `14216533f76ce05f2b2bbf4390227fb02b853ff3` (tag
@@ -37,7 +37,13 @@ agent-session managed pane. runtime-kit moves to commit
 `3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9`, whose history adapter reads
 Workbench session stores through the installed profile; its DSH and nils-cli
 records are unchanged, so the patched 84-package closure and its semantic
-identities are the same as in 0.2.1. All four gates need current evidence.
+identities are the same as in 0.2.1. All four gates have current evidence:
+[runtime-kit](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36731241458),
+[TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36749094796),
+[Web](https://github.com/sympoies/dsh-workbench/actions/runs/36752894456), and
+[cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36752936552).
+Deployments are accepted separately by the
+[agent delivery acceptance](agent-acceptance.md).
 
 The previous `v0.2.1` Linux x64 contract was **accepted for compatibility**. It keeps the 0.2.0
 component graph and corrects the Linux artifact record. The `v0.2.0` record
