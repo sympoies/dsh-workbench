@@ -18,7 +18,19 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.2.0` Linux x64 contract is **accepted for compatibility**. It is the first
+The current `v0.2.1` Linux x64 contract is a **candidate**. It keeps the 0.2.0
+component graph and corrects the Linux artifact record. The `v0.2.0` record
+pinned the digest of a profile workspace that pnpm had edited while the record
+was derived: a locked DSH package was younger than pnpm's minimum release age,
+and pnpm added a release-age exclusion to the staged `pnpm-workspace.yaml`. The
+release builder stages the workspace without that edit and refused the record,
+so `v0.2.0` was never released. Correcting the record changes the release
+identity, and the Web package embeds the release version, so the TUI, Web, and
+cross-interface handoff gates need current evidence; the runtime-kit gate keeps
+its evidence. The combined-profile workflow now checks the staged workspace and
+lock digests against the record before and after the frozen install.
+
+The `v0.2.0` Linux x64 contract was **accepted for compatibility** but never released. It is the first
 Workbench graph to move DeepSeek Harness: DSH moves to `dsh-v0.2.0-rc.2` at
 `639ed015397290b3745d163aafe02ffee4aa3f84`, dsh-TUI to `v0.12.0` at
 `3066b29113bde90606921b64bcf7c25fad31068d`, and runtime-kit to commit

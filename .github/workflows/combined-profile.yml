@@ -194,7 +194,9 @@ jobs:
             "$VERIFICATION_ROOT/dsh-home"
       - name: Verify source-bound semantic identities before frozen installation
         working-directory: dsh-workbench
-        run: node scripts/verify-staged-semantic-peers.ts "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
+        run: |
+          node scripts/verify-staged-semantic-peers.ts "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
+          node scripts/verify-profile-record.ts "$VERIFICATION_ROOT/dsh-home/profiles/workbench"
       - name: Install exact DSH/Web/TUI graph with strict frozen peers
         env:
           WORKBENCH_PNPM: ${{ steps.pins.outputs.workbench_pnpm }}
@@ -215,6 +217,9 @@ jobs:
           fs.cpSync(from, to, { recursive: true, errorOnExist: true,
             filter: entry => path.basename(entry) !== 'node_modules' });
           NODE
+          # The release builder requires these digests; pnpm must not have edited the workspace.
+          node "$GITHUB_WORKSPACE/dsh-workbench/scripts/verify-profile-record.ts" --require-lock \
+            "$VERIFICATION_ROOT/release-profile-input"
       - name: Prepare exact profile toolchain and packaged runtime-kit
         working-directory: dsh-runtime-kit
         env:
