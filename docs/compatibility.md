@@ -30,6 +30,10 @@ primarily against DSH 0.2.0-rc.2 and still depends on
 correction. The reviewed TUI patch is rebased onto 0.12.0 with identical
 changes; only its context and line offsets moved. The Web plugin keeps the same
 `conversation.session.header.utilities` slot, which rc.2 still provides.
+The rc.2 Web chat shows a running Turn only in its live running indicator and
+renders the Turn-process summary once the Turn settles; settled Turns read
+"Completed", and the welcome dialog is the "Preview Notice". The browser
+acceptance follows those native states.
 
 The previous `v0.1.7` Linux x64 contract was **accepted for compatibility**; the `v0.1.6`
 candidate was never released, because re-pinning runtime-kit changed the
