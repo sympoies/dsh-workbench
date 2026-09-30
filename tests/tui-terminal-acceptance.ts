@@ -126,6 +126,7 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
   write: (data: string) => void;
   stop: () => Promise<void>;
   readonly exitCode: number | null;
+  exitDiagnostic: () => string;
   waitFor: (marker: string | RegExp) => Promise<void>;
   waitForAfter: (first: string, second: string) => Promise<void>;
 } {
@@ -210,6 +211,8 @@ function startTerminal(binary: string, fixture: string, baseURL: string, apiKey:
   return {
     write: data => child.write(data),
     get exitCode() { return exitCode; },
+    // The redacted tail of the PTY output: a fatal error the TUI rethrows surfaces here.
+    exitDiagnostic: () => startupFailure(),
     stop: async () => {
       if (exitCode !== null) return;
       const waitForExit = (milliseconds: number) => new Promise<boolean>(resolveWait => {
@@ -309,7 +312,7 @@ async function runSessionScenario(binary: string, fixture: string): Promise<void
     }
     await waitForTitle(logPath, answer);
     await terminal.stop();
-    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly before resume');
+    assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly before resume: ${terminal.exitDiagnostic()}`);
     const sessionId = basename(dirname(logPath));
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, ['--resume', sessionId]);
     await terminal.waitFor(answer);
@@ -320,7 +323,7 @@ async function runSessionScenario(binary: string, fixture: string): Promise<void
     await terminal.waitFor(new RegExp(`\\b${previousWorkspaceCount + 1} total\\b`));
     await terminal.waitFor(new RegExp(`Sessions[\\s\\S]*${answer}`));
     await terminal.stop();
-    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after resume');
+    assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly after resume: ${terminal.exitDiagnostic()}`);
     assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [logPath],
       'Exact-ID resume created another session');
     const events = readEvents(logPath, { strict: true });
@@ -357,7 +360,7 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
     await waitForTitle(logPath, renamed);
     await terminal.waitFor(`Renamed to "${renamed}"`);
     await terminal.stop();
-    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after rename');
+    assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly after rename: ${terminal.exitDiagnostic()}`);
     const sessionId = basename(dirname(logPath));
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, ['--resume', sessionId]);
     await terminal.waitFor(answer);
@@ -365,7 +368,7 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
     await waitForTurnCount(logPath, 2);
     await terminal.waitForAfter('TUI_RENAME_RESUMED', answer);
     await terminal.stop();
-    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after renamed resume');
+    assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly after renamed resume: ${terminal.exitDiagnostic()}`);
     const offlineTitle = 'WB_OFFLINE_RENAME';
     const offlineWriter = pathToFileURL(join(fixture, 'home', 'profiles', profileName, 'node_modules',
       contract.components.tui.package.name, 'lib/types/dsh-adapter/compat/sessionLog.js')).href;
@@ -381,7 +384,7 @@ async function runRenameScenario(binary: string, fixture: string): Promise<void>
     await waitForTurnCount(logPath, 3);
     await terminal.waitForAfter('TUI_OFFLINE_RENAME_RESUMED', answer);
     await terminal.stop();
-    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly after offline rename');
+    assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly after offline rename: ${terminal.exitDiagnostic()}`);
     assert.deepEqual(sessionLogs(logRoot).filter(path => !previous.has(path)), [logPath]);
     const events = readEvents(logPath, { strict: true });
     assert.equal(events.filter(event => event.type === 'turn/end').length, 3);
@@ -418,7 +421,7 @@ async function runScenario(binary: string, fixture: string, scenario: typeof sce
     terminal.write(scenario.decision);
     const logPath = await waitForTurn(logRoot, previous);
     await terminal.stop();
-    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly');
+    assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly in the ${scenario.name} approval scenario: ${terminal.exitDiagnostic()}`);
     const events = readEvents(logPath, { strict: true });
     const ended = events.find(event => event.type === 'turn/end');
     const decided = events.find(event => event.type === 'approval/decided');
@@ -490,7 +493,7 @@ async function runQuestionScenario(binary: string, fixture: string): Promise<voi
     terminal.write('\r');
     const logPath = await waitForTurn(logRoot, previous);
     await terminal.stop();
-    assert.equal(terminal.exitCode, 0, 'TUI did not exit cleanly');
+    assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly in the question scenario: ${terminal.exitDiagnostic()}`);
     const events = readEvents(logPath, { strict: true });
     const endReason = events.find(event => event.type === 'turn/end')?.data?.reason as { kind?: string } | undefined;
     assert.equal(endReason?.kind, 'completed', 'question turn did not complete');
