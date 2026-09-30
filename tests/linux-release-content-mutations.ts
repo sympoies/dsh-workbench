@@ -22,6 +22,9 @@ try {
   const peer = original.files.find(file => file.path.startsWith('profile/artifacts/deepseek-ai-')
     && file.path.endsWith('.tgz') && !original.archives.some(archive => archive.path === file.path));
   if (!peer) throw new Error('release fixture has no patched peer archive');
+  const provider = original.archives.find(archive =>
+    archive.path.startsWith('profile/artifacts/sympoies-dsh-llm-codex-subscription-'));
+  if (!provider) throw new Error('release fixture has no provider archive');
   const changes: Array<{ label: string; path: string; mutate: (bytes: Buffer) => Buffer; error: RegExp }> = [
     { label: 'reviewed contract source', path: 'compatibility/workbench.json',
       mutate: bytes => Buffer.concat([bytes, Buffer.from(' ')]),
@@ -48,6 +51,9 @@ try {
       value.packageCanonicalSha256 = 'a'.repeat(64);
       return Buffer.from(`${JSON.stringify(value)}\n`);
     }, error: /source-build proof/ },
+    { label: 'provider archive', path: provider.path,
+      mutate: bytes => Buffer.concat([bytes, Buffer.from('changed')]),
+      error: /official component archive integrity differs from contract/ },
     { label: 'peer closure', path: peer.path,
       mutate: bytes => Buffer.concat([bytes, Buffer.from('changed')]),
       error: /peer closure canonical digest|peer archive differs/ },
@@ -62,6 +68,9 @@ try {
     if (!file) throw new Error('mutation target is not indexed');
     file.size = lstatSync(path).size;
     file.rawSha256 = sha256(modified);
+    // Keep the envelope consistent so the content check, not the file index, judges an archive.
+    const archive = manifest.archives.find(row => row.path === change.path);
+    if (archive) archive.rawSha256 = file.rawSha256;
     if (change.path === manifest.contractPath) manifest.contractRawSha256 = file.rawSha256;
     const manifestBytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
     writeFileSync(join(root, 'release-manifest.json'), manifestBytes);

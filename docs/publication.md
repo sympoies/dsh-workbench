@@ -21,7 +21,7 @@ history. For each proposed import from private work, record in its PR:
 ## Upstream attribution
 
 The accepted Linux compatibility sources were checked at their selected
-immutable revisions. All three upstream source licenses are MIT:
+immutable revisions. Every pinned source license is MIT:
 
 | Component | Accepted Linux source pin | Copyright holder | License evidence |
 | --- | --- | --- |

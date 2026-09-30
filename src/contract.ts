@@ -13,7 +13,7 @@ const evidenceUrl = /^https:\/\/github\.com\/(sympoies\/(?:dsh-workbench|dsh-run
 const components = ['dsh', 'runtimeKit', 'tui', 'codexSubscription'] as const;
 // Schema 4 adds the Codex subscription provider; earlier schemas are read only as a previous contract.
 const componentsOf = (contract: WorkbenchContract) =>
-  contract.schemaVersion >= 4 ? components : components.slice(0, 3);
+  contract.schemaVersion >= 4 ? components : components.filter(id => id !== 'codexSubscription');
 const gates = ['runtimeKit', 'tui', 'web', 'handoff'] as const;
 
 function fail(message: string): never {

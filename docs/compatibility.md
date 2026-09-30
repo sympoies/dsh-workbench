@@ -278,7 +278,7 @@ paths ([workspace boundary](session-handoff.md#workspace-boundary)).
 Workbench `v0.1.0-rc.4` narrows the first release's acceptance targets to
 Linux x64 and macOS arm64. Linux arm64 and macOS x64 may be evaluated for a
 later Workbench version. This target change does not promote the graph from
-candidate status or alter any of the three component pins.
+candidate status or alter any component pin.
 
 Workbench `v0.1.0-rc.5` pins runtime-kit's merged patched-peer commit and
 stages the combined profile at `$DSH_HOME/profiles/workbench` from the owner
@@ -365,15 +365,16 @@ Workbench profile runs supply installed interface and handoff evidence.
 
 `node scripts/contract.mjs check` validates structure and immutable pin shape.
 `node scripts/contract.mjs require-accepted` is the contract activation gate:
-it passes for this Linux x64 compatibility graph. An accepted contract requires all three
-components marked accepted and distinct public evidence links for runtime-kit,
+it passes for this Linux x64 compatibility graph. An accepted contract requires every
+component marked accepted and distinct public evidence links for runtime-kit,
 TUI, Web, and cross-interface handoff on every declared target platform. A
 local schema check alone does not establish that upstream packages match the
 recorded hashes; the release build and installation must verify those bytes.
 The [Linux release envelope](linux-release.md) defines the separate
 externally authenticated payload-file check before installation.
-Schema 3 adds the TUI patch identity; the compare gate reads schema 1 and 2
-candidates only as previous releases.
+Schema 3 adds the TUI patch identity, and schema 4 adds the Codex subscription
+provider component; the compare gate reads schemas 1 to 3 only as previous
+releases.
 
 The current common runtime baseline is Node.js 24.3.0 or newer on the target platform set recorded in the
 contract. A target platform is planned while the contract is a candidate; it
@@ -405,7 +406,7 @@ Consumers may use `node scripts/contract.mjs print` to read the validated
 contract as JSON. The Web plugin now embeds a generated identity with a
 SHA-256 digest of the immutable graph (release, runtime, component sources,
 packages, toolchains, peer overrides and patches) and reports the release and
-three component pins. Schema V2 excludes candidate/accepted status and
+the DSH, runtime-kit, and TUI pins; the digest covers every component. Schema V2 excludes candidate/accepted status and
 acceptance evidence so promoting the same tested bytes cannot change the
 artifact. The external contract owns acceptance; the Web package does not
 advertise an acceptance verdict. Its package build checks that identity against
