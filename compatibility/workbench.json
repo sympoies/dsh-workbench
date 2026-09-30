@@ -4,7 +4,7 @@
     "version": "0.2.1",
     "tag": "v0.2.1"
   },
-  "status": "candidate",
+  "status": "accepted",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",
@@ -85,16 +85,31 @@
       ]
     },
     "tui": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36713480047"
+        }
+      ]
     },
     "web": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36714894978"
+        }
+      ]
     },
     "handoff": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36714902842"
+        }
+      ]
     }
   }
 }
