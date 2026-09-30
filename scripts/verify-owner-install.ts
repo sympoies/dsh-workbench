@@ -88,6 +88,7 @@ for (const [script, args, timeout] of [
   ['tests/tui-terminal-acceptance.ts', [
     '--dsh-bin', installed.tuiLauncher, '--installed-dsh-home', config.dshHome,
     '--runtime-env-file', runtimeEnvFile, '--owner-environment-file', ownerEnvironmentFile,
+    '--installed-launcher',
   ], 600_000],
   ['tests/web-browser-acceptance.ts', [
     '--dsh-bin', installed.webLauncher, '--tui-bin', installed.tuiLauncher,

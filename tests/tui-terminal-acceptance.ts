@@ -37,6 +37,10 @@ for (const name of ['DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR']) {
   if (typeof process.env[name] === 'string') managerEnvironment[name] = process.env[name];
 }
 const profileName = installedHome ? 'workbench' : 'dsh-tui';
+// The owner installation's TUI launcher mounts its own hook surface only for a
+// complete agent-session managed pane, so drive it as one.
+const installedLauncher = process.argv.includes('--installed-launcher');
+if (installedLauncher && !installedHome) throw new Error('--installed-launcher requires an installed home');
 const scenarios = [
   { name: 'allow', decision: '1', outcome: 'allowed-once', toolOutput: 'TUI_ALLOW_TOOL_OK',
     answer: 'TUI_ALLOW_FINISHED', error: false },
@@ -355,11 +359,28 @@ async function runHookBridgeScenario(binary: string, fixture: string): Promise<v
   const answer = 'TUI_HOOK_BRIDGE_ANSWER';
   const mock = await startMockLlmServer({ sequence: ['success'], repeatLast: true, apiKey, successText: answer });
   const events = join(fixture, 'hook-events.log');
-  const hooks = join(fixture, 'agent-session-hooks.json');
-  const record = (event: string) => ({ hooks: [{ type: 'command',
-    command: `printf '%s\\n' ${event} >> ${quote(events)}`, timeout: 10 }] });
-  writeFileSync(hooks, JSON.stringify({ hooks: {
-    UserPromptSubmit: [record('pre_llm_call')], Stop: [record('post_llm_call')] } }), { mode: 0o600 });
+  let paneEnvironment: Record<string, string>;
+  let expected: string[];
+  if (installedLauncher) {
+    // The installed hooks call `agent-session activity hook ...` through the pane's
+    // own agent-session, which the launcher puts first on PATH.
+    const paneBin = join(fixture, 'pane-nils');
+    mkdirSync(paneBin, { recursive: true });
+    writeFileSync(join(paneBin, 'agent-session'),
+      `#!/bin/sh\n[ "$1" = activity ] && printf '%s\\n' "$*" >> ${quote(events)}\nexit 0\n`, { mode: 0o700 });
+    paneEnvironment = { AGENT_SESSION_ID: 'acceptance-pane', AGENT_SESSION_RUNTIME_ID: 'acceptance-runtime',
+      AGENT_SESSION_BIN: join(paneBin, 'agent-session') };
+    expected = ['pre_llm_call', 'post_llm_call']
+      .map(event => `activity hook --agent dsh --event ${event} --via http`);
+  } else {
+    const hooks = join(fixture, 'agent-session-hooks.json');
+    const record = (event: string) => ({ hooks: [{ type: 'command',
+      command: `printf '%s\\n' ${event} >> ${quote(events)}`, timeout: 10 }] });
+    writeFileSync(hooks, JSON.stringify({ hooks: {
+      UserPromptSubmit: [record('pre_llm_call')], Stop: [record('post_llm_call')] } }), { mode: 0o600 });
+    paneEnvironment = { DSH_WORKBENCH_AGENT_SESSION_HOOKS: hooks };
+    expected = ['pre_llm_call', 'post_llm_call'];
+  }
   const logRoot = join(fixture, 'home', 'sessions');
   const previous = new Set(sessionLogs(logRoot));
   let terminal: ReturnType<typeof startTerminal> | undefined;
@@ -367,7 +388,7 @@ async function runHookBridgeScenario(binary: string, fixture: string): Promise<v
     // A managed pane runs as the installed full host agent; hook commands run
     // through the DSH shell, which a workspace-write sandbox confines.
     terminal = startTerminal(binary, fixture, mock.baseURL, apiKey, [],
-      { DSH_WORKBENCH_AGENT_SESSION_HOOKS: hooks, DSH_PERMISSION_MODE: 'danger-full-access' });
+      { ...paneEnvironment, DSH_PERMISSION_MODE: 'danger-full-access' });
     await terminal.waitFor('Explore the uncharted!');
     terminal.write('TUI_HOOK_BRIDGE_TURN\r');
     const logPath = await waitForTurn(logRoot, previous);
@@ -380,7 +401,7 @@ async function runHookBridgeScenario(binary: string, fixture: string): Promise<v
       .filter(event => event.type === 'hook/invoked' || event.type === 'hook/result')
       .map(event => `${event.type}:${String(event.data?.point)}:${JSON.stringify(event.data?.output ?? {}).slice(0, 200)}`);
     assert.deepEqual(existsSync(events) ? readFileSync(events, 'utf8').trim().split('\n') : [],
-      ['pre_llm_call', 'post_llm_call'],
+      expected,
       `The managed hook bridge must report one prompt and one stop for one turn; session hook events: ${JSON.stringify(hookEvents)}`);
     await terminal.stop();
     assert.equal(terminal.exitCode, 0, `TUI did not exit cleanly in the hook bridge scenario: ${terminal.exitDiagnostic()}`);
