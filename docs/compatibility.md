@@ -18,7 +18,27 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.2.1` Linux x64 contract is **accepted for compatibility**. It keeps the 0.2.0
+The current `v0.2.2` Linux x64 contract is a **candidate**. It is the first
+schema 4 contract: a fourth component, `codexSubscription`, pins
+`@sympoies/dsh-llm-codex-subscription` 0.2.0 at
+`14216533f76ce05f2b2bbf4390227fb02b853ff3` (tag
+`dsh-llm-codex-subscription-v0.2.0`) by source tree and npm integrity. That
+release supports exactly DSH 0.2.0-rc.2 and builds on the pi-ai version that
+DSH release resolves. Its archive is staged and shipped like the dsh-TUI
+archive. The profile patch adds the `codex-subscription` route, a `codex-proxy`
+route on the upstream pi-ai adapter, and an owner-selected default model; each
+stays off until the owner environment file configures it, so an unconfigured
+install composes the 0.2.1 routes and default. The patch restates two upstream
+rows, and the combined-profile workflow fails when either drifts from its
+pinned bundle: `agent-default-model` of the DSH base bundle, and `dsh-tui` of
+the dsh-TUI bundle, restated without `effort` and with fullscreen off inside an
+agent-session managed pane. runtime-kit moves to commit
+`3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9`, whose history adapter reads
+Workbench session stores through the installed profile; its DSH and nils-cli
+records are unchanged, so the patched 84-package closure and its semantic
+identities are the same as in 0.2.1. All four gates need current evidence.
+
+The previous `v0.2.1` Linux x64 contract was **accepted for compatibility**. It keeps the 0.2.0
 component graph and corrects the Linux artifact record. The `v0.2.0` record
 pinned the digest of a profile workspace that pnpm had edited while the record
 was derived: a locked DSH package was younger than pnpm's minimum release age,
