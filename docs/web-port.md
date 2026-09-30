@@ -6,16 +6,16 @@ client plugin. The server entry is intentionally empty; DSH owns the Host,
 session writer, transport, conversation, tools, approvals, terminal, settings,
 and plugins.
 
-DSH 0.1.7-rc.1 provides explicit
-[`ISessions.retain`](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/api/session-controller/src/client/contract/sessions.ts)
+DSH 0.2.0-rc.2 provides explicit
+[`ISessions.retain`](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/api/session-controller/src/client/contract/sessions.ts)
 references and a
-[`SessionProvider` target](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/client/ui-sidebar-right/src/client/shell/RightbarRoot.tsx).
+[`SessionProvider` target](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-sidebar-right/src/client/shell/RightbarRoot.tsx).
 The prior addressed-session source patch is therefore excluded from this
 graph. An eventual multi-pane contribution must use these public owners
 and prove lifecycle behavior in a real browser before acceptance.
 
 The first additive action uses the official
-[`conversation.session.header.utilities` slot](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/client/ui-conversation/src/client/contract/slots.ts)
+[`conversation.session.header.utilities` slot](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-conversation/src/client/contract/slots.ts)
 to copy a session ID for TUI handoff. It reminds the user to stop the Web Host
 before TUI resume. It never releases a writer, modifies session data, or
 replaces the native conversation.

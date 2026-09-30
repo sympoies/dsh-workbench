@@ -25,9 +25,9 @@ immutable revisions. All three upstream source licenses are MIT:
 
 | Component | Accepted Linux source pin | Copyright holder | License evidence |
 | --- | --- | --- |
-| DeepSeek Harness | [`dsh-v0.1.7-rc.1` at `46a7f68b0922371ce7144b668b90e377d8e799f4`](https://github.com/deepseek-ai/deepseek-harness/tree/46a7f68b0922371ce7144b668b90e377d8e799f4) | DeepSeek | [MIT license at the pinned commit](https://github.com/deepseek-ai/deepseek-harness/blob/46a7f68b0922371ce7144b668b90e377d8e799f4/LICENSE) |
-| dsh-TUI | [`v0.11.2` at `dd4137129b91090184e5eaabb7b8a0a74c1b919b`](https://github.com/ccch1mneyyy/dsh-TUI/tree/dd4137129b91090184e5eaabb7b8a0a74c1b919b) | chimney (`ccch1mneyyy`) | [MIT license at the pinned commit](https://github.com/ccch1mneyyy/dsh-TUI/blob/dd4137129b91090184e5eaabb7b8a0a74c1b919b/LICENSE) |
-| dsh-runtime-kit | [commit `44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3`](https://github.com/sympoies/dsh-runtime-kit/tree/44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3/LICENSE) |
+| DeepSeek Harness | [`dsh-v0.2.0-rc.2` at `639ed015397290b3745d163aafe02ffee4aa3f84`](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84) | DeepSeek | [MIT license at the pinned commit](https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/LICENSE) |
+| dsh-TUI | [`v0.12.0` at `3066b29113bde90606921b64bcf7c25fad31068d`](https://github.com/ccch1mneyyy/dsh-TUI/tree/3066b29113bde90606921b64bcf7c25fad31068d) | chimney (`ccch1mneyyy`) | [MIT license at the pinned commit](https://github.com/ccch1mneyyy/dsh-TUI/blob/3066b29113bde90606921b64bcf7c25fad31068d/LICENSE) |
+| dsh-runtime-kit | [commit `e3de3b5007d9535ccced0262e463c8fccc9c0734`](https://github.com/sympoies/dsh-runtime-kit/tree/e3de3b5007d9535ccced0262e463c8fccc9c0734) | Sympoies contributors | [MIT license at the pinned commit](https://github.com/sympoies/dsh-runtime-kit/blob/e3de3b5007d9535ccced0262e463c8fccc9c0734/LICENSE) |
 
 The upstream copyright lines and license texts for these pinned source trees
 are preserved in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). These are

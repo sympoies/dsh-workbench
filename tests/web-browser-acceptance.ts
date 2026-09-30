@@ -656,7 +656,7 @@ async function openPage(browser: Browser, host: Awaited<ReturnType<typeof startH
   await continueButton.waitFor({ timeout: 5_000 }).catch(() => {});
   if (await continueButton.isVisible()) {
     await continueButton.click();
-    await page.getByRole('dialog', { name: 'Internal Testing Notice' })
+    await page.getByRole('dialog', { name: 'Preview Notice' })
       .waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {
         throw new Error('WORKBENCH_WEB_WELCOME_ACK_FAILED: acknowledgement did not persist');
       });
@@ -1003,7 +1003,11 @@ async function main(): Promise<void> {
     assert.ok(approvalText.includes('Waiting for approval'));
     assert.ok(approvalText.includes('printf TOOL_OK'));
     assert.ok(await approval.getByRole('button', { name: 'Reject' }).isVisible());
-    assert.ok((await firstPage.locator('[data-turn-process="1"]').innerText()).includes('Deep diving'),
+    // DSH renders the Turn-process summary only once the Turn settles; the live
+    // running indicator owns the in-progress state.
+    assert.ok((await firstPage.locator('[data-chat-running]').innerText()).includes('Deep diving'),
+      'the turn appeared settled while approval was pending');
+    assert.equal(await firstPage.locator('[data-turn-process="1"]').count(), 0,
       'the turn appeared settled while approval was pending');
     const pendingId = await copiedSessionId(firstPage);
     checkFirstIdentity(pendingId);
@@ -1011,7 +1015,7 @@ async function main(): Promise<void> {
       mock.baseURL, apiKey, 'pending');
     assert.ok(await approval.isVisible(), 'Web approval disappeared after refused TUI resume');
     await approval.getByRole('button', { name: 'Allow once' }).click();
-    await firstPage.getByText('Worked', { exact: true }).first().waitFor({ timeout: 30_000 });
+    await firstPage.getByText('Completed', { exact: true }).first().waitFor({ timeout: 30_000 });
     const firstId = await copiedSessionId(firstPage);
     assert.equal(firstId, pendingId, 'Web approval completed in a different session');
     await checkToolResult(firstPage);
@@ -1025,7 +1029,7 @@ async function main(): Promise<void> {
     await approval.waitFor({ timeout: 30_000 });
     await approval.getByRole('button', { name: 'Reject' }).click();
     await approval.waitFor({ state: 'hidden', timeout: 30_000 });
-    await firstPage.getByText('Worked', { exact: true }).first().waitFor({ timeout: 30_000 });
+    await firstPage.getByText('Completed', { exact: true }).first().waitFor({ timeout: 30_000 });
     const secondId = await copiedSessionId(firstPage);
     checkSecondIdentity(secondId);
     assert.ok(firstId !== secondId, 'two new sessions share an ID');

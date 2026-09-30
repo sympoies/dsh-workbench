@@ -6,8 +6,8 @@ Workbench source is separately licensed under [LICENSE](LICENSE).
 
 ## DeepSeek Harness
 
-Source: [`dsh-v0.1.7-rc.1` at
-`46a7f68b0922371ce7144b668b90e377d8e799f4`](https://github.com/deepseek-ai/deepseek-harness/blob/46a7f68b0922371ce7144b668b90e377d8e799f4/LICENSE)
+Source: [`dsh-v0.2.0-rc.2` at
+`639ed015397290b3745d163aafe02ffee4aa3f84`](https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/LICENSE)
 
 ```text
 MIT License
@@ -35,12 +35,14 @@ SOFTWARE.
 
 ## dsh-TUI
 
-Source: [`v0.11.2` at
-`dd4137129b91090184e5eaabb7b8a0a74c1b919b`](https://github.com/ccch1mneyyy/dsh-TUI/blob/dd4137129b91090184e5eaabb7b8a0a74c1b919b/LICENSE)
+Source: [`v0.12.0` at
+`3066b29113bde90606921b64bcf7c25fad31068d`](https://github.com/ccch1mneyyy/dsh-TUI/blob/3066b29113bde90606921b64bcf7c25fad31068d/LICENSE)
 
 The dsh-TUI package bundles `@dsh-tui-vendor/mathjax-tex-svg`, built from
 MathJax (`mathjax-full` 3.2.2) and mhchemParser 4.2.1 under the Apache License
 2.0. Its `LICENSE` and `NOTICE` files ship unmodified inside the installed TUI
+package. It also bundles the MIT-licensed `@dsh-std/*` packages (copyright DSH
+Standard contributors); their `LICENSE` files ship inside the installed TUI
 package.
 
 ```text
@@ -69,7 +71,7 @@ SOFTWARE.
 
 ## dsh-runtime-kit
 
-Source: [`44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3`](https://github.com/sympoies/dsh-runtime-kit/blob/44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3/LICENSE)
+Source: [`e3de3b5007d9535ccced0262e463c8fccc9c0734`](https://github.com/sympoies/dsh-runtime-kit/blob/e3de3b5007d9535ccced0262e463c8fccc9c0734/LICENSE)
 
 ```text
 MIT License

@@ -1,8 +1,8 @@
 diff --git a/lib/types/adapter/ports/channel-ui.d.ts b/lib/types/adapter/ports/channel-ui.d.ts
-index 1ffbfeb..19889a3 100644
+index a861a43..cc7d275 100644
 --- a/lib/types/adapter/ports/channel-ui.d.ts
 +++ b/lib/types/adapter/ports/channel-ui.d.ts
-@@ -512,7 +512,7 @@ export interface ChannelUi {
+@@ -531,7 +531,7 @@ export interface ChannelUi {
      setResumeTarget(sessionId: string): void;
      /** Rename the current session (`/rename`): appends a `session/title`
       *  event, which the status line and the /resume picker both read. */
@@ -64,10 +64,10 @@ index 8127eeb..9cbfc75 100644
          }
          if (appendSessionTitle(sessionId, title) !== 'appended' || !current(capture))
 diff --git a/lib/types/dsh-adapter/plugin.js b/lib/types/dsh-adapter/plugin.js
-index 5e5a31d..8ac10c9 100644
+index b91159a..4691596 100644
 --- a/lib/types/dsh-adapter/plugin.js
 +++ b/lib/types/dsh-adapter/plugin.js
-@@ -1112,7 +1112,7 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
+@@ -1129,7 +1129,7 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
      const approvalStore = new ApprovalStore(adapterRuntimeFor(ctx));
      bindApprovalStore(ctx, approvalStore);
      if (ctx.get('approval') !== undefined) {
@@ -76,7 +76,7 @@ index 5e5a31d..8ac10c9 100644
          // Badge-flip push (P-4): React does not know the session log appended —
          // a source-badge verdict that only flips inside getSnapshot() surfaces
          // solely when something else re-renders. Feed the session firehose to
-@@ -1312,50 +1312,11 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
+@@ -1367,50 +1367,11 @@ export async function apply(ctx, runtimeConfig, configOwner = ctx) {
          },
          // Only a `dsh --profile <name>` launch has a profile installation for
          // `/update` to act on; source checkouts and `--config` overlays get the
@@ -152,10 +152,10 @@ index 510a86c..5f83a5f 100644
      }
      const provider = { ask: request => answerer.ask(request) };
 diff --git a/lib/types/i18n.d.ts b/lib/types/i18n.d.ts
-index ef71399..d2b115e 100644
+index d9873ef..15d4160 100644
 --- a/lib/types/i18n.d.ts
 +++ b/lib/types/i18n.d.ts
-@@ -1868,6 +1868,10 @@ declare const dict: {
+@@ -1876,6 +1876,10 @@ declare const dict: {
          readonly zh: "需要时可在 cordis.yml 挂载对应 hooks 插件。";
          readonly en: "Mount the matching hooks plugin in cordis.yml when needed.";
      };
@@ -167,10 +167,10 @@ index ef71399..d2b115e 100644
          readonly zh: "当前运行方式不支持自动更新（需经 dsh --profile 启动），请在终端执行 dsh plugin --profile <name> update @deepseek-harness-tui/dsh-tui";
          readonly en: "Automatic update is unavailable in this launch mode (needs dsh --profile). Run dsh plugin --profile <name> update @deepseek-harness-tui/dsh-tui in a terminal.";
 diff --git a/lib/types/i18n.js b/lib/types/i18n.js
-index 54aa1c3..fcba654 100644
+index a98f956..3e63529 100644
 --- a/lib/types/i18n.js
 +++ b/lib/types/i18n.js
-@@ -560,6 +560,7 @@ const dict = {
+@@ -564,6 +564,7 @@ const dict = {
      'plan-mode-off-desc': { zh: '退出计划模式，恢复正常执行', en: 'Exit plan mode, back to normal execution' },
      'hooks-not-mounted': { zh: 'DSH hooks（dsh-hooks-claude / dsh-hooks-codex）未在本 leaf 挂载。', en: 'DSH hooks (dsh-hooks-claude / dsh-hooks-codex) are not mounted in this leaf.' },
      'hooks-mount-hint': { zh: '需要时可在 cordis.yml 挂载对应 hooks 插件。', en: 'Mount the matching hooks plugin in cordis.yml when needed.' },
@@ -179,10 +179,10 @@ index 54aa1c3..fcba654 100644
      'update-working': { zh: '当前回合仍在运行，请等待完成后再更新 TUI。', en: 'The current turn is still running. Wait for it to finish before updating the TUI.' },
      'update-starting': { zh: '正在更新 @deepseek-harness-tui/dsh-tui，完成后会自动重启并恢复当前会话……', en: 'Updating @deepseek-harness-tui/dsh-tui. The TUI will restart and resume this session when finished…' },
 diff --git a/lib/types/screens/Chat.js b/lib/types/screens/Chat.js
-index 82eee21..c5372a7 100644
+index 55c6f44..b2d067d 100644
 --- a/lib/types/screens/Chat.js
 +++ b/lib/types/screens/Chat.js
-@@ -2164,8 +2164,9 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
+@@ -2167,8 +2167,9 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
                      ]);
                      return true;
                  }
@@ -194,7 +194,7 @@ index 82eee21..c5372a7 100644
                  return true;
              }
              case 'rewind':
-@@ -4359,9 +4360,12 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
+@@ -4377,9 +4378,12 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
                                      }, onApplyTitle: () => {
                                          if (recap.title === undefined || recap.titleApplied)
                                              return;
@@ -211,7 +211,7 @@ index 82eee21..c5372a7 100644
                                          void setClipboard(btw.answer ?? '').then(raw => { if (raw)
                                              writeRaw?.(raw); });
 diff --git a/lib/types/update.js b/lib/types/update.js
-index f5edd1f..672d369 100644
+index 6fb60a3..6488673 100644
 --- a/lib/types/update.js
 +++ b/lib/types/update.js
 @@ -11,6 +11,11 @@ import { DATA_DIR } from './utils/paths.js';

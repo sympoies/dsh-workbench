@@ -8,7 +8,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { stageCombinedProfile, stageCombinedProfileFromPinnedKit } from '../src/combined-profile.ts';
 import { inspectPeerArtifact, inspectSemanticPeerArtifact, normalizePeerArtifact } from '../src/package-artifact.ts';
 
-const revision = '46a7f68b0922371ce7144b668b90e377d8e799f4';
+const revision = '639ed015397290b3745d163aafe02ffee4aa3f84';
 const releaseVersion = (JSON.parse(readFileSync(new URL('../compatibility/workbench.json', import.meta.url), 'utf8')) as
   { release: { version: string } }).release.version;
 
@@ -33,7 +33,7 @@ function fixture() {
   const artifacts = join(root, 'input');
   mkdirSync(artifacts);
   const cliArchive = join(artifacts, 'cli.tgz');
-  const cliBytes = archive('@deepseek-ai/dsh', '0.1.7-rc.1');
+  const cliBytes = archive('@deepseek-ai/dsh', '0.2.0-rc.2');
   writeFileSync(cliArchive, cliBytes);
   const cliIntegrity = `sha512-${createHash('sha512').update(cliBytes).digest('base64')}`;
   const tuiArchive = join(artifacts, 'tui.tgz');
@@ -46,7 +46,7 @@ function fixture() {
   const tuiIntegrity = `sha512-${createHash('sha512').update(tuiBytes).digest('base64')}`;
   const entries = [
     ['@deepseek-ai/cordis', '4.0.4'],
-    ['@deepseek-ai/dsh-sandbox', '0.1.7-rc.1'],
+    ['@deepseek-ai/dsh-sandbox', '0.2.0-rc.2'],
     ['@deepseek-ai/node-addon-system', '0.1.2'],
     ['@deepseek-ai/node-addon-system-darwin-arm64', '0.1.2'],
     ['@deepseek-ai/node-addon-system-darwin-x64', '0.1.2'],
@@ -76,7 +76,7 @@ function fixture() {
   const kitManifest = {
     schema_version: 'dsh-runtime-kit.dsh-compatibility.v1',
     repository: 'https://github.com/deepseek-ai/deepseek-harness',
-    validated_releases: { '0.1.7-rc.1': { revision } },
+    validated_releases: { '0.2.0-rc.2': { revision } },
     public_packages: Object.fromEntries(entries.slice(0, 2).map(([name]) => [name, {}])),
     workspace_artifacts: Object.fromEntries(packages.map(row =>
       [row.name, { version: row.version, artifact_sha256: row.artifact_sha256 }])),
@@ -113,7 +113,7 @@ test('profile roots the authenticated host closure so plugin resolution cannot f
   const { cliArchive, cliIntegrity, root, receipt, kitManifest, tuiArchive, tuiIntegrity, webArchive, webDigest } = fixture();
   try {
     const additional = ['@deepseek-ai/dsh-agent-loop', '@deepseek-ai/dsh-scope'].map(name => {
-      const version = '0.1.7-rc.1';
+      const version = '0.2.0-rc.2';
       const bytes = archive(name, version);
       const path = join(root, `${name.slice(1).replace('/', '-')}.tgz`);
       writeFileSync(path, bytes);
@@ -297,13 +297,13 @@ test('stages a portable profile from the authenticated runtime-kit patched recei
     ]);
     assert.equal(manifest.dependencies['@sympoies/dsh-runtime-kit'], undefined);
     assert.equal(manifest.dependencies['@deepseek-ai/dsh-sandbox'],
-      'file:artifacts/deepseek-ai-dsh-sandbox-0.1.7-rc.1.tgz');
+      'file:artifacts/deepseek-ai-dsh-sandbox-0.2.0-rc.2.tgz');
     assert.equal(manifest.dependencies['@deepseek-harness-tui/dsh-tui'],
-      'file:artifacts/deepseek-harness-tui-dsh-tui-0.11.2.tgz');
+      'file:artifacts/deepseek-harness-tui-dsh-tui-0.12.0.tgz');
     const workspace = readFileSync(join(profile, 'pnpm-workspace.yaml'), 'utf8');
     assert.match(workspace, /patchedDependencies:/);
-    assert.match(workspace, /'@deepseek-ai\/dsh-sandbox': 'file:artifacts\/deepseek-ai-dsh-sandbox-0\.1\.7-rc\.1\.tgz'/);
-    assert.deepEqual(readFileSync(join(profile, 'artifacts/deepseek-ai-dsh-sandbox-0.1.7-rc.1.tgz')),
+    assert.match(workspace, /'@deepseek-ai\/dsh-sandbox': 'file:artifacts\/deepseek-ai-dsh-sandbox-0\.2\.0-rc\.2\.tgz'/);
+    assert.deepEqual(readFileSync(join(profile, 'artifacts/deepseek-ai-dsh-sandbox-0.2.0-rc.2.tgz')),
       normalizePeerArtifact(readFileSync(receipt.data.packages[1].path)));
     assert.match(readFileSync(join(profile, 'cordis.yml'), 'utf8'), /^\[\]\n$/);
   } finally {
@@ -334,7 +334,7 @@ test('refuses a mixed, forged, or incomplete patched closure before creating a p
       },
     }, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity), /digest/);
     assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest: {
-      ...kitManifest, validated_releases: { '0.1.7-rc.1': { revision: '0'.repeat(40) } },
+      ...kitManifest, validated_releases: { '0.2.0-rc.2': { revision: '0'.repeat(40) } },
     }, tuiArchive, webArchive }, tuiIntegrity, webDigest, cliIntegrity), /revision/);
     assert.throws(() => stageCombinedProfile({ cliArchive, profile, receipt, kitManifest, tuiArchive, webArchive },
       'sha512-' + '0'.repeat(88), undefined, cliIntegrity), /TUI archive integrity/);
@@ -383,8 +383,8 @@ test('roots the authenticated official CLI in the same profile graph', () => {
     const input = { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive };
     stageCombinedProfile(input, tuiIntegrity, webDigest, cliIntegrity);
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'));
-    assert.equal(manifest.dependencies['@deepseek-ai/dsh'], 'file:artifacts/deepseek-ai-dsh-0.1.7-rc.1.tgz');
-    assert.deepEqual(readFileSync(join(profile, 'artifacts/deepseek-ai-dsh-0.1.7-rc.1.tgz')), readFileSync(cliArchive));
+    assert.equal(manifest.dependencies['@deepseek-ai/dsh'], 'file:artifacts/deepseek-ai-dsh-0.2.0-rc.2.tgz');
+    assert.deepEqual(readFileSync(join(profile, 'artifacts/deepseek-ai-dsh-0.2.0-rc.2.tgz')), readFileSync(cliArchive));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -393,10 +393,10 @@ test('rejects a changed or misidentified official CLI before creating the profil
   try {
     const profile = join(root, 'profile');
     const input = { profile, receipt, kitManifest, tuiArchive, webArchive, cliArchive };
-    writeFileSync(cliArchive, archive('@deepseek-ai/dsh', '0.1.7-rc.1', 'altered'));
+    writeFileSync(cliArchive, archive('@deepseek-ai/dsh', '0.2.0-rc.2', 'altered'));
     assert.throws(() => stageCombinedProfile(input, tuiIntegrity, webDigest, cliIntegrity), /Official CLI archive integrity mismatch/);
     assert.equal(existsSync(profile), false);
-    for (const [name, version] of [['@deepseek-ai/other', '0.1.7-rc.1'], ['@deepseek-ai/dsh', '0.1.7-rc.2']]) {
+    for (const [name, version] of [['@deepseek-ai/other', '0.2.0-rc.2'], ['@deepseek-ai/dsh', '0.1.7-rc.2']]) {
       const bytes = archive(name, version);
       writeFileSync(cliArchive, bytes);
       const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
