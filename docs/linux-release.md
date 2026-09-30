@@ -90,7 +90,7 @@ module-type package manifest.
 It assembles the closed profile file set, kit, nils binaries,
 notices, and license inventories; then it runs the independently loaded
 envelope and content checks on the new private output before archiving it. The
-content check compares all 83 peer packages with the pinned runtime-kit
+content check compares all 84 peer packages with the pinned runtime-kit
 compatibility record, verifies the exact profile dependencies and peer-closure
 bundle, checks official DSH/TUI SHA-512 identities and the reviewed Web
 canonical digest, and compares the seven nils executables with the pinned

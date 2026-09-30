@@ -18,7 +18,20 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.1.7` Linux x64 contract is **accepted for compatibility**; the `v0.1.6`
+The current `v0.2.0` Linux x64 contract is a **candidate**. It is the first
+Workbench graph to move DeepSeek Harness: DSH moves to `dsh-v0.2.0-rc.2` at
+`639ed015397290b3745d163aafe02ffee4aa3f84`, dsh-TUI to `v0.12.0` at
+`3066b29113bde90606921b64bcf7c25fad31068d`, and runtime-kit to commit
+`e3de3b5007d9535ccced0262e463c8fccc9c0734`, which authenticates the rc.2 release, its
+84-package workspace closure, and the rebased `native-execution-boundaries-v5`
+patch while retaining DSH 0.1.7-rc.1 as its rollback. dsh-TUI 0.12.0 validates
+primarily against DSH 0.2.0-rc.2 and still depends on
+`dsh-working-activity@0.5.0`, whose DSH peers keep the Workbench-scoped
+correction. The reviewed TUI patch is rebased onto 0.12.0 with identical
+changes; only its context and line offsets moved. The Web plugin keeps the same
+`conversation.session.header.utilities` slot, which rc.2 still provides.
+
+The previous `v0.1.7` Linux x64 contract was **accepted for compatibility**; the `v0.1.6`
 candidate was never released, because re-pinning runtime-kit changed the
 component tuple again. It keeps the DSH
 and dsh-TUI pins, moves runtime-kit to commit
@@ -169,7 +182,7 @@ portable release artifact.
 
 The TUI's `dsh-working-activity` dependency declares peers for other DSH
 releases and React 18. The selected TUI uses React 19 and declares support for
-DSH `0.1.7-rc.1`; unmodified npm and pnpm strict installs reject the combined
+DSH `0.2.0-rc.2`; unmodified npm and pnpm strict installs reject the combined
 graph. The TUI contract therefore records the exact working-activity and React
 versions for a Workbench-scoped peer correction. `node scripts/tui-compat.mjs`
 renders pnpm overrides for only that package's stale peer edges, nine DSH
@@ -284,8 +297,8 @@ single component contract before the handoff proof is repeated.
 ## Gate
 
 The current Linux graph pins runtime-kit commit
-`44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3` and its authenticated nils-cli
-1.29.4 release (the accepted rc.13 graph pinned `00f91aad` with nils-cli
+`e3de3b5007d9535ccced0262e463c8fccc9c0734` and its authenticated nils-cli
+1.31.1 release (the accepted rc.13 graph pinned `00f91aad` with nils-cli
 1.29.0). Finish-line open binds authority to the actual DSH process.
 A live owner still prevents takeover. After a crash, nils must prove that the
 owner has died, perform authoritative cleanup, rotate authority, and invalidate

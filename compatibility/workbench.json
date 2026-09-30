@@ -1,10 +1,10 @@
 {
   "schemaVersion": 3,
   "release": {
-    "version": "0.1.7",
-    "tag": "v0.1.7"
+    "version": "0.2.0",
+    "tag": "v0.2.0"
   },
-  "status": "accepted",
+  "status": "candidate",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",
@@ -16,48 +16,48 @@
     "dsh": {
       "source": {
         "url": "https://github.com/deepseek-ai/deepseek-harness",
-        "tag": "dsh-v0.1.7-rc.1",
-        "commit": "46a7f68b0922371ce7144b668b90e377d8e799f4",
-        "tree": "55a4a1b1e7df3324c3c2a7f6fa27e61fedbb7278"
+        "tag": "dsh-v0.2.0-rc.2",
+        "commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+        "tree": "ac66a6a3e77f6fa396509ddfecc7beacf0cf642a"
       },
       "package": {
         "name": "@deepseek-ai/dsh",
-        "version": "0.1.7-rc.1",
-        "integrity": "sha512-O1K076aCmqE+h4fB5J+mi3twNSAnh26OqHepaqvS5f1tccFnxhVyGpUmjcncVM5x1SX4niznmvsGrsRo9p733A=="
+        "version": "0.2.0-rc.2",
+        "integrity": "sha512-EAJ3gPNcVt/uv8X19PMm9NkVhWgT7xXNMk0UKCVm+IQ5rpSQOcsMUa0HWlnYYVybKMsccjcRB21vVVsaXQ6IdA=="
       },
       "toolchain": {
         "node": "^22.19.0 || >=24.0.0",
         "pnpm": "11.7.0"
       },
-      "status": "accepted"
+      "status": "candidate"
     },
     "runtimeKit": {
       "source": {
         "url": "https://github.com/sympoies/dsh-runtime-kit",
-        "commit": "44b8dced6ae96dd2ae3b5223bc7fae8664a4a6e3",
-        "tree": "185dc1d45ab764de1198afa33f5a8b7f943d62c4"
+        "commit": "e3de3b5007d9535ccced0262e463c8fccc9c0734",
+        "tree": "b6c3721b139141b17b8a987c3705aef6cd8b25a3"
       },
       "package": {
         "name": "@sympoies/dsh-runtime-kit",
         "version": "0.0.0",
-        "integrity": "git-tree:185dc1d45ab764de1198afa33f5a8b7f943d62c4"
+        "integrity": "git-tree:b6c3721b139141b17b8a987c3705aef6cd8b25a3"
       },
       "toolchain": {
         "node": ">=24.0.0"
       },
-      "status": "accepted"
+      "status": "candidate"
     },
     "tui": {
       "source": {
         "url": "https://github.com/ccch1mneyyy/dsh-TUI",
-        "tag": "v0.11.2",
-        "commit": "dd4137129b91090184e5eaabb7b8a0a74c1b919b",
-        "tree": "67329cdfbcdd851c85045f8b49a50504714544ef"
+        "tag": "v0.12.0",
+        "commit": "3066b29113bde90606921b64bcf7c25fad31068d",
+        "tree": "35c6d5d3f00dca51891fc486dfcfd43407867c78"
       },
       "package": {
         "name": "@deepseek-harness-tui/dsh-tui",
-        "version": "0.11.2",
-        "integrity": "sha512-50VsS38jdl0EYj4GDEzQwshIS6iyE7BEzNBQdTOJ/XqqVurftGPdDnTiVtI08wePIyQDqGcy8rZyIEaqG7A9dg=="
+        "version": "0.12.0",
+        "integrity": "sha512-T6SSLacZL1w8+I0YHUgCI//rfGrWjs12qhesRIXeG849+OSkr6bwzwl6GfMdpWSjWxQLwBpzZWEkYKa5mw2/OQ=="
       },
       "toolchain": {
         "node": "^22.19 || >=24",
@@ -69,47 +69,27 @@
       },
       "compatibilityPatch": {
         "path": "compatibility/patches/tui-rename.patch",
-        "sha256": "9393e884e9cd741890d82a959727e4ba29fa9d2fccefeb7f0c39d93eb1de94a3"
+        "sha256": "caa9d784da59914c1954f0bf5d63d09a998b01f27c692027193efe1e056c5cad"
       },
-      "status": "accepted"
+      "status": "candidate"
     }
   },
   "acceptance": {
     "runtimeKit": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-runtime-kit/actions/runs/36566672034"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "tui": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36567445313"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "web": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36570557193"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "handoff": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36570592963"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     }
   }
 }

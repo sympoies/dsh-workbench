@@ -58,7 +58,7 @@ of the patched closure.
    contains local paths and is not a release artifact.
    The registry input contains the five unmodified native-system 0.1.2 archives
    declared by the exact runtime-kit contract, downloaded with scripts disabled.
-   All 83 archives are verified; Linux x64 stages 80 packages and reports the
+   All 84 archives are verified; Linux x64 stages 81 packages and reports the
    three incompatible optional native platforms as skipped. Workbench
    deterministically repacks the authenticated workspace archives before
    staging, so gzip metadata and tar member order cannot change the frozen
@@ -111,7 +111,7 @@ of the patched closure.
    Every host-compatible archive is a direct profile dependency as well as an
    override. This keeps bundle plugin owners and their scope consumers in one
    local module graph; an override alone does not prevent a missing plugin
-   from falling back to the separately installed CLI host. All 83 archives are
+   from falling back to the separately installed CLI host. All 84 archives are
    authenticated, while the three incompatible native leaves remain outside
    the Linux x64 dependencies and overrides. Runtime-kit's public peer ABI
    remains the same ten packages.

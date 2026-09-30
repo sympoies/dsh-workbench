@@ -164,7 +164,7 @@ jobs:
             --artifact-root "$VERIFICATION_ROOT/dsh-patched-peers" \
             --consumer-root "$VERIFICATION_ROOT/kit-peer-verification" \
             > "$VERIFICATION_ROOT/kit-peer-stage.json"
-          node -e 'const r=require(process.argv[1]);if(!r.ok||r.data.verified_packages.length!==83||r.data.packages.length!==80||r.data.skipped_optional_packages.length!==3||r.data.patch_state!=="patched")process.exit(1)' \
+          node -e 'const r=require(process.argv[1]);if(!r.ok||r.data.verified_packages.length!==84||r.data.packages.length!==81||r.data.skipped_optional_packages.length!==3||r.data.patch_state!=="patched")process.exit(1)' \
             "$VERIFICATION_ROOT/kit-peer-stage.json"
       - name: Build Web plugin and stage combined Web/TUI profile
         working-directory: dsh-workbench
@@ -252,8 +252,8 @@ jobs:
           }
           const receipt = JSON.parse(readFileSync(join(root, 'dsh-patched-peer-pack.json')));
           const staged = JSON.parse(readFileSync(join(root, 'kit-peer-stage.json')));
-          if (!receipt.ok || !staged.ok || staged.data.verified_packages.length !== 83
-            || staged.data.packages.length !== 80) throw new Error('Verified patched closure required');
+          if (!receipt.ok || !staged.ok || staged.data.verified_packages.length !== 84
+            || staged.data.packages.length !== 81) throw new Error('Verified patched closure required');
           let workspace = 'overrides:\n';
           for (const row of receipt.data.packages) {
             // The reviewed repack changes tar bytes while retaining the pinned package content.
