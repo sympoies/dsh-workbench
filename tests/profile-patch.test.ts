@@ -37,7 +37,6 @@ function expressionOf(row: string, key: string): string {
 const codexModels = ['gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna'];
 const configured = {
   DSH_CODEX_SUBSCRIPTION_URL: 'https://subscription.example.invalid/v1',
-  DSH_CODEX_PROXY_URL: 'https://proxy.example.invalid/v1',
   DSH_WORKBENCH_DEFAULT_PROVIDER: 'codex-subscription',
   DSH_WORKBENCH_DEFAULT_MODEL: 'gpt-6.1-sol',
 };
@@ -49,20 +48,24 @@ test('profile keeps the Web plugin and asking approvals', () => {
   assert.ok(WORKBENCH_PROFILE_PATCH.endsWith('\n'));
 });
 
+test('the Web Models page keeps the pi-ai provider row to itself', () => {
+  // The page saves providers into this row. A patch row would replace its config, and an
+  // expression there makes the settings service refuse or drop every provider edit.
+  assert.ok(!WORKBENCH_PROFILE_PATCH.split('\n').some(line => /^\s*- id: llm-pi-ai$/.test(line)));
+});
+
 test('an unconfigured owner composes the DeepSeek-only routes and default of the base bundle', () => {
   assert.equal(evaluate(expressionOf('llm-codex-subscription', 'disabled'), {}), true);
-  assert.deepEqual(evaluate(expressionOf('llm-pi-ai', 'config'), {}), {});
   assert.deepEqual(evaluate(expressionOf('agent-default-model', 'config'), {}),
     { provider: 'deepseek-official', model: 'deepseek-flash' });
   // An empty value is not a configuration.
   const empty = Object.fromEntries(Object.keys(configured).map(name => [name, '']));
   assert.equal(evaluate(expressionOf('llm-codex-subscription', 'disabled'), empty), true);
-  assert.deepEqual(evaluate(expressionOf('llm-pi-ai', 'config'), empty), {});
   assert.deepEqual(evaluate(expressionOf('agent-default-model', 'config'), empty),
     { provider: 'deepseek-official', model: 'deepseek-flash' });
 });
 
-test('owner settings enable each Codex route and the default model independently', () => {
+test('owner settings enable the Codex subscription route and the default model', () => {
   assert.equal(evaluate(expressionOf('llm-codex-subscription', 'disabled'), configured), false);
   assert.equal(evaluate(expressionOf('llm-codex-subscription', 'baseURL'), configured),
     configured.DSH_CODEX_SUBSCRIPTION_URL);
@@ -72,21 +75,8 @@ test('owner settings enable each Codex route and the default model independently
   for (const id of codexModels) {
     assert.ok(WORKBENCH_PROFILE_PATCH.includes(`          - id: ${id}\n`), `subscription catalog lacks ${id}`);
   }
-  const proxy = evaluate(expressionOf('llm-pi-ai', 'config'), configured) as {
-    providers: Record<string, { apiKeyEnv: string; api: string; baseURL: string; models: Array<{ id: string }> }>;
-  };
-  assert.deepEqual(Object.keys(proxy.providers), ['codex-proxy']);
-  assert.equal(proxy.providers['codex-proxy'].baseURL, configured.DSH_CODEX_PROXY_URL);
-  assert.equal(proxy.providers['codex-proxy'].apiKeyEnv, 'DSH_CODEX_PROXY_TOKEN');
-  assert.equal(proxy.providers['codex-proxy'].api, 'openai-responses');
-  assert.deepEqual(proxy.providers['codex-proxy'].models.map(model => model.id), codexModels);
   assert.deepEqual(evaluate(expressionOf('agent-default-model', 'config'), configured),
     { provider: 'codex-subscription', model: 'gpt-6.1-sol' });
-  // One route alone does not switch on the other.
-  const subscriptionOnly = { DSH_CODEX_SUBSCRIPTION_URL: configured.DSH_CODEX_SUBSCRIPTION_URL };
-  assert.deepEqual(evaluate(expressionOf('llm-pi-ai', 'config'), subscriptionOnly), {});
-  assert.equal(evaluate(expressionOf('llm-codex-subscription', 'disabled'),
-    { DSH_CODEX_PROXY_URL: configured.DSH_CODEX_PROXY_URL }), true);
 });
 
 test('a half-named default model never mixes with the base default', () => {
@@ -122,6 +112,6 @@ test('the TUI runs inline only inside an agent-session managed pane', () => {
 test('the patch carries no host endpoint or credential value', () => {
   assert.doesNotMatch(WORKBENCH_PROFILE_PATCH, /https?:\/\/|127\.0\.0\.1|localhost/);
   for (const line of WORKBENCH_PROFILE_PATCH.split('\n').filter(value => /TOKEN/.test(value))) {
-    assert.match(line, /apiKeyEnv: '?DSH_CODEX_(SUBSCRIPTION|PROXY)_TOKEN'?,?$/);
+    assert.match(line, /^\s*apiKeyEnv: DSH_CODEX_SUBSCRIPTION_TOKEN$/);
   }
 });

@@ -6,10 +6,12 @@
  *   preset would otherwise reject every approval-gated action instead of asking.
  * - Keeps the official CLI's Claude Code hook bridge disabled unless the installed TUI
  *   launch runs as an agent-session managed pane and names its activity hooks.
- * - Offers the Codex subscription route, the Codex proxy route, and an owner-selected
- *   default model. Each stays off until the owner environment names its endpoint or
- *   route, so an unconfigured install composes the DeepSeek routes and the default
- *   model of the base bundle. The patch holds no endpoint and no credential value.
+ * - Offers the Codex subscription route and an owner-selected default model. Each stays
+ *   off until the owner environment names its endpoint or route, so an unconfigured
+ *   install composes the DeepSeek routes and the default model of the base bundle. The
+ *   patch holds no endpoint and no credential value.
+ * - Leaves the `llm-pi-ai` row to the base bundle: the Web Models page saves its
+ *   providers there, and a patch row would replace that config.
  * - Restates the dsh-TUI row without its `effort`, so the TUI honors the user's stored
  *   `/effort` choice and otherwise the route's own default. A row-level effort outranks
  *   the stored choice and would reset it in every new session.
@@ -69,22 +71,6 @@ export const WORKBENCH_PROFILE_PATCH = [
   '- id: approval',
   '  config:',
   '    policy: ask',
-  '- id: llm-pi-ai',
-  '  config: !!js |-',
-  '    (() => {',
-  '      const baseURL = process.env.DSH_CODEX_PROXY_URL;',
-  '      if (!baseURL) return {};',
-  "      const reasoningEfforts = { off: 'none', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' };",
-  '      const model = (id, name) => ({ id, name, contextWindow: 272000, maxTokens: 128000, reasoningEfforts });',
-  "      return { providers: { 'codex-proxy': {",
-  "        displayName: 'OpenAI Codex',",
-  "        apiKeyEnv: 'DSH_CODEX_PROXY_TOKEN',",
-  "        api: 'openai-responses',",
-  '        baseURL,',
-  "        reasoning: 'high',",
-  `        models: [${codexModels.map(([id, name]) => `model('${id}', '${name}')`).join(', ')}],`,
-  '      } } };',
-  '    })()',
   '- id: agent-default-model',
   '  config: !!js |-',
   '    (() => {',

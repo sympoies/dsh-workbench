@@ -271,20 +271,21 @@ process environment.
 
 ### Codex routes
 
-The profile ships two more model routes that stay off until the owner file
-names their endpoints. The release holds no endpoint and no credential value.
+The profile ships the `codex-subscription` model route, which stays off until
+the owner file names its endpoint. The release holds no endpoint and no
+credential value.
 
 | Owner file key | Kind | Effect |
 | --- | --- | --- |
 | `DSH_CODEX_SUBSCRIPTION_URL` | `environment` | Enables the `codex-subscription` route on this OpenAI Responses endpoint. The URL ends in `/v1`. |
 | `DSH_CODEX_SUBSCRIPTION_TOKEN` | `secretFiles` | Credential for that route. DSH does not offer a route whose credential is unset, so an endpoint that authenticates by itself still needs a placeholder value. |
-| `DSH_CODEX_PROXY_URL` | `environment` | Enables the `codex-proxy` route on this OpenAI Responses endpoint. |
-| `DSH_CODEX_PROXY_TOKEN` | `secretFiles` | Credential for that route, with the same placeholder rule. |
 | `DSH_WORKBENCH_DEFAULT_PROVIDER` and `DSH_WORKBENCH_DEFAULT_MODEL` | `environment` | The route and model of a new session, for example `codex-subscription` and `gpt-6.1-sol`. Set both; one alone is ignored. |
 
-Both routes offer `gpt-6.1-sol`, `gpt-6-sol`, `gpt-6-astra`, and `gpt-6-luna`.
+The route offers `gpt-6.1-sol`, `gpt-6-sol`, `gpt-6-astra`, and `gpt-6-luna`.
 Without these keys the profile composes the DeepSeek routes and the default
-model of the DSH base bundle, as before.
+model of the DSH base bundle, as before. The profile leaves the pi-ai provider
+row to the Web Models page, which saves its providers there; add any other
+OpenAI Responses endpoint, such as a Codex proxy, on that page.
 
 These keys are accepted from 0.2.2. An earlier release that reads the same
 owner file refuses to launch with `owner environment contains an unsupported
@@ -293,6 +294,12 @@ plan. Give each retained install root its own owner environment file, or
 remove these keys before rolling back to an earlier root.
 
 The default applies to Web and to a TUI session that has no stored choice.
+Name an enabled route: nothing checks the default, and a session on a route
+the profile does not register fails or falls back to the DeepSeek default. A
+model chosen in Web, or set when an account login initializes the default, is
+saved over this default in the install root's profile patch, and later
+owner-file changes to the default no longer apply to that root. Restoring it
+means putting the release's `agent-default-model` row back into that patch.
 dsh-TUI resolves a new session's route in this order: a stored `/model` choice
 in the user's TUI data directory, then this default. A stored choice that names
 a route the profile does not register falls back to the DeepSeek default, not
@@ -300,7 +307,7 @@ to this one; choose the model once with `/model` to replace it.
 
 The profile restates the dsh-TUI row without its reasoning effort. A new TUI
 session therefore uses the stored `/effort` choice, and otherwise the default
-of the selected route (`high` on the Codex routes). The dsh-TUI bundle's own
+of the selected route (`high` on the Codex subscription route). The dsh-TUI bundle's own
 row pins an effort that would replace the stored choice in every new session.
 The TUI runs fullscreen as in the bundle, except inside an agent-session
 managed pane, where it runs inline because the host replays and scrolls the

@@ -25,10 +25,11 @@ schema 4 contract: a fourth component, `codexSubscription`, pins
 `dsh-llm-codex-subscription-v0.2.0`) by source tree and npm integrity. That
 release supports exactly DSH 0.2.0-rc.2 and builds on the pi-ai version that
 DSH release resolves. Its archive is staged and shipped like the dsh-TUI
-archive. The profile patch adds the `codex-subscription` route, a `codex-proxy`
-route on the upstream pi-ai adapter, and an owner-selected default model; each
-stays off until the owner environment file configures it, so an unconfigured
-install composes the 0.2.1 routes and default. The patch restates two upstream
+archive. The profile patch adds the `codex-subscription` route and an
+owner-selected default model; both stay off until the owner environment file
+configures them, so an unconfigured install composes the 0.2.1 routes and
+default. The patch leaves the pi-ai provider row, which the Web Models page
+edits, to the base bundle. It restates two upstream
 rows, and the combined-profile workflow fails when either drifts from its
 pinned bundle: `agent-default-model` of the DSH base bundle, and `dsh-tui` of
 the dsh-TUI bundle, restated without `effort` and with fullscreen off inside an
