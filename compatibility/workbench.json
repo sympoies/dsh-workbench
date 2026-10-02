@@ -1,10 +1,10 @@
 {
   "schemaVersion": 4,
   "release": {
-    "version": "0.2.2",
-    "tag": "v0.2.2"
+    "version": "0.2.3",
+    "tag": "v0.2.3"
   },
-  "status": "accepted",
+  "status": "candidate",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",
@@ -34,18 +34,18 @@
     "runtimeKit": {
       "source": {
         "url": "https://github.com/sympoies/dsh-runtime-kit",
-        "commit": "3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9",
-        "tree": "dd9a6be4a2d619cff6e0e4002ba71c82b7096522"
+        "commit": "742eee54328deaed048ef877db83ff6eeb31b88f",
+        "tree": "94df818eab949067b14a0ee589068dc30c68234d"
       },
       "package": {
         "name": "@sympoies/dsh-runtime-kit",
         "version": "0.0.0",
-        "integrity": "git-tree:dd9a6be4a2d619cff6e0e4002ba71c82b7096522"
+        "integrity": "git-tree:94df818eab949067b14a0ee589068dc30c68234d"
       },
       "toolchain": {
         "node": ">=24.0.0"
       },
-      "status": "accepted"
+      "status": "candidate"
     },
     "tui": {
       "source": {
@@ -93,40 +93,20 @@
   },
   "acceptance": {
     "runtimeKit": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-runtime-kit/actions/runs/36731241458"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "tui": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36749094796"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "web": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36752894456"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "handoff": {
-      "status": "passed",
-      "evidence": [
-        {
-          "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36752936552"
-        }
-      ]
+      "status": "pending",
+      "evidence": []
     }
   }
 }
