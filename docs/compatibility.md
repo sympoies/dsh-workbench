@@ -18,7 +18,7 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The `v0.2.3` Linux x64 contract is a **candidate**. It advances runtime-kit
+The `v0.2.3` Linux x64 contract is **accepted for compatibility**. It advances runtime-kit
 to the reviewed nils-cli 1.31.13 adoption and activation catalog repair,
 including the packaged peer-coordination guidance and managed-session reminder
 integration. The
@@ -26,8 +26,13 @@ companion release comes from that source's authenticated `compatibility/nils-cli
 Workbench does not maintain a second editable hook pin. DSH, dsh-TUI, and the
 Codex subscription provider retain the exact source and package identities
 from Workbench v0.2.2. The new graph, Web
-artifact, runtime-kit package, and frozen profile records require fresh
-installed TUI, Web, and handoff acceptance before promotion or publication.
+artifact, runtime-kit package, and frozen profile records passed fresh
+installed TUI, Web, and handoff acceptance. All four gates have current evidence:
+[runtime-kit](https://github.com/sympoies/dsh-runtime-kit/actions/runs/37080966681),
+[TUI](https://github.com/sympoies/dsh-workbench/actions/runs/37084576653),
+[Web](https://github.com/sympoies/dsh-workbench/actions/runs/37084696752), and
+[cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/37084698852).
+Publication and owner deployment remain separate gates.
 
 The previous `v0.2.2` Linux x64 contract is **accepted for compatibility**. It is the first
 schema 4 contract: a fourth component, `codexSubscription`, pins
