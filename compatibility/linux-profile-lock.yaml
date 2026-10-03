@@ -3605,7 +3605,7 @@ packages:
       '@deepseek-ai/dsh-llm-pi-ai': 0.2.0-rc.2
 
   '@sympoies/dsh-workbench-web@file:artifacts/sympoies-dsh-workbench-web-0.2.3.tgz':
-    resolution: {integrity: sha512-spOfcI1Nu3/8xIYlAk1ZIOnhYaLfwHzn2vQrmngluPkvW4X/DMAT6gLs+ltaSKIDcu9exME9wpakvChfSzEFtg==, tarball: file:artifacts/sympoies-dsh-workbench-web-0.2.3.tgz}
+    resolution: {integrity: sha512-/5IowomW1jYwUlYJv1HEZnOQtmxA3zse1lXE6FsCETWqVP6tfdjDbLkARuy0P8fYgTZvF8kGoL9dmiH/1/46tA==, tarball: file:artifacts/sympoies-dsh-workbench-web-0.2.3.tgz}
     version: 0.2.3
     peerDependencies:
       '@deepseek-ai/cordis': 4.0.4

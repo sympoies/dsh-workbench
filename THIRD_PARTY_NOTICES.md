@@ -71,7 +71,7 @@ SOFTWARE.
 
 ## dsh-runtime-kit
 
-Source: [`742eee54328deaed048ef877db83ff6eeb31b88f`](https://github.com/sympoies/dsh-runtime-kit/blob/742eee54328deaed048ef877db83ff6eeb31b88f/LICENSE)
+Source: [`6449ff8b5c032c53f8153f6c85d1466235499d75`](https://github.com/sympoies/dsh-runtime-kit/blob/6449ff8b5c032c53f8153f6c85d1466235499d75/LICENSE)
 
 ```text
 MIT License

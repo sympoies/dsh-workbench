@@ -19,8 +19,9 @@ Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
 The `v0.2.3` Linux x64 contract is a **candidate**. It advances runtime-kit
-to the reviewed nils-cli 1.31.13 adoption revision, including the packaged
-peer-coordination guidance and managed-session reminder integration. The
+to the reviewed nils-cli 1.31.13 adoption and activation catalog repair,
+including the packaged peer-coordination guidance and managed-session reminder
+integration. The
 companion release comes from that source's authenticated `compatibility/nils-cli.json`;
 Workbench does not maintain a second editable hook pin. DSH, dsh-TUI, and the
 Codex subscription provider retain the exact source and package identities
