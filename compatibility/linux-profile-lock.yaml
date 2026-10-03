@@ -359,8 +359,8 @@ importers:
         specifier: file:artifacts/sympoies-dsh-llm-codex-subscription-0.2.0.tgz
         version: file:artifacts/sympoies-dsh-llm-codex-subscription-0.2.0.tgz(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-attachment@file:artifacts/deepseek-ai-dsh-attachment-0.2.0-rc.2.tgz(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-brand@file:artifacts/deepseek-ai-dsh-brand-0.2.0-rc.2.tgz(@deepseek-ai/cordis@4.0.4)))(@deepseek-ai/dsh-launch-environment@file:artifacts/deepseek-ai-dsh-launch-environment-0.2.0-rc.2.tgz(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-llm-pi-ai@0.2.0-rc.2(3d043a4e5d51f333712da520208fa0ef))(@deepseek-ai/dsh-llm@file:artifacts/deepseek-ai-dsh-llm-0.2.0-rc.2.tgz(@deepseek-ai/cordis@4.0.4))(supports-color@7.2.0)(ws@8.22.0)(zod@4.6.5)
       '@sympoies/dsh-workbench-web':
-        specifier: file:artifacts/sympoies-dsh-workbench-web-0.2.2.tgz
-        version: file:artifacts/sympoies-dsh-workbench-web-0.2.2.tgz(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-client-ui-conversation@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-renderer@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-session@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(react@19.3.0)
+        specifier: file:artifacts/sympoies-dsh-workbench-web-0.2.3.tgz
+        version: file:artifacts/sympoies-dsh-workbench-web-0.2.3.tgz(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-client-ui-conversation@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-renderer@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-session@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(react@19.3.0)
 
 packages:
 
@@ -3604,9 +3604,9 @@ packages:
       '@deepseek-ai/dsh-llm': 0.2.0-rc.2
       '@deepseek-ai/dsh-llm-pi-ai': 0.2.0-rc.2
 
-  '@sympoies/dsh-workbench-web@file:artifacts/sympoies-dsh-workbench-web-0.2.2.tgz':
-    resolution: {integrity: sha512-kEOcsmflt5cY9i8JE3tH20DEvjofh266shC/OjYp4e0N+8hy5sovaFgRusxQQXB08Y9YMeqUCZXapTN7iuFydg==, tarball: file:artifacts/sympoies-dsh-workbench-web-0.2.2.tgz}
-    version: 0.2.2
+  '@sympoies/dsh-workbench-web@file:artifacts/sympoies-dsh-workbench-web-0.2.3.tgz':
+    resolution: {integrity: sha512-/5IowomW1jYwUlYJv1HEZnOQtmxA3zse1lXE6FsCETWqVP6tfdjDbLkARuy0P8fYgTZvF8kGoL9dmiH/1/46tA==, tarball: file:artifacts/sympoies-dsh-workbench-web-0.2.3.tgz}
+    version: 0.2.3
     peerDependencies:
       '@deepseek-ai/cordis': 4.0.4
       '@deepseek-ai/dsh-client-ui-conversation': 0.2.0-rc.2
@@ -8448,7 +8448,7 @@ snapshots:
       - ws
       - zod
 
-  '@sympoies/dsh-workbench-web@file:artifacts/sympoies-dsh-workbench-web-0.2.2.tgz(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-client-ui-conversation@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-renderer@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-session@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(react@19.3.0)':
+  '@sympoies/dsh-workbench-web@file:artifacts/sympoies-dsh-workbench-web-0.2.3.tgz(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-client-ui-conversation@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-renderer@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-session@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))(react@19.3.0)':
     dependencies:
       '@deepseek-ai/cordis': file:artifacts/deepseek-ai-cordis-4.0.4.tgz(@deepseek-ai/cordis-plugin-include@1.0.9)(@deepseek-ai/cordis-plugin-loader@1.0.5)
       '@deepseek-ai/dsh-client-ui-conversation': 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)

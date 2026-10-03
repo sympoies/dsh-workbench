@@ -1,8 +1,8 @@
 {
   "schemaVersion": 4,
   "release": {
-    "version": "0.2.2",
-    "tag": "v0.2.2"
+    "version": "0.2.3",
+    "tag": "v0.2.3"
   },
   "status": "accepted",
   "runtime": {
@@ -34,13 +34,13 @@
     "runtimeKit": {
       "source": {
         "url": "https://github.com/sympoies/dsh-runtime-kit",
-        "commit": "3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9",
-        "tree": "dd9a6be4a2d619cff6e0e4002ba71c82b7096522"
+        "commit": "6449ff8b5c032c53f8153f6c85d1466235499d75",
+        "tree": "47e8146ffa5c4b6ce86ff50f3fc410946110381b"
       },
       "package": {
         "name": "@sympoies/dsh-runtime-kit",
         "version": "0.0.0",
-        "integrity": "git-tree:dd9a6be4a2d619cff6e0e4002ba71c82b7096522"
+        "integrity": "git-tree:47e8146ffa5c4b6ce86ff50f3fc410946110381b"
       },
       "toolchain": {
         "node": ">=24.0.0"
@@ -97,7 +97,7 @@
       "evidence": [
         {
           "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-runtime-kit/actions/runs/36731241458"
+          "url": "https://github.com/sympoies/dsh-runtime-kit/actions/runs/37080966681"
         }
       ]
     },
@@ -106,7 +106,7 @@
       "evidence": [
         {
           "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36749094796"
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/37084576653"
         }
       ]
     },
@@ -115,7 +115,7 @@
       "evidence": [
         {
           "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36752894456"
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/37084696752"
         }
       ]
     },
@@ -124,7 +124,7 @@
       "evidence": [
         {
           "platform": "linux-x64",
-          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/36752936552"
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/37084698852"
         }
       ]
     }

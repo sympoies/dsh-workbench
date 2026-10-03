@@ -1,9 +1,9 @@
 {
   "schemaVersion": "dsh-workbench.linux-artifacts.v2",
-  "releaseVersion": "0.2.2",
-  "runtimeKitPackageCanonicalSha256": "c38ea395ae1c01aeb8e4bb9bf35f2c12eecfdea7a2136a7bf0ad9da90c3a04a5",
+  "releaseVersion": "0.2.3",
+  "runtimeKitPackageCanonicalSha256": "8e8f60680195448a7ac69d619caea56945fc23e6716596452bc910a2e0605439",
   "profileWorkspaceRawSha256": "2c4ab87468a83ea62ec0bd28743b72a11f2e67c0006c420d929b678be7512f64",
-  "profileLockRawSha256": "e0feb16c150c1e3c8eb2f3f33638372c206296290ac6c14581f43e6327224c0e",
+  "profileLockRawSha256": "65ae5c2eb722074d127b58b1d8d1fe82c4ec7c6d690482614c92ca578d66efd9",
   "peerSemanticArtifacts": [
     {
       "name": "@deepseek-ai/cordis",
@@ -401,5 +401,5 @@
       "semanticSha256": "4faaebc1e1a78fc2235ae82dea2a56ab4d8b8fa6c95d1c6fbb36e671c9043c65"
     }
   ],
-  "webSemanticSha256": "1ac1a2801bb2e4ec1a8635c6814731793e02a1d8abab5f7ba6557dd24e35fcf2"
+  "webSemanticSha256": "2c856c46c247136d347e733d5c607ddcdc4ca58d5e944c93faeb4a01c13de374"
 }
