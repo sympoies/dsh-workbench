@@ -235,11 +235,11 @@ test('a timed-out installer command cannot leave a descendant that mutates later
     const marker = join(root, 'late-mutation');
     const command = join(root, 'spawn-descendant.cjs');
     writeFileSync(command, `const { spawn } = require('node:child_process');
-spawn(process.execPath, ['-e', ${JSON.stringify(
-  `setTimeout(() => require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'late'), 500)`) }],
-  { stdio: 'ignore' });
+spawn(process.execPath, ['-e',
+  "setTimeout(() => require('node:fs').writeFileSync(process.argv[1], 'late'), 500)",
+  process.argv[2]], { stdio: 'ignore' });
 setTimeout(() => {}, 10000);\n`, { mode: 0o600 });
-    assert.throws(() => runInstallerCommand(process.execPath, [command], root,
+    assert.throws(() => runInstallerCommand(process.execPath, [command, marker], root,
       process.env, 'timeout fixture', 100), /timeout fixture/);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 650);
     assert.equal(existsSync(marker), false);
