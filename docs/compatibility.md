@@ -27,7 +27,9 @@ Workbench does not maintain a second editable hook pin. DSH, dsh-TUI, and the
 Codex subscription provider retain the exact source and package identities
 from Workbench v0.2.2. The new graph, Web
 artifact, runtime-kit package, and frozen profile records passed fresh
-installed TUI, Web, and handoff acceptance. All four gates have current evidence:
+installed TUI, Web, and handoff acceptance.
+
+All four gates have current evidence:
 [runtime-kit](https://github.com/sympoies/dsh-runtime-kit/actions/runs/37080966681),
 [TUI](https://github.com/sympoies/dsh-workbench/actions/runs/37084576653),
 [Web](https://github.com/sympoies/dsh-workbench/actions/runs/37084696752), and
@@ -45,7 +47,9 @@ archive. The profile patch adds the `codex-subscription` route and an
 owner-selected default model; both stay off until the owner environment file
 configures them, so an unconfigured install composes the 0.2.1 routes and
 default. The patch leaves the pi-ai provider row, which the Web Models page
-edits, to the base bundle. It restates two upstream
+edits, to the base bundle.
+
+It restates two upstream
 rows, and the combined-profile workflow fails when either drifts from its
 pinned bundle: `agent-default-model` of the DSH base bundle, and `dsh-tui` of
 the dsh-TUI bundle, restated without `effort` and with fullscreen off inside an
@@ -53,7 +57,9 @@ agent-session managed pane. runtime-kit moves to commit
 `3b822a93e7a5a6ff2df93fbb9b3855f0122fbbc9`, whose history adapter reads
 Workbench session stores through the installed profile; its DSH and nils-cli
 records are unchanged, so the patched 84-package closure and its semantic
-identities are the same as in 0.2.1. All four gates have current evidence:
+identities are the same as in 0.2.1.
+
+All four gates have current evidence:
 [runtime-kit](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36731241458),
 [TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36749094796),
 [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36752894456), and
@@ -71,6 +77,7 @@ so `v0.2.0` was never released. Correcting the record changes the release
 identity, and the Web package embeds the release version, so the TUI, Web, and
 cross-interface handoff gates were re-run; the runtime-kit gate keeps its
 [evidence](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36697031259).
+
 Distinct current-version runs supplied the
 [TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36713480047), [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36714894978), and
 [cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36714902842) evidence. Deployments are
@@ -87,7 +94,9 @@ patch while retaining DSH 0.1.7-rc.1 as its rollback. dsh-TUI 0.12.0 validates
 primarily against DSH 0.2.0-rc.2 and still depends on
 `dsh-working-activity@0.5.0`, whose DSH peers keep the Workbench-scoped
 correction. The reviewed TUI patch is rebased onto 0.12.0 with identical
-changes; only its context and line offsets moved. The Web plugin keeps the same
+changes; only its context and line offsets moved.
+
+The Web plugin keeps the same
 `conversation.session.header.utilities` slot, which rc.2 still provides.
 The rc.2 Web chat shows a running Turn only in its live running indicator and
 renders the Turn-process summary once the Turn settles; settled Turns read
@@ -109,7 +118,9 @@ in the agent's scope, like approvals, and the pinned TUI registered its answerer
 without `{ global: true, prepend: true }`. The question then never reached the
 TUI: the turn waited on an answer while the screen showed only its working line.
 The 0.1.5 agent delivery acceptance stopped there. The real-TTY acceptance now
-answers an agent question in the TUI. The runtime-kit revision tells the agent
+answers an agent question in the TUI.
+
+The runtime-kit revision tells the agent
 that `runtime_kit_governed_commit` commits only the session cwd and that any
 other worktree commits with `semantic-commit commit --repo`; in the same run the
 agent had used the tool from a default-branch session cwd and could not commit.
@@ -129,7 +140,9 @@ depends on `dsh-working-activity@0.5.0`. The reviewed TUI patch is rebased onto
 0.11.2 with the same behavior. Upstream now writes the user-title payload for
 both renames, so the patch no longer changes `appendSessionTitle`, but live
 `/rename` still appends without DSH's projection-cache barrier and keeps the
-patched title-service path. The first ordinary launch of a home without
+patched title-service path.
+
+The first ordinary launch of a home without
 `~/.dsh-tui/home.json` now opens the TUI's one-shot workspace home; 0.11.0
 skipped it because it read the launch's profile arguments as a first prompt.
 The acceptance fixtures record that home as seen and drive the chat screen.
@@ -157,7 +170,9 @@ nils-cli 1.29.3 companions, whose agent-hook no longer blocks read-only commands
 with descriptor duplications, quoted glob characters, or mid-word tildes, and
 it retires a finish-line ledger whose checkout the agent removed during a turn
 instead of ending the turn as `finish-line unavailable`. The runtime-kit DSH
-patch is unchanged. Distinct current-version runs supplied the
+patch is unchanged.
+
+Distinct current-version runs supplied the
 [runtime-kit](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36508915988),
 [TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36509204697), [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36510431654), and
 [cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36510449853) evidence. Deployments are
@@ -172,7 +187,9 @@ the Web identity, Web artifact, Linux profile lock, and Linux artifact record
 new values. Three distinct current-version Linux profile runs supplied the
 [TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36481063825), [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36483645255), and
 [cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36483672331) evidence; the
-runtime-kit pin and its evidence are unchanged. Deployments are accepted
+runtime-kit pin and its evidence are unchanged.
+
+Deployments are accepted
 separately by the [agent delivery acceptance](agent-acceptance.md).
 
 The `v0.1.1` Linux x64 contract was **accepted for compatibility**. It keeps every
@@ -186,6 +203,7 @@ registry check is off. Otherwise `/update` would run
 `dsh plugin --profile workbench update` against the installed home and drift
 the accepted graph in place. The changed patch digest gives the Web identity,
 Web artifact, both profile lockfiles, and the Linux artifact record new values.
+
 Three distinct current-version Linux profile runs supplied the
 [TUI](https://github.com/sympoies/dsh-workbench/actions/runs/36437868830), [Web](https://github.com/sympoies/dsh-workbench/actions/runs/36439691635), and
 [cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/36443105642) evidence for the changed graph; the
@@ -207,7 +225,9 @@ release, portable installer, OCI image, or owner deployment is published by
 that status. Those remain separate [#9](https://github.com/sympoies/dsh-workbench/issues/9)
 and [#8](https://github.com/sympoies/dsh-workbench/issues/8) gates. Its DSH and TUI package integrity values
 come from the npm registry at the pinned package versions. Git commit and tree
-values identify the upstream source revisions. The runtime-kit source pins
+values identify the upstream source revisions.
+
+The runtime-kit source pins
 the merged DSH 0.1.7 support from [PR #272](https://github.com/sympoies/dsh-runtime-kit/pull/272),
 the authenticated patched peer closure from
 [PR #274](https://github.com/sympoies/dsh-runtime-kit/pull/274), and the typed
@@ -219,7 +239,9 @@ exact committed approval-rejection cleanup from
 crash recovery with canonical managed-session authentication from
 [PR #288](https://github.com/sympoies/dsh-runtime-kit/pull/288);
 runtime-kit has no published npm release at this revision, so its Git tree is
-its source integrity identity. The contract records the upstream package
+its source integrity identity.
+
+The contract records the upstream package
 version `0.0.0` for runtime-kit; that is not a Workbench release version.
 These identities were checked on 2026-09-27. Runtime-kit compatibility and
 managed-worktree recovery passed its owner CI. The graph's native Web/TUI
@@ -259,6 +281,7 @@ working-activity dependency and the graph's React version. Among its peers,
 the package imports only `@deepseek-ai/schemastery` at runtime; its DSH peers
 are type imports, and its Web client is a self-contained bundle. The corrected graph passed a strict frozen install in
 an isolated probe, and a disposable TUI profile reached the terminal UI.
+
 The Linux real-TTY acceptance additionally drove both an allowed-once and a
 rejected Bash escalation through the pinned TUI, then verified distinct
 Session V4 decisions, tool results, completed turns, and command execution or
@@ -269,7 +292,9 @@ exact fixture session count and the long session's unique title in `/resume`.
 The terminal assertion reconstructs the screen
 from ANSI updates; searching the output byte stream cannot verify a changed
 count because the TUI may emit only the changed digit. Those isolated checks
-preceded the accepted combined Linux TUI gate below. The overrides do
+preceded the accepted combined Linux TUI gate below.
+
+The overrides do
 not relax peer checks for any other
 dependency; a future installer must include them in its frozen graph and
 reject an unexpected working-activity version.
@@ -286,7 +311,9 @@ TUI title or acknowledging success. Both `/rename` and recap-title application
 handle rejection; a changed channel binding cannot acknowledge the old operation
 as a rename of the current session. This preserves the upstream cache's
 write-behind policy while making a completed TUI rename visible in an unopened
-Web sidebar. The generic TUI port allows `void | Promise<void>` for other
+Web sidebar.
+
+The generic TUI port allows `void | Promise<void>` for other
 adapters; the patched DSH carrier returns `Promise<void>`.
 The patch path and SHA-256 digest are part of the single contract;
 the frozen profile lock records pnpm's patch hash. A real-terminal regression
@@ -311,7 +338,9 @@ smoke. The same two-platform CI separately exercised the pinned TUI profile
 in a real PTY: approval allow/reject, tool results, 72-turn history,
 exact-ID resume, and rename survived exit and restart. This proves TUI
 behavior on both targets but does not yet exercise a real TTY on the combined
-`workbench` profile or complete the Web/TUI handoff gate. Workbench
+`workbench` profile or complete the Web/TUI handoff gate.
+
+Workbench
 `v0.1.0-rc.6` adds the Workbench-built native Web plugin archive and checks its
 package name, version, and canonical artifact SHA-256 against the reviewed
 [`web-artifact.json`](../compatibility/web-artifact.json) record before adding
@@ -321,10 +350,12 @@ turn, but governed Bash remains a separate acceptance gate.
 The publication comparison treats the reviewed Web artifact digest as part of
 the release identity, including the first addition of the record. A changed
 digest requires a higher Workbench release version.
+
 Workbench `v0.1.0-rc.7` pins runtime-kit's typed nils host-denial diagnostics
 and records the resulting Web plugin identity and artifact digest. This
 diagnostic change does not provide the missing macOS finish-line backend or
 accept the candidate graph.
+
 Workbench `v0.1.0-rc.9` extends the exact TUI 0.11.0 compatibility patch so
 its approval listener receives requests dispatched in a DSH agent scope and
 runs before DSH's global `Include` listener, which otherwise ends the
@@ -336,6 +367,7 @@ belongs to a live tool call before presenting it. The patch digest, frozen TUI
 profile lock, Web identity, and reviewed Web artifact digest are updated
 together. Combined-profile allow/reject acceptance remains required before
 this candidate can be accepted.
+
 Workbench `v0.1.0-rc.10` pins the merged runtime-kit finish-line lifecycle
 repair at commit `407da96d891a6457b20b375406e2460cfd576b6b` and its exact
 Git tree. The combined-profile acceptance now checks browser approval allow
@@ -347,7 +379,9 @@ pending an OS-enforced descendant-cleanup backend under
 The pin also includes runtime-kit's managed DSH home instructions at
 `<dshHome>/AGENTS.md`. Setup, update, and rollback preview refuse an existing
 file without a recorded runtime-kit digest with exit 65 and
-`agent-home-unmanaged`, leaving that file unchanged. An operator must move or
+`agent-home-unmanaged`, leaving that file unchanged.
+
+An operator must move or
 merge the existing instructions before retrying; the portable installer must
 test this migration on copies under [#9](https://github.com/sympoies/dsh-workbench/issues/9).
 The [rc.7 combined-profile matrix](https://github.com/sympoies/dsh-workbench/actions/runs/36242300610)
@@ -375,7 +409,9 @@ turn does not inherit permission to execute an unapproved command. Sessions
 without a committed recoverable owner binding still fail closed; this protocol
 does not permit stealing another live owner's authority. The installed Linux
 gate proved pending-approval SIGKILL recovery through TUI and reopening in
-Web, alongside ordinary allow/reject and handoff. The four distinct public
+Web, alongside ordinary allow/reject and handoff.
+
+The four distinct public
 records in the contract are the
 [runtime-kit owner CI](https://github.com/sympoies/dsh-runtime-kit/actions/runs/36348019468),
 [combined TUI profile](https://github.com/sympoies/dsh-workbench/actions/runs/36351502065),
@@ -435,6 +471,8 @@ artifact. The external contract owns acceptance; the Web package does not
 advertise an acceptance verdict. Its package build checks that identity against
 the contract.
 This identifies a graph build; it does not prove the actual installed
-runtime-kit or TUI package matches. Future Web images, TUI packages, install
+runtime-kit or TUI package matches.
+
+Future Web images, TUI packages, install
 receipts, and release metadata must verify the installed graph and derive
 their identity from the same contract before activation.

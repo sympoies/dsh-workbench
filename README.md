@@ -35,3 +35,5 @@ deployment only when it delivers a correct pull request.
 See [DEVELOPMENT.md](DEVELOPMENT.md) for contributor workflow and
 [docs/devlog/README.md](docs/devlog/README.md) for durable development
 decisions.
+
+Use the [documentation map](docs/README.md) to find a guide by task.
