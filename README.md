@@ -7,10 +7,14 @@ and resume them sequentially.
 
 The [machine-readable contract](compatibility/workbench.json) accepts the
 exact Linux x64 component combination after installed Web/TUI and session
-handoff checks. It does not yet provide a portable installer, published
-Workbench release, or owner deployment. Follow the
-[roadmap](https://github.com/sympoies/dsh-workbench/issues/10) for the
-acceptance gates and release work.
+handoff checks. Linux x64 Workbench releases are published on
+[GitHub Releases](https://github.com/sympoies/dsh-workbench/releases) as a
+native-install archive, its OCI artifact carrier, and a release receipt. The
+two-phase portable installer, `scripts/linux-install.mjs`, installs a release
+archive; see [Linux owner installation](docs/linux-release.md#linux-owner-installation).
+Follow the [roadmap](https://github.com/sympoies/dsh-workbench/issues/10) for
+the remaining acceptance gates and release work, such as macOS arm64
+([issue #47](https://github.com/sympoies/dsh-workbench/issues/47)).
 
 This repository owns portable product code and release artifacts. Host paths,
 credentials, exposure, persistent data, and deployment cutover belong to each
