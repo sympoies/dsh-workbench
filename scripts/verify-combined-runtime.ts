@@ -92,6 +92,9 @@ const runtimeEnvironment = {
   DSH_RUNTIME_KIT_AGENT_HOOK_POLICY: policyPath,
   DSH_RUNTIME_KIT_AGENT_HOOK_STATE_DIR: join(stateHome, 'agent-hook-dsh'),
   DSH_RUNTIME_KIT_PRIVATE_SKILLS_DIR: join(root, 'private-skills'),
+  // A runtime-kit that predates the agent-docs retirement still declares and probes it.
+  ...Object.hasOwn(JSON.parse(readFileSync(join(kitPackage, 'compatibility', 'nils-cli.json'), 'utf8'))
+    .release.artifacts, 'agent-docs') ? { DSH_RUNTIME_KIT_AGENT_DOCS_BIN: join(nilsBin, 'agent-docs') } : {},
 };
 // This disposable installation owns its DSH sessions. An outer agent's managed
 // principal belongs to another checkout and must not claim these test sessions.

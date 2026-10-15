@@ -266,9 +266,11 @@ still requests approval, such as taking over a managed worktree, asks the
 operator instead of being rejected. The
 install-private homes still isolate runtime-kit
 setup, and the pinned hook policy and state paths stay explicit. The
-installer no longer requires an `agent-docs` binary or copies an agent-docs
-catalog; runtime-kit owns its activated documents. An older installation's
-unused `agent-docs/` directory is left in place.
+installer no longer copies an agent-docs catalog; runtime-kit owns its
+activated documents. It passes the authenticated `agent-docs` executable from
+the release only while the selected runtime-kit's nils declaration still lists
+it, and requires nothing when the declaration omits it. An older
+installation's unused `agent-docs/` directory is left in place.
 Isolation belongs to a container or an explicit sandbox, not to an edited
 process environment.
 

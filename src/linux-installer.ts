@@ -198,7 +198,18 @@ export function runInstallerCommand(executable: string, args: string[], cwd: str
   return result.stdout;
 }
 
-function runtimeEnvironment(root: string, config: Record<string, string>,
+/**
+ * The authenticated agent-docs executable when the selected runtime-kit still declares
+ * it. A runtime-kit that predates the agent-docs retirement probes this executable during
+ * setup and does not find it on PATH; a release whose declaration omits it needs none.
+ */
+export function selectedAgentDocsBin(releaseRoot: string,
+  nilsRelease: Pick<LinuxReleaseManifest['nilsRelease'], 'toolPaths'>): string | undefined {
+  return nilsRelease.toolPaths.includes('nils/bin/agent-docs')
+    ? join(releaseRoot, 'nils/bin/agent-docs') : undefined;
+}
+
+export function runtimeEnvironment(root: string, config: Record<string, string>,
   owner: OwnerEnvironment, pnpmEnvironment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = { ...pnpmEnvironment,
     PATH: `${dirname(config.dshDirectBin)}:${dirname(process.execPath)}:/usr/bin:/bin`,
@@ -220,6 +231,7 @@ function runtimeEnvironment(root: string, config: Record<string, string>,
     DSH_RUNTIME_KIT_AGENT_HOOK_STATE_DIR: join(root, 'state/agent-hook-dsh'),
     DSH_RUNTIME_KIT_PRIVATE_SKILLS_DIR: config.privateSkillsDir,
   });
+  if (config.agentDocsBin !== undefined) environment.DSH_RUNTIME_KIT_AGENT_DOCS_BIN = config.agentDocsBin;
   return environment;
 }
 
@@ -441,6 +453,7 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       { flag: 'wx', mode: 0o700 });
     chmodSync(dshDirectBin, 0o700);
     writePackageManagerShims(binDir, process.execPath, input.pnpmExecutable, pnpmEnvironment);
+    const agentDocsBin = selectedAgentDocsBin(releaseRoot, manifest.nilsRelease);
     const config = {
       schemaVersion: 'dsh-workbench.linux-launch.v1',
       ownerEnvironmentFile: input.ownerEnvironmentFile,
@@ -451,6 +464,7 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       privateSkillsDir: join(root, 'private-skills'),
       hookConfig, hookPolicy,
       agentHookBin: join(releaseRoot, 'nils/bin/agent-hook'),
+      ...agentDocsBin === undefined ? {} : { agentDocsBin },
       dshDirectBin, agentSessionHooks,
     };
     const launchConfig = join(root, 'launch-config.json');

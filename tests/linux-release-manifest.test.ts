@@ -143,6 +143,15 @@ test('release verification accepts a nils set without agent-docs and an older on
       assert.equal(verifyLinuxReleaseEnvelope(release.root, digest).nilsRelease.toolPaths.length, tools.length);
     } finally { release.cleanup(); }
   }
+  // A runtime-kit that still declares agent-docs keeps requiring its authenticated executable.
+  const pinned = fixture([...nilsTools, 'agent-docs']);
+  try {
+    pinned.write();
+    pinned.manifest.nilsRelease.toolPaths = nilsTools.map(name => `nils/bin/${name}`);
+    const bytes = `${JSON.stringify(pinned.manifest)}\n`;
+    writeFileSync(join(pinned.root, 'release-manifest.json'), bytes);
+    assert.throws(() => verifyLinuxReleaseEnvelope(pinned.root, sha256(bytes)), /nils tools differ from pinned runtime-kit/);
+  } finally { pinned.cleanup(); }
   for (const tools of [nilsTools.filter(name => name !== 'agent-hook'), [...nilsTools, 'unexpected-tool']]) {
     const release = fixture(tools);
     try {
