@@ -263,6 +263,15 @@ test('runtime-kit setup failure reports only its bounded diagnostic code', () =>
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('installation and launch neither require an agent-docs binary nor copy its catalog', () => {
+  // The retired nils-cli agent-docs tool may be absent from both the nils release and
+  // the runtime-kit package, so no install, launch, or verification path may name it.
+  for (const path of ['src/linux-installer.ts', 'src/linux-installed-launch.ts',
+    'scripts/verify-owner-install.ts', 'scripts/verify-combined-runtime.ts']) {
+    assert.doesNotMatch(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'), /agent[-_]?docs/i, path);
+  }
+});
+
 test('the installed agent-session hook surface reports DSH turn lifecycle only', () => {
   assert.deepEqual(JSON.parse(AGENT_SESSION_HOOKS), { hooks: {
     UserPromptSubmit: [{ hooks: [{ type: 'command',

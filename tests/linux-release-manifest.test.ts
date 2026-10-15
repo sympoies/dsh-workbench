@@ -16,7 +16,9 @@ const roles: Record<string, LinuxReleaseRole> = {
   'license-inventory': 'licenseInventory',
 };
 
-function fixture(): { root: string; manifest: LinuxReleaseManifest; write: () => string; cleanup: () => void } {
+const nilsTools = ['agent-hook', 'agent-session', 'forge-cli', 'git-cli', 'review-specialists', 'semantic-commit'];
+
+function fixture(tools = nilsTools): { root: string; manifest: LinuxReleaseManifest; write: () => string; cleanup: () => void } {
   const root = mkdtempSync(join(tmpdir(), 'dsh-workbench-release-manifest-'));
   const add = (path: string, bytes: Buffer | string, mode = 0o644) => {
     mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -62,8 +64,7 @@ function fixture(): { root: string; manifest: LinuxReleaseManifest; write: () =>
   add('profile/pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
   add('runtime-kit/package.tgz', 'kit archive bytes');
   add('nils/nils-cli-v1.29.0-x86_64-unknown-linux-gnu.tar.gz', 'nils archive bytes');
-  for (const name of ['agent-hook', 'agent-docs', 'agent-session', 'forge-cli', 'git-cli',
-    'review-specialists', 'semantic-commit']) {
+  for (const name of tools) {
     add(`nils/bin/${name}`, `#!/bin/sh\n# ${name}\n`, 0o755);
   }
   add('notices/LICENSE', 'MIT\n');
@@ -79,9 +80,7 @@ function fixture(): { root: string; manifest: LinuxReleaseManifest; write: () =>
       sourceTree: contract.components.runtimeKit.source.tree,
       packagePath: 'runtime-kit/package.tgz', packageRawSha256: '' },
     nilsRelease: { version: '1.29.0', archivePath: 'nils/nils-cli-v1.29.0-x86_64-unknown-linux-gnu.tar.gz', archiveRawSha256: '',
-      toolPaths: ['agent-hook', 'agent-docs', 'agent-session', 'forge-cli', 'git-cli',
-        'review-specialists', 'semantic-commit']
-        .map(name => `nils/bin/${name}`) },
+      toolPaths: tools.map(name => `nils/bin/${name}`) },
   };
   const write = () => {
     const nilsArchive = readFileSync(join(root, manifest.nilsRelease.archivePath));
@@ -134,6 +133,23 @@ test('accepted Linux release verifies an external manifest digest and closed fil
     assert.equal(verifyLinuxReleaseEnvelope(release.root, digest).releaseVersion, release.manifest.releaseVersion);
     assert.throws(() => verifyLinuxReleaseEnvelope(release.root, '0'.repeat(64)), /manifest digest mismatch/);
   } finally { release.cleanup(); }
+});
+
+test('release verification accepts a nils set without agent-docs and an older one that still carries it', () => {
+  for (const tools of [nilsTools, [...nilsTools, 'agent-docs']]) {
+    const release = fixture(tools);
+    try {
+      const digest = release.write();
+      assert.equal(verifyLinuxReleaseEnvelope(release.root, digest).nilsRelease.toolPaths.length, tools.length);
+    } finally { release.cleanup(); }
+  }
+  for (const tools of [nilsTools.filter(name => name !== 'agent-hook'), [...nilsTools, 'unexpected-tool']]) {
+    const release = fixture(tools);
+    try {
+      const digest = release.write();
+      assert.throws(() => verifyLinuxReleaseEnvelope(release.root, digest), /nils release/);
+    } finally { release.cleanup(); }
+  }
 });
 
 test('trusted verifier checks a detached payload and refuses a replaced bundled verifier', () => {

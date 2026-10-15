@@ -116,7 +116,6 @@ jobs:
           test "$(shasum -a 256 "$VERIFICATION_ROOT/$NILS_ARCHIVE" | cut -d ' ' -f 1)" = "$NILS_SHA256"
           tar -xzf "$VERIFICATION_ROOT/$NILS_ARCHIVE" -C "$VERIFICATION_ROOT"
           test -x "$NILS_BIN_DIR/agent-hook"
-          test -x "$NILS_BIN_DIR/agent-docs"
           echo "$NILS_BIN_DIR" >> "$GITHUB_PATH"
       - name: Probe authoritative finish-line host
         working-directory: dsh-workbench

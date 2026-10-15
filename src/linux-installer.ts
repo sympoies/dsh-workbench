@@ -218,9 +218,6 @@ function runtimeEnvironment(root: string, config: Record<string, string>,
     DSH_RUNTIME_KIT_AGENT_HOOK_CONFIG: config.hookConfig,
     DSH_RUNTIME_KIT_AGENT_HOOK_POLICY: config.hookPolicy,
     DSH_RUNTIME_KIT_AGENT_HOOK_STATE_DIR: join(root, 'state/agent-hook-dsh'),
-    DSH_RUNTIME_KIT_AGENT_DOCS_BIN: config.agentDocsBin,
-    DSH_RUNTIME_KIT_AGENT_DOCS_HOME: config.agentDocsHome,
-    DSH_RUNTIME_KIT_AGENT_DOCS_STATE_HOME: join(root, 'state/agent-docs-dsh'),
     DSH_RUNTIME_KIT_PRIVATE_SKILLS_DIR: config.privateSkillsDir,
   });
   return environment;
@@ -422,17 +419,13 @@ export function applyLinuxInstall(input: LinuxInstallInput,
     runInstallerCommand('/usr/bin/tar', ['-xzf', join(releaseRoot, 'runtime-kit/package.tgz'),
       '-C', kitPackageRoot, '--no-same-owner'], root, process.env, 'runtime-kit package extraction');
     const kitPackage = join(kitPackageRoot, 'package');
-    const agentDocsHome = join(root, 'agent-docs');
     const configHome = join(root, 'config');
     const stateHome = join(root, 'state');
     const binDir = join(root, 'bin');
-    for (const path of [agentDocsHome, configHome, stateHome, binDir,
+    for (const path of [configHome, stateHome, binDir,
       join(configHome, 'agent-hook'), join(root, 'codex'), join(root, 'claude'),
       join(root, 'private-skills'), join(root, 'runtime')]) {
       mkdirSync(path, { recursive: true, mode: 0o700 });
-    }
-    for (const name of ['AGENT_DOCS.toml', 'PROJECT_DEV_EDIT.md']) {
-      copyFileSync(join(kitPackage, 'agent-docs', name), join(agentDocsHome, name));
     }
     const hookPolicy = join(kitPackage, 'policy/dsh-runtime-kit-v1.toml');
     const hookConfig = join(configHome, 'agent-hook/config.toml');
@@ -455,10 +448,10 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       tuiEntry: join(profile, 'workbench-tui/scripts/launch-workbench-tui.ts'),
       dshHome: join(root, 'dsh-home'), codexHome: join(root, 'codex'),
       claudeConfigDir: join(root, 'claude'), configHome, stateHome,
-      privateSkillsDir: join(root, 'private-skills'), agentDocsHome,
+      privateSkillsDir: join(root, 'private-skills'),
       hookConfig, hookPolicy,
       agentHookBin: join(releaseRoot, 'nils/bin/agent-hook'),
-      agentDocsBin: join(releaseRoot, 'nils/bin/agent-docs'), dshDirectBin, agentSessionHooks,
+      dshDirectBin, agentSessionHooks,
     };
     const launchConfig = join(root, 'launch-config.json');
     writeFileSync(launchConfig, `${JSON.stringify(config)}\n`, { flag: 'wx', mode: 0o600 });

@@ -27,6 +27,7 @@ test('installed Web and TUI launch replace their process and use only private ow
       stateHome: process.env.XDG_STATE_HOME ?? null,
       codexHome: process.env.CODEX_HOME ?? null,
       claudeConfigDir: process.env.CLAUDE_CONFIG_DIR ?? null,
+      agentDocs: Object.keys(process.env).filter(name => name.startsWith('DSH_RUNTIME_KIT_AGENT_DOCS_')),
     }));\n`, { mode: 0o600 });
     mkdirSync(join(kitPackage, 'dist/bin'), { recursive: true });
     copyFileSync(fakeEntry, join(kitPackage, 'dist/bin/dsh-runtime-kit-launch.js'));
@@ -41,21 +42,30 @@ test('installed Web and TUI launch replace their process and use only private ow
       tuiEntry: fakeEntry, dshHome: join(root, 'dsh-home'),
       codexHome: join(root, 'codex'), claudeConfigDir: join(root, 'claude'),
       configHome: join(root, 'config'), stateHome: join(root, 'state'),
-      privateSkillsDir: join(root, 'skills'), agentDocsHome: join(root, 'docs'),
+      privateSkillsDir: join(root, 'skills'),
       hookConfig: join(root, 'hook-config'), hookPolicy: join(root, 'hook-policy'),
-      agentHookBin: join(root, 'agent-hook'), agentDocsBin: join(root, 'agent-docs'),
+      agentHookBin: join(root, 'agent-hook'),
       dshDirectBin: join(root, 'dsh-direct'), agentSessionHooks: join(root, 'hooks.json'),
+    }), { mode: 0o600 });
+    // An installation made before agent-docs retired still records its fields; they are ignored.
+    const legacyConfigPath = join(root, 'legacy-launch.json');
+    writeFileSync(legacyConfigPath, JSON.stringify({
+      ...JSON.parse(readFileSync(configPath, 'utf8')),
+      agentDocsHome: join(root, 'docs'), agentDocsBin: join(root, 'agent-docs'),
     }), { mode: 0o600 });
     // The installed launch is a full host agent: the owner's machine tools keep their own
     // configuration homes, and DSH runs without its file sandbox unless the caller chooses a mode.
     const machineHomes = { XDG_CONFIG_HOME: join(root, 'machine-config'),
       XDG_STATE_HOME: join(root, 'machine-state'), CODEX_HOME: join(root, 'machine-codex'),
       CLAUDE_CONFIG_DIR: join(root, 'machine-claude') };
-    for (const face of ['web', 'tui']) {
+    for (const [face, path] of [configPath, legacyConfigPath].flatMap(path =>
+      ['web', 'tui'].map(face => [face, path] as const))) {
       const { DSH_PERMISSION_MODE: _inheritedMode, ...base } = process.env;
       // An unmanaged launch: the test runner may itself run inside a managed pane.
-      for (const key of Object.keys(base)) if (key.startsWith('AGENT_SESSION_')) delete base[key];
-      const result = spawnSync(process.execPath, [launch, configPath, face, '--dump-config'], {
+      for (const key of Object.keys(base)) {
+        if (key.startsWith('AGENT_SESSION_') || key.startsWith('DSH_RUNTIME_KIT_AGENT_DOCS_')) delete base[key];
+      }
+      const result = spawnSync(process.execPath, [launch, path, face, '--dump-config'], {
         env: { ...base, ...machineHomes, DEEPSEEK_API_KEY: 'inherited-key',
           DEEPSEEK_BASE_URL: 'https://inherited.invalid', AGENT_SESSION_TEST: 'outer-agent' },
         encoding: 'utf8', timeout: 10_000,
@@ -72,8 +82,9 @@ test('installed Web and TUI launch replace their process and use only private ow
       assert.equal(observed.stateHome, machineHomes.XDG_STATE_HOME);
       assert.equal(observed.codexHome, machineHomes.CODEX_HOME);
       assert.equal(observed.claudeConfigDir, machineHomes.CLAUDE_CONFIG_DIR);
+      assert.deepEqual(observed.agentDocs, []);
       assert.equal(observed.args.at(-1), '--dump-config');
-      const chosen = spawnSync(process.execPath, [launch, configPath, face, '--dump-config'], {
+      const chosen = spawnSync(process.execPath, [launch, path, face, '--dump-config'], {
         env: { ...base, DSH_PERMISSION_MODE: 'workspace-write' }, encoding: 'utf8', timeout: 10_000,
       });
       assert.equal(chosen.status, 0, chosen.stderr);
@@ -183,9 +194,9 @@ function managedFixture(root: string) {
     runtimeRoot: join(root, 'runtime'), kitPackage, dshCli: fakeEntry, tuiEntry: fakeEntry, dshHome,
     codexHome: join(root, 'codex'), claudeConfigDir: join(root, 'claude'),
     configHome: join(root, 'config'), stateHome: join(root, 'state'),
-    privateSkillsDir: join(root, 'skills'), agentDocsHome: join(root, 'docs'),
+    privateSkillsDir: join(root, 'skills'),
     hookConfig: join(root, 'hook-config'), hookPolicy: join(root, 'hook-policy'),
-    agentHookBin: join(root, 'agent-hook'), agentDocsBin: join(root, 'agent-docs'),
+    agentHookBin: join(root, 'agent-hook'),
     dshDirectBin: join(root, 'dsh-direct'), agentSessionHooks: hooks,
   }), { mode: 0o600 });
   const managed = { AGENT_SESSION_ID: 'managed-1', AGENT_SESSION_RUNTIME_ID: 'runtime-1',
@@ -315,9 +326,9 @@ test('Codex route settings reach the installed launch only from the owner enviro
       tuiEntry: fakeEntry, dshHome: join(root, 'dsh-home'),
       codexHome: join(root, 'codex'), claudeConfigDir: join(root, 'claude'),
       configHome: join(root, 'config'), stateHome: join(root, 'state'),
-      privateSkillsDir: join(root, 'skills'), agentDocsHome: join(root, 'docs'),
+      privateSkillsDir: join(root, 'skills'),
       hookConfig: join(root, 'hook-config'), hookPolicy: join(root, 'hook-policy'),
-      agentHookBin: join(root, 'agent-hook'), agentDocsBin: join(root, 'agent-docs'),
+      agentHookBin: join(root, 'agent-hook'),
       dshDirectBin: join(root, 'dsh-direct'),
     }), { mode: 0o600 });
     const inherited = Object.fromEntries(names.map(name => [name, `inherited-${name}`]));
