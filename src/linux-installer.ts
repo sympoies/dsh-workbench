@@ -198,7 +198,18 @@ export function runInstallerCommand(executable: string, args: string[], cwd: str
   return result.stdout;
 }
 
-function runtimeEnvironment(root: string, config: Record<string, string>,
+/**
+ * The authenticated agent-docs executable when the selected runtime-kit still declares
+ * it. A runtime-kit that predates the agent-docs retirement probes this executable during
+ * setup and does not find it on PATH; a release whose declaration omits it needs none.
+ */
+export function selectedAgentDocsBin(releaseRoot: string,
+  nilsRelease: Pick<LinuxReleaseManifest['nilsRelease'], 'toolPaths'>): string | undefined {
+  return nilsRelease.toolPaths.includes('nils/bin/agent-docs')
+    ? join(releaseRoot, 'nils/bin/agent-docs') : undefined;
+}
+
+export function runtimeEnvironment(root: string, config: Record<string, string>,
   owner: OwnerEnvironment, pnpmEnvironment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = { ...pnpmEnvironment,
     PATH: `${dirname(config.dshDirectBin)}:${dirname(process.execPath)}:/usr/bin:/bin`,
@@ -218,11 +229,9 @@ function runtimeEnvironment(root: string, config: Record<string, string>,
     DSH_RUNTIME_KIT_AGENT_HOOK_CONFIG: config.hookConfig,
     DSH_RUNTIME_KIT_AGENT_HOOK_POLICY: config.hookPolicy,
     DSH_RUNTIME_KIT_AGENT_HOOK_STATE_DIR: join(root, 'state/agent-hook-dsh'),
-    DSH_RUNTIME_KIT_AGENT_DOCS_BIN: config.agentDocsBin,
-    DSH_RUNTIME_KIT_AGENT_DOCS_HOME: config.agentDocsHome,
-    DSH_RUNTIME_KIT_AGENT_DOCS_STATE_HOME: join(root, 'state/agent-docs-dsh'),
     DSH_RUNTIME_KIT_PRIVATE_SKILLS_DIR: config.privateSkillsDir,
   });
+  if (config.agentDocsBin !== undefined) environment.DSH_RUNTIME_KIT_AGENT_DOCS_BIN = config.agentDocsBin;
   return environment;
 }
 
@@ -422,17 +431,13 @@ export function applyLinuxInstall(input: LinuxInstallInput,
     runInstallerCommand('/usr/bin/tar', ['-xzf', join(releaseRoot, 'runtime-kit/package.tgz'),
       '-C', kitPackageRoot, '--no-same-owner'], root, process.env, 'runtime-kit package extraction');
     const kitPackage = join(kitPackageRoot, 'package');
-    const agentDocsHome = join(root, 'agent-docs');
     const configHome = join(root, 'config');
     const stateHome = join(root, 'state');
     const binDir = join(root, 'bin');
-    for (const path of [agentDocsHome, configHome, stateHome, binDir,
+    for (const path of [configHome, stateHome, binDir,
       join(configHome, 'agent-hook'), join(root, 'codex'), join(root, 'claude'),
       join(root, 'private-skills'), join(root, 'runtime')]) {
       mkdirSync(path, { recursive: true, mode: 0o700 });
-    }
-    for (const name of ['AGENT_DOCS.toml', 'PROJECT_DEV_EDIT.md']) {
-      copyFileSync(join(kitPackage, 'agent-docs', name), join(agentDocsHome, name));
     }
     const hookPolicy = join(kitPackage, 'policy/dsh-runtime-kit-v1.toml');
     const hookConfig = join(configHome, 'agent-hook/config.toml');
@@ -448,6 +453,7 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       { flag: 'wx', mode: 0o700 });
     chmodSync(dshDirectBin, 0o700);
     writePackageManagerShims(binDir, process.execPath, input.pnpmExecutable, pnpmEnvironment);
+    const agentDocsBin = selectedAgentDocsBin(releaseRoot, manifest.nilsRelease);
     const config = {
       schemaVersion: 'dsh-workbench.linux-launch.v1',
       ownerEnvironmentFile: input.ownerEnvironmentFile,
@@ -455,10 +461,11 @@ export function applyLinuxInstall(input: LinuxInstallInput,
       tuiEntry: join(profile, 'workbench-tui/scripts/launch-workbench-tui.ts'),
       dshHome: join(root, 'dsh-home'), codexHome: join(root, 'codex'),
       claudeConfigDir: join(root, 'claude'), configHome, stateHome,
-      privateSkillsDir: join(root, 'private-skills'), agentDocsHome,
+      privateSkillsDir: join(root, 'private-skills'),
       hookConfig, hookPolicy,
       agentHookBin: join(releaseRoot, 'nils/bin/agent-hook'),
-      agentDocsBin: join(releaseRoot, 'nils/bin/agent-docs'), dshDirectBin, agentSessionHooks,
+      ...agentDocsBin === undefined ? {} : { agentDocsBin },
+      dshDirectBin, agentSessionHooks,
     };
     const launchConfig = join(root, 'launch-config.json');
     writeFileSync(launchConfig, `${JSON.stringify(config)}\n`, { flag: 'wx', mode: 0o600 });

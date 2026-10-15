@@ -8,6 +8,18 @@ import type { WorkbenchContract } from './contract-types.ts';
 const sourceRoot = fileURLToPath(new URL('..', import.meta.url));
 const digestPattern = /^[a-f0-9]{64}$/;
 const commitPattern = /^[a-f0-9]{40}$/;
+// The nils-cli executables a release carries. A retired tool is accepted when the
+// pinned runtime-kit still declares it, so releases from older pins keep verifying.
+const requiredNilsTools = ['agent-hook', 'agent-session', 'forge-cli', 'git-cli',
+  'review-specialists', 'semantic-commit'];
+const retiredNilsTools = ['agent-docs'];
+
+function validNilsToolSet(names: unknown[]): boolean {
+  return new Set(names).size === names.length
+    && requiredNilsTools.every(name => names.includes(name))
+    && names.every(name => typeof name === 'string'
+      && (requiredNilsTools.includes(name) || retiredNilsTools.includes(name)));
+}
 const roleRoots = {
   contract: 'compatibility/',
   installer: 'installer/',
@@ -242,8 +254,9 @@ export function verifyLinuxReleaseEnvelope(root: string, expectedManifestSha256:
     || byPath.get(payloadPath(nils.archivePath, 'nils archive path'))?.role !== 'nilsTool'
     || byPath.get(nils.archivePath as string)?.rawSha256
       !== digest(nils.archiveRawSha256, 'nils archive digest')
-    || !Array.isArray(nils.toolPaths) || nils.toolPaths.length !== 7
-    || new Set(nils.toolPaths).size !== 7
+    || !Array.isArray(nils.toolPaths)
+    || !validNilsToolSet(nils.toolPaths.map(path =>
+      typeof path === 'string' && path.startsWith('nils/bin/') ? path.slice('nils/bin/'.length) : undefined))
     || nils.toolPaths.some(path => {
       const file = byPath.get(payloadPath(path, 'nils tool path'));
       return file?.role !== 'nilsTool' || file.mode !== '0755';
@@ -268,7 +281,7 @@ export function verifyLinuxReleaseEnvelope(root: string, expectedManifestSha256:
     || kitArchive?.sha256 !== nils.archiveRawSha256
     || typeof kitArchiveName !== 'string' || typeof nilsArchivePath !== 'string'
     || !nilsArchivePath.endsWith(`/${kitArchiveName}`)
-    || kitTools === undefined || Object.keys(kitTools).length !== 7) {
+    || kitTools === undefined || !validNilsToolSet(Object.keys(kitTools))) {
     fail('nils release differs from pinned runtime-kit compatibility');
   }
   const expectedToolPaths = Object.keys(kitTools).map(name => `nils/bin/${name}`).sort();

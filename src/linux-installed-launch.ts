@@ -17,11 +17,11 @@ type LaunchConfig = {
   configHome: string;
   stateHome: string;
   privateSkillsDir: string;
-  agentDocsHome: string;
   hookConfig: string;
   hookPolicy: string;
   agentHookBin: string;
-  agentDocsBin: string;
+  /** Present only when the installed runtime-kit still declares agent-docs. */
+  agentDocsBin?: string;
   dshDirectBin: string;
   agentSessionHooks: string;
 };
@@ -183,11 +183,9 @@ Object.assign(environment, {
   DSH_RUNTIME_KIT_AGENT_HOOK_CONFIG: config.hookConfig,
   DSH_RUNTIME_KIT_AGENT_HOOK_POLICY: config.hookPolicy,
   DSH_RUNTIME_KIT_AGENT_HOOK_STATE_DIR: `${config.stateHome}/agent-hook-dsh`,
-  DSH_RUNTIME_KIT_AGENT_DOCS_BIN: config.agentDocsBin,
-  DSH_RUNTIME_KIT_AGENT_DOCS_HOME: config.agentDocsHome,
-  DSH_RUNTIME_KIT_AGENT_DOCS_STATE_HOME: `${config.stateHome}/agent-docs-dsh`,
   DSH_RUNTIME_KIT_PRIVATE_SKILLS_DIR: config.privateSkillsDir,
 });
+if (typeof config.agentDocsBin === 'string') environment.DSH_RUNTIME_KIT_AGENT_DOCS_BIN = config.agentDocsBin;
 const launcher = `${config.kitPackage}/dist/bin/dsh-runtime-kit-launch.js`;
 const appArgs = [...args];
 if (appArgs[0] === '--profile') {

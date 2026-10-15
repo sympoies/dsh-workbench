@@ -53,7 +53,7 @@ assert.deepEqual(JSON.parse(readFileSync(join(installRoot, 'installed-unit-recei
   installed);
 
 const config = JSON.parse(readFileSync(join(installRoot, 'launch-config.json'), 'utf8')) as
-  Record<string, string>;
+  Record<string, string> & { agentDocsBin?: string };
 const environment = {
   DSH_HOME: config.dshHome,
   CODEX_HOME: config.codexHome,
@@ -65,10 +65,8 @@ const environment = {
   DSH_RUNTIME_KIT_AGENT_HOOK_CONFIG: config.hookConfig,
   DSH_RUNTIME_KIT_AGENT_HOOK_POLICY: config.hookPolicy,
   DSH_RUNTIME_KIT_AGENT_HOOK_STATE_DIR: join(config.stateHome, 'agent-hook-dsh'),
-  DSH_RUNTIME_KIT_AGENT_DOCS_BIN: config.agentDocsBin,
-  DSH_RUNTIME_KIT_AGENT_DOCS_HOME: config.agentDocsHome,
-  DSH_RUNTIME_KIT_AGENT_DOCS_STATE_HOME: join(config.stateHome, 'agent-docs-dsh'),
   DSH_RUNTIME_KIT_PRIVATE_SKILLS_DIR: config.privateSkillsDir,
+  ...config.agentDocsBin === undefined ? {} : { DSH_RUNTIME_KIT_AGENT_DOCS_BIN: config.agentDocsBin },
 };
 const runtimeEnvFile = join(installRoot, 'terminal-environment.json');
 writeFileSync(runtimeEnvFile, `${JSON.stringify(environment)}\n`, { flag: 'wx', mode: 0o600 });

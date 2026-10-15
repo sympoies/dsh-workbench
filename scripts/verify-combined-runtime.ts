@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startApprovalMockLlmServer } from '../tests/approval-mock.ts';
@@ -46,13 +46,12 @@ const root = join(dirname(runtimeRoot), 'workbench-verification');
 const workspace = join(root, 'workspace');
 const configHome = join(root, 'config');
 const stateHome = join(root, 'state');
-const docsHome = join(root, 'agent-docs');
 const policyPath = join(kitPackage, 'policy', 'dsh-runtime-kit-v1.toml');
 const hookConfig = join(configHome, 'agent-hook', 'config.toml');
 const wrapper = join(root, 'dsh-wrapper.mjs');
 const wrapperFailure = join(root, 'dsh-wrapper-failure.log');
 const dshCli = installedDshCli ?? join(dshSource, 'apps', 'cli', 'lib', 'bin.js');
-for (const directory of [runtimeRoot, root, workspace, configHome, stateHome, docsHome,
+for (const directory of [runtimeRoot, root, workspace, configHome, stateHome,
   join(configHome, 'agent-hook'), join(root, 'codex'), join(root, 'claude'),
   join(root, 'private-skills')]) {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -61,9 +60,6 @@ const sourceRepo = fileURLToPath(new URL('..', import.meta.url));
 const cloned = spawnSync('git', ['clone', '--local', '--no-hardlinks', '--quiet', sourceRepo, workspace],
   { encoding: 'utf8', timeout: 60_000 });
 assert.equal(cloned.status, 0, 'Could not create a disposable Git workspace');
-for (const name of ['AGENT_DOCS.toml', 'PROJECT_DEV_EDIT.md']) {
-  copyFileSync(join(kitPackage, 'agent-docs', name), join(docsHome, name));
-}
 const policyDigest = createHash('sha256').update(readFileSync(policyPath)).digest('hex');
 writeFileSync(hookConfig,
   `schema_version = "agent-hook.config.v1"\n\n[policy]\npath = ${JSON.stringify(policyPath)}\ndigest = "sha256:${policyDigest}"\n`,
@@ -95,10 +91,10 @@ const runtimeEnvironment = {
   DSH_RUNTIME_KIT_AGENT_HOOK_CONFIG: hookConfig,
   DSH_RUNTIME_KIT_AGENT_HOOK_POLICY: policyPath,
   DSH_RUNTIME_KIT_AGENT_HOOK_STATE_DIR: join(stateHome, 'agent-hook-dsh'),
-  DSH_RUNTIME_KIT_AGENT_DOCS_BIN: join(nilsBin, 'agent-docs'),
-  DSH_RUNTIME_KIT_AGENT_DOCS_HOME: docsHome,
-  DSH_RUNTIME_KIT_AGENT_DOCS_STATE_HOME: join(stateHome, 'agent-docs-dsh'),
   DSH_RUNTIME_KIT_PRIVATE_SKILLS_DIR: join(root, 'private-skills'),
+  // A runtime-kit that predates the agent-docs retirement still declares and probes it.
+  ...Object.hasOwn(JSON.parse(readFileSync(join(kitPackage, 'compatibility', 'nils-cli.json'), 'utf8'))
+    .release.artifacts, 'agent-docs') ? { DSH_RUNTIME_KIT_AGENT_DOCS_BIN: join(nilsBin, 'agent-docs') } : {},
 };
 // This disposable installation owns its DSH sessions. An outer agent's managed
 // principal belongs to another checkout and must not claim these test sessions.

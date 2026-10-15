@@ -145,7 +145,7 @@ of the patched closure.
    then removes that test file and continues with a clean home.
 6. Launch the pinned DSH binary **through the same runtime-kit owner launcher**
    with `--profile workbench`. The compatible nils-cli set required by the
-   pinned kit includes authenticated `agent-hook`, `agent-docs`, and adjacent
+   pinned kit includes authenticated `agent-hook` and adjacent
    `agent-session` binaries. The kit declaration governs their exact version
    and hashes.
 

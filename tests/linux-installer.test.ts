@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import test from 'node:test';
 import { AGENT_SESSION_HOOKS, applyLinuxInstall, nodeMeetsBaseline, planLinuxInstall, preparePnpmEnvironment,
-  runInstallerCommand, writePackageManagerShims,
+  runInstallerCommand, runtimeEnvironment, selectedAgentDocsBin, writePackageManagerShims,
   type LinuxInstallInput } from '../src/linux-installer.ts';
 import { hashOwnerFile, ownerPackageTreeSha256 } from '../src/linux-owner-input.ts';
 
@@ -261,6 +261,29 @@ test('runtime-kit setup failure reports only its bounded diagnostic code', () =>
       return true;
     });
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('setup passes the authenticated agent-docs executable only when the selected nils set declares it', () => {
+  const releaseRoot = '/install/release';
+  const tools = ['agent-hook', 'agent-session', 'forge-cli', 'git-cli', 'review-specialists', 'semantic-commit'];
+  const owner = { schemaVersion: 'dsh-workbench.owner-environment.v1' as const, environment: {}, secretFiles: {} };
+  const config = { dshDirectBin: '/install/bin/dsh-direct', dshHome: '/install/dsh-home',
+    agentHookBin: join(releaseRoot, 'nils/bin/agent-hook'), privateSkillsDir: '/install/private-skills' };
+  for (const [declared, expected] of [
+    [[...tools, 'agent-docs'], join(releaseRoot, 'nils/bin/agent-docs')],
+    [tools, undefined],
+  ] as const) {
+    const agentDocsBin = selectedAgentDocsBin(releaseRoot, { toolPaths: declared.map(name => `nils/bin/${name}`) });
+    assert.equal(agentDocsBin, expected);
+    const environment = runtimeEnvironment('/install',
+      { ...config, ...agentDocsBin === undefined ? {} : { agentDocsBin } }, owner, {});
+    assert.equal(environment.DSH_RUNTIME_KIT_AGENT_DOCS_BIN, expected);
+    assert.equal(Object.hasOwn(environment, 'DSH_RUNTIME_KIT_AGENT_DOCS_BIN'), expected !== undefined);
+    assert.equal(environment.PATH?.split(':').includes(join(releaseRoot, 'nils/bin')), false);
+    for (const name of ['DSH_RUNTIME_KIT_AGENT_DOCS_HOME', 'DSH_RUNTIME_KIT_AGENT_DOCS_STATE_HOME']) {
+      assert.equal(environment[name], undefined);
+    }
+  }
 });
 
 test('the installed agent-session hook surface reports DSH turn lifecycle only', () => {

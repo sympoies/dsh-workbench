@@ -100,7 +100,8 @@ jobs:
             if(!artifact?.archive?.name||!artifact.archive.sha256)process.exit(1);
             const outputs={archive:artifact.archive.name,sha256:artifact.archive.sha256,
               url:`https://github.com/sympoies/nils-cli/releases/download/${m.release.source_revision}/${artifact.archive.name}`,
-              bin_dir:`${process.env.VERIFICATION_ROOT}/${artifact.archive.name.slice(0,-7)}/bin`};
+              bin_dir:`${process.env.VERIFICATION_ROOT}/${artifact.archive.name.slice(0,-7)}/bin`,
+              agent_docs:String(Object.hasOwn(m.release.artifacts??{},"agent-docs"))};
             fs.appendFileSync(process.env.GITHUB_OUTPUT,
               Object.entries(outputs).map(([key,value])=>`${key}=${value}\n`).join(""));
           '
@@ -110,13 +111,14 @@ jobs:
           NILS_ARCHIVE: ${{ steps.nils.outputs.archive }}
           NILS_SHA256: ${{ steps.nils.outputs.sha256 }}
           NILS_BIN_DIR: ${{ steps.nils.outputs.bin_dir }}
+          NILS_AGENT_DOCS: ${{ steps.nils.outputs.agent_docs }}
         run: |
           curl --fail --location --proto '=https' --tlsv1.2 \
             --output "$VERIFICATION_ROOT/$NILS_ARCHIVE" "$NILS_URL"
           test "$(shasum -a 256 "$VERIFICATION_ROOT/$NILS_ARCHIVE" | cut -d ' ' -f 1)" = "$NILS_SHA256"
           tar -xzf "$VERIFICATION_ROOT/$NILS_ARCHIVE" -C "$VERIFICATION_ROOT"
           test -x "$NILS_BIN_DIR/agent-hook"
-          test -x "$NILS_BIN_DIR/agent-docs"
+          if [ "$NILS_AGENT_DOCS" = true ]; then test -x "$NILS_BIN_DIR/agent-docs"; fi
           echo "$NILS_BIN_DIR" >> "$GITHUB_PATH"
       - name: Probe authoritative finish-line host
         working-directory: dsh-workbench
