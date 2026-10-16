@@ -1,52 +1,65 @@
 # Development
 
-This repository is being initialized. The
-[roadmap](https://github.com/sympoies/dsh-workbench/issues/10) owns the order
-for the version contract, DSH Web and TUI ports, session handoff, and portable
-release.
+The [roadmap](https://github.com/sympoies/dsh-workbench/issues/10) owns the
+order for the version contract, DSH Web and TUI ports, session handoff, and
+portable release.
 
 Use exact source tags or commits and keep a candidate graph separate from an
 accepted release. Test Web and TUI against the same DSH session store and
 workspace identity before claiming cross-interface resume.
 
+## Toolchain and source layout
+
 TypeScript is the default for product source, substantive scripts, and tests.
 Node 24.3.0 or later runs the erasable TypeScript directly without an
-experimental warning. The `.mjs` files in `scripts/` are thin CLI entrypoints:
+experimental warning.
+
+The `.mjs` files in `scripts/` are thin CLI entrypoints:
 `contract.mjs` delegates to `src/contract.ts`, `tui-compat.mjs` delegates to
 `src/tui-compat.ts`, `web-metadata.mjs` delegates to `src/web-metadata.ts`, and
 `combined-profile.mjs` delegates to `src/combined-profile.ts`.
 Keep new CLI wrappers equally thin, with their logic in typechecked TypeScript.
-The Linux release candidate builder is `scripts/linux-release.mjs`; its
-private input schema and archive/content verification boundary are documented
-in [docs/linux-release.md](docs/linux-release.md). Run the content verifier
-against the same private staged root and external manifest digest before any
-installed-profile test. A successful builder result remains a candidate.
-The repository-owned `.agents/scripts/release.sh` prepares and verifies the
-Linux archive plus its OCI artifact carrier from the same clean source commit.
-The carrier has an empty OCI config and contains the raw native-install archive;
-it does not advertise a runnable container. CI exercises both the carrier
-identity and the extracted owner-installed Web/TUI profile.
-The same entrypoint has a read-only publication `preflight` and a `publish`
-action gated on the exact issue #8 human audit. The publisher checks merged
-source, asset, and public receipt identities and the approving reviewer's
-repository permission before creating the signed tag and GitHub Release.
-The two-phase Linux installer is `scripts/linux-install.mjs`; its private
-input, owner environment, exact apply receipt, and launch behavior are in
-[docs/linux-release.md](docs/linux-release.md). Unit tests cover plan refusal
-and launcher environment/process replacement. The release profile must also
-exercise apply and both installed launchers from the same authenticated
-archive bytes before publication.
+
 Install the exact development toolchain with
 `pnpm install --frozen-lockfile --strict-peer-dependencies`, then run `pnpm typecheck` and
 `pnpm test`. The root lockfile pins development tools; the separate
 [compatibility contract](compatibility/workbench.json) pins the DSH product
 graph. Generated files and `node_modules/` are not published.
 
+## Linux release and installer
+
+The Linux release candidate builder is `scripts/linux-release.mjs`; its
+private input schema and archive/content verification boundary are documented
+in [docs/linux-release.md](docs/linux-release.md). Run the content verifier
+against the same private staged root and external manifest digest before any
+installed-profile test. A successful builder result remains a candidate.
+
+The repository-owned `.agents/scripts/release.sh` prepares and verifies the
+Linux archive plus its OCI artifact carrier from the same clean source commit.
+The carrier has an empty OCI config and contains the raw native-install archive;
+it does not advertise a runnable container. CI exercises both the carrier
+identity and the extracted owner-installed Web/TUI profile.
+
+The same entrypoint has a read-only publication `preflight` and a `publish`
+action gated on the exact issue #8 human audit. The publisher checks merged
+source, asset, and public receipt identities and the approving reviewer's
+repository permission before creating the signed tag and GitHub Release.
+
+The two-phase Linux installer is `scripts/linux-install.mjs`; its private
+input, owner environment, exact apply receipt, and launch behavior are in
+[docs/linux-release.md](docs/linux-release.md). Unit tests cover plan refusal
+and launcher environment/process replacement. The release profile must also
+exercise apply and both installed launchers from the same authenticated
+archive bytes before publication.
+
+## Web plugin
+
 For the Web plugin, run `pnpm web:metadata:check` and `pnpm web:build` before
 `pnpm typecheck`; its generated `web/lib/` is ignored. The metadata check
 ensures the Web package version, DSH catalog, and generated Client identity
 match the contract. The package build runs this check before bundling. See the
 [Web port notes](docs/web-port.md) for the current acceptance boundary.
+
 The combined profile also checks the packed Web plugin's canonical artifact
 SHA-256 against [`compatibility/web-artifact.json`](compatibility/web-artifact.json).
 After an intentional Web source or contract change, build and pack the plugin,
@@ -54,6 +67,9 @@ inspect it with `inspectPeerArtifact` from `src/package-artifact.ts`, and review
 the new digest in that record before staging. The artifact record contains no
 component version pin; Web package identity still comes from the Workbench
 contract.
+
+## Native browser acceptance
+
 On Linux or macOS with `zstdcat`, run the native browser
 acceptance with a Chromium executable and an installed DSH executable at the
 exact contract version:
@@ -65,13 +81,16 @@ pnpm test:web:browser --dsh-bin /path/to/pinned/dsh --browser-bin /path/to/chrom
 The script builds and packs the Web plugin, installs a Web profile containing
 the patched TUI bundle and a separate patched TUI profile in a disposable DSH
 home, and runs eight sessions against authenticated local mock LLM servers.
+
 Through a native pseudoterminal provided by the pinned
 development-only `node-pty` package, it creates and renames a TUI session,
 stops TUI, then checks that session's exact ID, title, prompt, and answer in
 native Web before and after a
 Web Host restart. While Web still holds a session writer, including while a
 tool approval is pending, it checks that TUI refuses an exact-ID resume without
-rewriting the archive. The fixture then kills Web Host while it still owns a
+rewriting the archive.
+
+The fixture then kills Web Host while it still owns a
 settled session. It also kills Web while tool approval is pending and checks
 that TUI resumes under recovered authority without executing the unapproved
 command. In the same recovered TUI process and session, the fixture completes
@@ -79,23 +98,29 @@ a text turn and then fresh Bash allow and reject turns. It checks new approval
 identities, successful execution exactly once, rejected nonexecution, and
 completed turns while preserving the pre-crash history. Web
 reads the continuation
-on restart. It also checks distinct Web IDs, isolated histories, a
+on restart.
+
+It also checks distinct Web IDs, isolated histories, a
 pending turn, tool approval and rejection, a provider error, and Web Host
 restart recovery. Its image scenario uploads a synthetic PNG through native
 Web, checks the durable Session V4 attachment reference, resumes the exact
 session in TUI, verifies the continued model request includes the image, and
 reopens the same image in Web. The fixture, profiles, and mock endpoints are
 removed afterward. Package installation is isolated from caller credentials.
+
 Another TUI session starts in a second canonical workspace. Web, launched from
 the first workspace, must list both exact IDs with their distinct canonical
 paths and open the second session's title and history. After the second path is
 moved away, a cold Web Host may still show its history but must not offer an
-active editor for the unavailable workspace. The eighth session is a synthetic
+active editor for the unavailable workspace.
+
+The eighth session is a synthetic
 copied Session V2 archive: Web reads the
 historical exchange, TUI continues it under the same ID into Session V4, and
 Web reopens the result. This does not exercise a real user's DSH home.
 Local Chromium sandboxing remains enabled; the Linux GitHub-hosted CI runner
 uses an explicit test-only exception because its browser sandbox cannot initialize.
+
 With `--installed-dsh-home` and `--runtime-env-file`, the same eight scenarios
 use the owner-marked disposable installation and the activated `workbench`
 profile for both interfaces. They preserve its package manifest and lock;
@@ -106,10 +131,13 @@ separate `--dsh-bin` starts Web through the runtime owner. Workbench's TUI entry
 projects explicit exact-ID resume through TUI's supported configuration seam
 so the shared graph's Web flag parser cannot consume it. See the
 [combined-profile entry contract](docs/combined-profile.md).
+
 The combined-profile CI installs the browser revision selected by the pinned
 `playwright-core` package and runs this acceptance on the first-release Linux
 x64 target after the exact DSH build. macOS arm64 is tracked separately in
 [issue #47](https://github.com/sympoies/dsh-workbench/issues/47).
+
+## Compatibility contract changes
 
 Run `node --test tests/contract.test.ts tests/tui-compat.test.ts` and
 `node scripts/contract.mjs check`
@@ -118,10 +146,14 @@ change to any component source or package identity, or to the reviewed Web
 artifact digest, requires a new Workbench release version. CI compares the
 contract and artifact record with `main`. See the
 [contract guide](docs/compatibility.md) for acceptance and release rules.
+
 Run `node --test tests/tui-graph.test.ts` with the pinned pnpm version when
 changing the TUI compatibility patch or peer correction. It reproduces the
 uncorrected strict peer failure, then resolves and installs the exact DSH/TUI
 graph with the reviewed patch and peer correction.
+
+## TUI terminal acceptance
+
 On Linux or macOS with `zstdcat`, run the real terminal approval
 acceptance with an installed executable of the exact DSH contract version:
 
@@ -133,7 +165,9 @@ The combined-profile CI runs this acceptance on Linux x64
 after its authenticated graph setup and doctor check. It also starts the
 activated `workbench` Web Host through runtime-kit's owner launcher and checks
 a real browser approval allow and reject, command execution or nonexecution,
-the durable tool results, and embedded identity in that installed profile. The
+the durable tool results, and embedded identity in that installed profile.
+
+The
 terminal test first installs the frozen TUI-only profile in a separate
 disposable home, then attempts the same scenarios in the installed `workbench`
 profile. The latter remains an acceptance gate for governed Bash. To repeat
@@ -142,12 +176,16 @@ runtime-kit launcher wrapper and pass
 `--installed-dsh-home /absolute/path/to/dsh-home` plus
 `--runtime-env-file /absolute/path/to/terminal-environment.json`; the runtime
 verification script marks only its disposable DSH home and emits the matching
-environment file for this use. Both paths use a native pseudoterminal through
+environment file for this use.
+
+Both paths use a native pseudoterminal through
 the development-only `node-pty` package. The acceptance drives Allow once with
 the TUI's explicit `1` shortcut and Reject with `Esc` through two real TTY
 sessions against an authenticated local mock. `Enter` submits the current focus,
 which can be Reject. The driver waits for the rendered approval choice before
-sending a decision. The acceptance checks the final Session V4 archive,
+sending a decision.
+
+The acceptance checks the final Session V4 archive,
 approval, tool result, completed turn,
 and whether the allowed or rejected command actually ran. It also creates a
 72-turn conversation beyond the TUI's initial rendered-row cap, exits,
@@ -155,13 +193,17 @@ resumes its exact ID, submits another turn, and checks its unique title and
 the exact `/resume` session count through a headless terminal screen. It also
 renames a session, exits, resumes that exact ID, and completes another turn
 while checking the durable user-title event. It then exercises the patched
-stopped-session title writer and resumes the same ID again. The default test
+stopped-session title writer and resumes the same ID again.
+
+The default test
 uses a disposable DSH home; the installed-home option must point to a
 disposable installation because the scenarios create sessions there. No
 provider credential is needed. Combined-profile CI also runs the test against
 the activated `workbench` profile in a disposable home. Its pseudoterminal
 preserves the host's systemd user manager connection for runtime-kit's
 finish-line containment. This gate does not claim cross-interface handoff.
+
+## Devlog and publication review
 
 For durable design or compatibility outcomes, update the current owner first,
 then use `devlog new` to append one evidence-backed entry. Run `devlog check`
@@ -249,13 +291,16 @@ result is recorded:
   its install and DSH home, after the Web, TUI, and full-host checks pass. If
   socket path limits force it under `/tmp`, remove it in the same step.
 - Release packet: after `publish` reports `published-and-verified` and the
-  release checks pass, keep `release-packet.json`, `build-input.json`, the
-  notes, the prepare, verify, preflight, and publish output, and a
-  `sha256sum` record of the archive and nils-cli archive. Delete the release,
-  verify, preflight, and publish roots, the OCI layout, the archive, the OCI
-  carrier, downloaded release assets, the staged DSH home, and the frozen
-  profile input. Keep only the upstream DSH and TUI tarballs the next build
-  reuses. Delete an earlier packet's copies once a newer packet holds them.
+  release checks pass:
+  - keep `release-packet.json`, `build-input.json`, the
+    notes, the prepare, verify, preflight, and publish output, and a
+    `sha256sum` record of the archive and nils-cli archive;
+  - delete the release,
+    verify, preflight, and publish roots, the OCI layout, the archive, the OCI
+    carrier, downloaded release assets, the staged DSH home, and the frozen
+    profile input;
+  - keep only the upstream DSH and TUI tarballs the next build
+    reuses, and delete an earlier packet's copies once a newer packet holds them.
 - Agent delivery acceptance: follow its
   [cleanup step](docs/agent-acceptance.md#procedure).
 
