@@ -4,7 +4,7 @@
     "version": "0.2.4",
     "tag": "v0.2.4"
   },
-  "status": "candidate",
+  "status": "accepted",
   "runtime": {
     "node": ">=24.3.0",
     "pnpm": "11.24.0",
@@ -45,7 +45,7 @@
       "toolchain": {
         "node": ">=24.0.0"
       },
-      "status": "candidate"
+      "status": "accepted"
     },
     "tui": {
       "source": {
@@ -93,20 +93,40 @@
   },
   "acceptance": {
     "runtimeKit": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-runtime-kit/actions/runs/38730629696"
+        }
+      ]
     },
     "tui": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/38915286115"
+        }
+      ]
     },
     "web": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/38915292682"
+        }
+      ]
     },
     "handoff": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "platform": "linux-x64",
+          "url": "https://github.com/sympoies/dsh-workbench/actions/runs/38915300236"
+        }
+      ]
     }
   }
 }

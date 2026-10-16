@@ -18,15 +18,25 @@ unavailable authoritative finish-line backend does not block Linux acceptance.
 Earlier two-platform results below remain historical component and handoff
 evidence, not a claim that the combined macOS profile is releasable.
 
-The current `v0.2.4` Linux x64 contract is a **candidate**. It moves runtime-kit
+The current `v0.2.4` Linux x64 contract is **accepted for compatibility**. It moves runtime-kit
 to commit `36a0b1c1386669a49994fd0413b781238239e5d6`, which no longer declares
 or probes nils-cli `agent-docs`; its authenticated companion is nils-cli
 1.33.13 with six tools. DSH, dsh-TUI, and the Codex subscription provider
 retain the exact source and package identities from Workbench v0.2.3, and the
 runtime-kit DSH record is unchanged, so the patched 84-package closure and its
 semantic identities are the same. The Web identity and artifact, runtime-kit
-package digest, and frozen profile lock entry are regenerated. All four gates
-are pending fresh evidence for this tuple.
+package digest, and frozen profile lock entry are regenerated. Three distinct
+main-branch runs passed fresh installed TUI, Web, and handoff acceptance for this
+tuple.
+
+All four gates have current evidence:
+[runtime-kit](https://github.com/sympoies/dsh-runtime-kit/actions/runs/38730629696),
+[TUI](https://github.com/sympoies/dsh-workbench/actions/runs/38915286115),
+[Web](https://github.com/sympoies/dsh-workbench/actions/runs/38915292682), and
+[cross-interface handoff](https://github.com/sympoies/dsh-workbench/actions/runs/38915300236).
+The earlier main push run for this tuple failed one shared-session step (native
+New Session did not reach its blank view) and is not acceptance evidence.
+Publication and owner deployment remain separate gates.
 
 The previous `v0.2.3` Linux x64 contract is **accepted for compatibility**. It advances runtime-kit
 to the reviewed nils-cli 1.31.13 adoption and activation catalog repair,
